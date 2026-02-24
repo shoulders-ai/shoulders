@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /d/
+Disallow: /auth/
+Disallow: /account
+Disallow: /subscribe
+Disallow: /verify-email
+Disallow: /reset-password
+
+Sitemap: https://shoulde.rs/sitemap.xml

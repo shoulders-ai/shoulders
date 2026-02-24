@@ -1,0 +1,228 @@
+/* SuperDoc theme overrides */
+
+/* ============================================================
+   Kill SuperDoc transition/animation lag globally
+   Scoped styles in SuperDoc's Vue SFCs use 250ms; we nuke all.
+   ============================================================ */
+.docx-editor *,
+.docx-editor *::before,
+.docx-editor *::after {
+  transition-duration: 0.05s !important;
+}
+/* Popovers/dropdowns/menus: instant open/close */
+.docx-editor [class*="popover"],
+.docx-editor [class*="dropdown"],
+.docx-editor [class*="menu"] {
+  transition-duration: 0s !important;
+  animation-duration: 0.05s !important;
+}
+/* Naive UI transitions (SuperDoc uses naive-ui for dropdowns/tooltips) */
+.n-dropdown .v-binder-follower-content,
+.n-popover .v-binder-follower-content,
+.n-tooltip .v-binder-follower-content {
+  transition-duration: 0.05s !important;
+}
+/* Comment highlights: instant on hover */
+.sd-editor-comment-highlight {
+  transition: background-color 0.05s ease !important;
+}
+/* Overflow menu icons in comment headers */
+.overflow-menu__icon {
+  transition: all 0.05s ease !important;
+}
+/* Comment entry input focus */
+.comment-entry {
+  transition: all 0.05s ease !important;
+}
+
+/* ============================================================
+   Document page — paper stays white in all themes
+   ============================================================ */
+.docx-editor .ProseMirror {
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+}
+/* Page background matches theme */
+.docx-editor [class*="page-container"] {
+  background: var(--bg-tertiary) !important;
+}
+/* Trim dead space below last page */
+.docx-editor [class*="pages-container"],
+.docx-editor [class*="editor-container"] {
+  padding-bottom: 2rem !important;
+}
+
+/* ============================================================
+   Tracked changes — editor decorations
+   ============================================================ */
+.docx-editor [class*="insertion"] {
+  background: rgba(158,206,106,0.15) !important;
+}
+.docx-editor [class*="deletion"] {
+  background: rgba(247,118,142,0.1) !important;
+  text-decoration: line-through !important;
+}
+
+/* ============================================================
+   SuperDoc z-index containment
+   Prevents internal popovers from escaping above app modals.
+   ============================================================ */
+.docx-editor {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
+/* ============================================================
+   Comment dialogs — themed, fixed overflow, tighter layout
+   ============================================================ */
+.comments-dialog {
+  max-width: 320px !important;
+  min-width: 220px !important;
+  border-radius: 8px !important;
+  background-color: #f0f3fa !important;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.08),
+    0 4px 12px rgba(0,0,0,0.06) !important;
+  padding: 8px 12px !important;
+  font-family: var(--ui-font, 'Inter', sans-serif) !important;
+}
+/* Active comment: slightly elevated */
+.comments-dialog.is-active {
+  box-shadow:
+    0 2px 6px rgba(0,0,0,0.10),
+    0 8px 24px rgba(0,0,0,0.08) !important;
+}
+/* Resolved: dimmed */
+.comments-dialog.is-resolved {
+  background-color: #eaeaea !important;
+  opacity: 0.75;
+}
+
+/* Comment header: prevent icon overflow */
+.comments-dialog .comment-header {
+  gap: 4px !important;
+  flex-wrap: nowrap !important;
+}
+.comments-dialog .comment-header-left {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+/* Truncate long names — force dark text (comments have light bg in all themes) */
+.comments-dialog .user-name {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 120px !important;
+  font-size: 12px !important;
+  color: #1a1a1a !important;
+}
+.comments-dialog .user-timestamp {
+  font-size: 11px !important;
+  color: #888 !important;
+}
+
+/* Accept/reject icon buttons — prevent overflow, tighten hitbox */
+.comments-dialog .overflow-menu {
+  flex-shrink: 0 !important;
+  gap: 3px !important;
+}
+.comments-dialog .overflow-menu__icon {
+  width: 12px !important;
+  height: 12px !important;
+  padding: 4px !important;
+  border-radius: 4px !important;
+  color: #555 !important;
+}
+.comments-dialog .overflow-menu__icon:hover {
+  background-color: #d0d4db !important;
+  color: #111 !important;
+}
+
+/* Comment body text */
+.comments-dialog .comment {
+  font-size: 12.5px !important;
+  line-height: 1.45 !important;
+  margin: 6px 0 !important;
+  color: #1a1a1a !important;
+}
+
+/* Tracked change labels */
+.comments-dialog .change-type {
+  font-size: 10px !important;
+  color: #666 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
+}
+.comments-dialog .tracked-change-text {
+  font-size: 12px !important;
+  color: #222 !important;
+}
+
+/* Separator between comments in thread */
+.comments-dialog .comment-separator {
+  background-color: #d0d4db !important;
+  height: 1px !important;
+  margin: 6px 0 !important;
+}
+
+/* Footer buttons (Cancel / Comment / Update) */
+.comments-dialog .comment-footer {
+  margin: 4px 0 2px !important;
+  gap: 4px !important;
+}
+
+/* Comment entry input */
+.comments-dialog .comment-entry {
+  border-radius: 6px !important;
+  border: 1px solid #ccd0d8 !important;
+  background: #fff !important;
+}
+.comments-dialog .comment-entry.sd-input-active {
+  border-color: #7aa2f7 !important;
+  box-shadow: 0 0 0 1px rgba(122,162,247,0.25) !important;
+}
+
+/* ============================================================
+   Buttons: themed, compact
+   ============================================================ */
+.sd-button {
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  padding: 5px 10px !important;
+  font-weight: 500 !important;
+  font-family: var(--ui-font, 'Inter', sans-serif) !important;
+}
+.sd-button:not(.primary) {
+  color: #444 !important;
+  background-color: #fff !important;
+  border: 1px solid #ccd0d8 !important;
+}
+.sd-button:not(.primary):hover {
+  background-color: #eaedf2 !important;
+  color: #111 !important;
+}
+.sd-button.primary {
+  background-color: #7aa2f7 !important;
+  border: none !important;
+  color: #fff !important;
+}
+.sd-button.primary:hover {
+  background-color: #5d8ae6 !important;
+}
+.sd-button.primary:disabled {
+  background-color: #7aa2f7 !important;
+  opacity: 0.4 !important;
+}
+
+/* ============================================================
+   Tracked change highlight colors (CSS vars for SuperDoc)
+   ============================================================ */
+:root {
+  --sd-track-insert-border: #9ece6a;
+  --sd-track-insert-bg: rgba(158,206,106,0.12);
+  --sd-track-delete-border: #f7768e;
+  --sd-track-delete-bg: rgba(247,118,142,0.08);
+  --sd-track-format-border: #e0af68;
+  --sd-comment-highlight-hover: rgba(122,162,247,0.25);
+}

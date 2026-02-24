@@ -1,0 +1,3 @@
+shoulde.rs {
+	reverse_proxy localhost:3000
+}

@@ -1,0 +1,53 @@
+{
+  "productName": "Shoulders",
+  "version": "0.2.0",
+  "identifier": "com.shoulders.editor",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Shoulders",
+        "width": 1400,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "resources": ["../public/fonts"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["shoulders"]
+      }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDkyQ0YwMzUyMDNFMkE1NUEKUldSYXBlSURVZ1BQa3Z1OEFCVU1lZG1IZlltYmtiVTl0MGMwOVM0cnVDWnhHS0hHQnY0U1lYd3QK",
+      "endpoints": [
+        "https://shoulde.rs/api/v1/updates/latest.json"
+      ]
+    }
+  }
+}

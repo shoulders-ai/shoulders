@@ -1,0 +1,16 @@
+node_modules/
+dist/
+src-tauri/target/
+*.log
+.DS_Store
+dev/
+.env
+
+# Internal docs and notes
+private/
+
+# Documentation drafts
+docs/plans/
+
+# User-specific Claude Code permissions
+.claude/settings.local.json

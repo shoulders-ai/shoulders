@@ -1,0 +1,378 @@
+/* CodeMirror overrides */
+.cm-editor {
+  height: 100%;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-size: var(--editor-font-size);
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.cm-scroller {
+  overflow: auto;
+}
+
+/* Ghost text */
+.ghost-text {
+  color: var(--fg-secondary);
+  opacity: 0.45;
+  pointer-events: none;
+  white-space: pre-wrap;
+  font-style: italic;
+}
+.theme-light .ghost-text,
+.theme-solarized .ghost-text,
+.theme-humane .ghost-text,
+.theme-one-light .ghost-text {
+  color: var(--fg-muted);
+  opacity: 0.6;
+}
+.ghost-badge {
+  display: inline-block;
+  background: var(--bg-tertiary);
+  color: var(--fg-muted);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 8px;
+  vertical-align: middle;
+  font-style: normal;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.ghost-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.4;
+  animation: dot-bounce 0.9s ease-in-out infinite;
+}
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-3px); opacity: 0.9; }
+}
+
+/* Task processing spinner */
+.task-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--warning);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* @codemirror/merge inline diff styling */
+.cm-mergeView .cm-changedLine {
+  background: rgba(158, 206, 106, 0.06) !important;
+}
+.cm-mergeView .cm-insertedLine {
+  background: rgba(158, 206, 106, 0.1) !important;
+}
+.cm-mergeView .cm-deletedLine {
+  background: rgba(247, 118, 142, 0.08) !important;
+}
+.cm-changedText {
+  background: linear-gradient(#00ff00aa, #00ff00aa) bottom/100% 3px no-repeat !important;
+}
+.cm-mergeView .cm-deletedText {
+  background: rgba(247, 118, 142, 0.2) !important;
+  color: var(--fg-muted) !important;
+}
+/* Merge gutter markers */
+.cm-mergeView .cm-changeGutter {
+  width: 4px !important;
+  min-width: 4px !important;
+}
+.cm-mergeView .cm-changeGutter .cm-gutterElement {
+  padding: 0 !important;
+}
+/* Accept/reject chunk buttons */
+.cm-mergeView .cm-mergeControls {
+  padding: 2px 0;
+}
+.cm-mergeView .cm-mergeControls button {
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 500;
+  margin: 0 3px;
+  transition: all 0.15s ease;
+  letter-spacing: 0.01em;
+}
+.cm-mergeView .cm-mergeControls button:first-child {
+  background: rgba(158, 206, 106, 0.12);
+  color: var(--success);
+  border-color: rgba(158, 206, 106, 0.2);
+}
+.cm-mergeView .cm-mergeControls button:first-child:hover {
+  background: rgba(158, 206, 106, 0.25);
+  border-color: rgba(158, 206, 106, 0.4);
+  box-shadow: 0 1px 4px rgba(158, 206, 106, 0.15);
+}
+.cm-mergeView .cm-mergeControls button:last-child {
+  background: rgba(247, 118, 142, 0.1);
+  color: var(--error);
+  border-color: rgba(247, 118, 142, 0.15);
+}
+.cm-mergeView .cm-mergeControls button:last-child:hover {
+  background: rgba(247, 118, 142, 0.22);
+  border-color: rgba(247, 118, 142, 0.35);
+  box-shadow: 0 1px 4px rgba(247, 118, 142, 0.12);
+}
+
+/* Accept/reject chunk buttons */
+.cm-chunkButtons > button {
+  padding: 0px 6px;
+  font-size: var(--editor-font-size);
+  border-radius: 2px !important;
+}
+
+/* ReviewBar buttons */
+.review-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.review-bar-accept {
+  background: rgba(158, 206, 106, 0.12);
+  color: var(--success);
+  border-color: rgba(158, 206, 106, 0.2);
+}
+.review-bar-accept:hover {
+  background: rgba(158, 206, 106, 0.25);
+  border-color: rgba(158, 206, 106, 0.4);
+}
+.review-bar-reject {
+  background: rgba(247, 118, 142, 0.1);
+  color: var(--error);
+  border-color: rgba(247, 118, 142, 0.15);
+}
+.review-bar-reject:hover {
+  background: rgba(247, 118, 142, 0.22);
+  border-color: rgba(247, 118, 142, 0.35);
+}
+
+/* Task markers */
+.task-gutter {
+  width: 12px;
+}
+.task-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin: 3px 2px;
+  cursor: pointer;
+}
+.task-idle {
+  background: var(--accent);
+  opacity: 0.6;
+}
+.task-streaming {
+  background: var(--accent);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.task-error {
+  background: var(--error);
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.task-range {
+  border-bottom: 2px dotted var(--accent);
+  border-bottom-style: dotted;
+}
+.task-range-idle {
+  border-bottom-color: var(--accent);
+  opacity: 0.6;
+}
+.task-range-streaming {
+  border-bottom-color: var(--accent);
+  background: rgba(122, 162, 247, 0.06);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.task-range-error {
+  border-bottom-color: var(--error);
+  background: rgba(247, 118, 142, 0.05);
+}
+
+/* DOCX AI task indicators (floating overlay dots) */
+.docx-task-gutter {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+.docx-task-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.docx-task-idle {
+  background: var(--accent);
+  opacity: 0.6;
+}
+.docx-task-idle:hover {
+  opacity: 1;
+  transform: scale(1.3);
+}
+.docx-task-streaming {
+  background: var(--accent);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.docx-task-error {
+  background: var(--error);
+}
+.docx-task-active {
+  opacity: 1;
+  box-shadow: 0 0 0 3px rgba(122, 162, 247, 0.3);
+  transform: scale(1.3);
+}
+.docx-task-approximate {
+  opacity: 0.35;
+  border: 1px dashed var(--accent);
+  background: transparent;
+}
+
+/* Wiki links */
+.cm-wikilink { color: var(--hl-link); }
+.cm-wikilink:hover { text-decoration: underline; cursor: pointer; }
+.cm-wikilink-bracket { color: var(--fg-muted); font-size: 0.9em; }
+.cm-wikilink-broken { color: var(--error); text-decoration: underline wavy; }
+.cm-wikilink-target { color: var(--fg-muted); font-size: 0.9em; }
+.cm-wikilink-display { color: var(--hl-link); }
+.cm-wikilink-display:hover { text-decoration: underline; cursor: pointer; }
+.cm-wikilink-pipe { color: var(--fg-muted); }
+
+/* Citations */
+.cm-citation-bracket { color: var(--fg-muted); }
+.cm-citation-key { color: var(--hl-link); cursor: pointer; }
+.cm-citation-key:hover { text-decoration: underline; }
+.cm-citation-key-broken { color: var(--error); text-decoration: underline wavy; cursor: pointer; }
+.cm-citation-key-review { color: var(--warning); cursor: pointer; }
+.cm-citation-key-review:hover { text-decoration: underline; }
+.cm-citation-text { color: var(--fg-muted); }
+
+/* LaTeX citation decorations */
+.cm-latex-cite-cmd { color: var(--hl-keyword); }
+.cm-latex-cite-brace { color: var(--fg-muted); }
+.cm-latex-cite-key { color: var(--hl-link); }
+.cm-latex-cite-key-broken { color: var(--error); text-decoration: underline wavy; }
+.cm-latex-cite-key-review { color: var(--warning); }
+.cm-latex-cite-annotation {
+  color: var(--fg-muted);
+  font-size: 0.85em;
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* Code chunks (.Rmd/.qmd) */
+.cm-chunk-gutter { width: 16px; }
+.cm-chunk-gutter .cm-gutterElement { padding: 0; display: flex; align-items: center; justify-content: center; }
+.chunk-run-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: none;
+  color: var(--success, #4ade80);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  padding: 0;
+  border-radius: 2px;
+}
+.chunk-run-btn:hover { opacity: 1; background: rgba(74, 222, 128, 0.15); }
+.cm-chunk-header { background: rgba(74, 222, 128, 0.04); }
+.cm-chunk-content { background: rgba(74, 222, 128, 0.02); }
+
+/* Inline chunk output widgets */
+.cm-chunk-output-widget {
+  position: relative;
+  border-top: 1px solid var(--border);
+  padding: 8px 12px 8px 52px;
+  max-height: 800px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  font-size: var(--editor-font-size);
+}
+.cm-chunk-output-close {
+  position: sticky;
+  top: 0;
+  float: right;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: var(--bg-primary);
+  color: var(--fg-muted);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 1;
+}
+.cm-chunk-output-widget:hover .cm-chunk-output-close {
+  opacity: 0.8;
+}
+.cm-chunk-output-close:hover {
+  opacity: 1 !important;
+  background: var(--bg-hover);
+  color: var(--fg-primary);
+}
+.cm-chunk-output-widget:empty,
+.cm-chunk-output-widget[style*="display: none"] {
+  display: none !important;
+  border: none;
+  padding: 0;
+}
+.cm-chunk-output-widget img {
+  max-width: 100%;
+  height: auto;
+}
+.cm-chunk-output-widget pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Chunk output spinner */
+.cm-chunk-output-spinner {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+.chunk-spinner-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: dot-bounce 0.9s ease-in-out infinite;
+}
+.chunk-spinner-dot:nth-child(2) { animation-delay: 0.15s; }
+.chunk-spinner-dot:nth-child(3) { animation-delay: 0.3s; }

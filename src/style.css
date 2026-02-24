@@ -1,0 +1,67 @@
+@import './css/fonts.css';
+@import './css/themes.css';
+@import './css/editor.css';
+@import './css/components.css';
+@import './css/handsontable.css';
+@import './css/superdoc.css';
+@import './css/xterm.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--fg-muted);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-secondary);
+}
+
+/* Hidden scrollbar (keeps scroll, hides bar) */
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Selection */
+::selection {
+  background: var(--editor-selection);
+}
+
+/* PDF.js font-measurement canvases (appended to body, need absolute positioning) */
+.hiddenCanvasElement {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}

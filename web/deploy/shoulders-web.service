@@ -1,0 +1,15 @@
+[Unit]
+Description=Shoulders Web API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/shoulders
+ExecStart=/usr/bin/node web/.output/server/index.mjs
+Restart=always
+RestartSec=5
+EnvironmentFile=/home/ubuntu/shoulders/web/.env
+
+[Install]
+WantedBy=multi-user.target
