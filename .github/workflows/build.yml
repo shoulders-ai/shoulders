@@ -18,11 +18,11 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: '--target aarch64-apple-darwin --bundles dmg'
+            args: '--target aarch64-apple-darwin --bundles dmg,app'
             rust-target: aarch64-apple-darwin
             label: macOS-ARM
           - platform: macos-latest
-            args: '--target x86_64-apple-darwin --bundles dmg'
+            args: '--target x86_64-apple-darwin --bundles dmg,app'
             rust-target: x86_64-apple-darwin
             label: macOS-Intel
           - platform: ubuntu-22.04

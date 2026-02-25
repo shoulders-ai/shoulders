@@ -16,6 +16,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            set -e
             cd ~/shoulders
             git fetch origin main
             git reset --hard origin/main
