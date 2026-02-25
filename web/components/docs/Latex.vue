@@ -5,27 +5,36 @@
 
     <h2>Getting started</h2>
     <p>
-      LaTeX support uses a bundled Tectonic compiler — no external tools needed. Packages
-      are downloaded automatically on first compile.
+      LaTeX compilation is powered by <a href="https://tectonic-typesetting.github.io/" target="_blank">Tectonic</a>,
+      a modern, self-contained TeX engine. It is not bundled with Shoulders but can be downloaded
+      with one click from Settings.
     </p>
     <div class="docs-steps">
       <div class="docs-step">
         <span class="docs-step-number">1</span>
+        <div class="docs-step-content">
+          Open Settings (<kbd>Cmd/Ctrl</kbd>+<kbd>,</kbd>) → System and click
+          <strong>Download Tectonic</strong> (~15 MB one-time download).
+        </div>
+      </div>
+      <div class="docs-step">
+        <span class="docs-step-number">2</span>
         <div class="docs-step-content">
           Open or create a <code>.tex</code> file. The editor provides syntax highlighting
           and autocomplete for common LaTeX commands.
         </div>
       </div>
       <div class="docs-step">
-        <span class="docs-step-number">2</span>
+        <span class="docs-step-number">3</span>
         <div class="docs-step-content">
           The document compiles automatically. The first compile may take a moment as Tectonic
-          downloads the required packages.
+          downloads the required TeX packages.
         </div>
       </div>
     </div>
     <Callout type="tip">
-      LaTeX compilation can be disabled in Settings (<kbd>Cmd/Ctrl</kbd>+<kbd>,</kbd>) → Environment.
+      If Tectonic is already installed on your system (e.g. via Homebrew or Cargo), Shoulders
+      will find it automatically — no download needed.
     </Callout>
 
     <h2>Writing</h2>
@@ -38,22 +47,28 @@
 
     <h2>Compiling</h2>
     <p>
-      The document recompiles automatically 5 seconds after the last edit. The compiled PDF
+      The document recompiles automatically about 5 seconds after the last edit. The compiled PDF
       opens in a split pane next to your source. Each recompilation updates the PDF in place —
       you see changes as you write.
     </p>
     <p>
-      You can also trigger a compile manually from the toolbar above the PDF viewer.
+      The tab bar above the editor shows compile controls:
     </p>
+    <ul>
+      <li><strong>Compile</strong> — trigger a manual compile at any time.</li>
+      <li><strong>Auto</strong> — toggle auto-compilation on or off (on by default).</li>
+      <li><strong>Status</strong> — shows compile time on success, or error count on failure.</li>
+    </ul>
 
     <h2>Navigating between source and PDF</h2>
     <p>
       SyncTeX links the source and PDF bidirectionally:
     </p>
     <ul>
-      <li><strong>Forward sync</strong> — click a position in the editor to jump to the
-        corresponding location in the PDF.</li>
-      <li><strong>Backward sync</strong> — click in the PDF to jump back to the source line.</li>
+      <li><strong>Forward sync</strong> — click the <strong>Sync</strong> button in the tab bar
+        to jump the PDF to your current cursor position.</li>
+      <li><strong>Backward sync</strong> — double-click in the PDF to jump back to the
+        corresponding source line.</li>
     </ul>
 
     <h2>Errors</h2>
