@@ -77,6 +77,13 @@
           </div>
         </template>
 
+        <template v-if="isImportable">
+          <div class="context-menu-item" @click="$emit('import-to-refs', entry)">
+            <IconBook2 :size="14" :stroke-width="1.5" />
+            Import to References
+          </div>
+        </template>
+
         <template v-if="entry">
           <div class="context-menu-separator"></div>
           <div class="context-menu-item" @click="$emit('reveal-in-finder', entry)">
@@ -94,7 +101,7 @@ import { computed } from 'vue'
 import {
   IconFileText, IconNotebook, IconMath, IconCode, IconBrandPython,
   IconFilePlus, IconFolderPlus, IconPencil, IconCopy, IconTrash, IconClock,
-  IconExternalLink,
+  IconExternalLink, IconBook2,
 } from '@tabler/icons-vue'
 import { isMac } from '../../platform'
 
@@ -108,7 +115,15 @@ const props = defineProps({
   selectedCount: { type: Number, default: 0 },
 })
 
-defineEmits(['close', 'create', 'rename', 'duplicate', 'delete', 'delete-selected', 'version-history', 'reveal-in-finder'])
+defineEmits(['close', 'create', 'rename', 'duplicate', 'delete', 'delete-selected', 'version-history', 'reveal-in-finder', 'import-to-refs'])
+
+const IMPORTABLE_EXTS = ['.bib', '.ris', '.json', '.pdf', '.csl', '.nbib', '.enw']
+
+const isImportable = computed(() => {
+  if (!props.entry || props.entry.is_dir) return false
+  const lower = props.entry.name.toLowerCase()
+  return IMPORTABLE_EXTS.some(ext => lower.endsWith(ext))
+})
 
 // Keep menu within viewport
 const menuStyle = computed(() => {

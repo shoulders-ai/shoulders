@@ -148,6 +148,7 @@
       @delete-selected="handleDeleteSelected"
       @version-history="$emit('version-history', $event)"
       @reveal-in-finder="revealInFinder"
+      @import-to-refs="handleImportToRefs"
     />
 
     <!-- "+ New" dropdown menu -->
@@ -288,6 +289,18 @@ let draggedPaths = []
 
 // External drag state
 const externalDragOver = ref(false)
+
+// File extensions that can be imported into references
+const IMPORTABLE_EXTS = ['.bib', '.ris', '.json', '.pdf', '.csl', '.nbib', '.enw', '.txt']
+
+function isImportableFile(path) {
+  const lower = path.toLowerCase()
+  return IMPORTABLE_EXTS.some(ext => lower.endsWith(ext))
+}
+
+function hasImportableFiles(paths) {
+  return paths.some(p => isImportableFile(p))
+}
 
 function openFile(path) {
   editor.openFile(path)
@@ -635,11 +648,42 @@ function onDragStart({ path, event }) {
   document.body.classList.add('tab-dragging')
   window.dispatchEvent(new CustomEvent('filetree-drag-start', { detail: { paths: [...draggedPaths] } }))
 
+  const canImport = hasImportableFiles(draggedPaths)
+  let overRefZone = false
+
   function onMouseMove(ev) {
     dragGhostX.value = ev.clientX
     dragGhostY.value = ev.clientY
+
+    // Show/hide reference drop zone feedback for importable files
+    if (canImport) {
+      const nowOverRef = isOverRefZone({ x: ev.clientX, y: ev.clientY })
+      if (nowOverRef && !overRefZone) {
+        window.dispatchEvent(new CustomEvent('ref-drag-over'))
+        dragOverDir.value = null
+        overRefZone = true
+      } else if (!nowOverRef && overRefZone) {
+        window.dispatchEvent(new CustomEvent('ref-drag-leave'))
+        overRefZone = false
+      }
+    }
   }
   function onMouseUp() {
+    // Check if dropped on reference panel with importable files
+    if (canImport && overRefZone && draggedPaths.length > 0) {
+      const importPaths = [...draggedPaths]
+      dragGhostVisible.value = false
+      dragOverDir.value = null
+      draggedPaths = []
+      document.body.classList.remove('tab-dragging')
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+      window.dispatchEvent(new CustomEvent('ref-drag-leave'))
+      window.dispatchEvent(new CustomEvent('ref-file-drop', { detail: { paths: importPaths } }))
+      window.dispatchEvent(new CustomEvent('filetree-drag-end'))
+      return
+    }
+
     dragGhostVisible.value = false
     dragOverDir.value = null
     draggedPaths = []
@@ -991,6 +1035,18 @@ async function handleDeleteSelected() {
       await files.deletePath(path)
     }
     selectedPaths.clear()
+  }
+}
+
+function handleImportToRefs(entry) {
+  let paths
+  if (selectedPaths.size > 1) {
+    paths = [...selectedPaths].filter(p => isImportableFile(p))
+  } else {
+    paths = [entry.path]
+  }
+  if (paths.length > 0) {
+    window.dispatchEvent(new CustomEvent('ref-file-drop', { detail: { paths } }))
   }
 }
 
