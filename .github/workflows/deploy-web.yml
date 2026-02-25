@@ -17,7 +17,8 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd ~/shoulders
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             cd web
             ~/.bun/bin/bun install --frozen-lockfile
             ~/.bun/bin/bun run build
