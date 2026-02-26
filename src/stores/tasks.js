@@ -426,7 +426,8 @@ export const useTasksStore = defineStore('tasks', {
                     useUsageStore().record({ usage: assistantMsg.usage, feature: 'tasks', provider, modelId: access.model, sessionId: thread.id })
                   }).catch(e => console.warn('[tasks] usage record failed:', e))
                   assistantMsg.status = 'complete'
-                  thread.status = 'idle'
+                  // Keep thread.status as 'streaming' — blocks sendMessage during tool execution.
+                  // _executeToolCalls → _streamResponse will manage status from here.
                   this._cleanupListeners(thread)
                   this._executeToolCalls(thread).catch(e => {
                     console.error('[tasks] Tool execution failed:', e)
@@ -504,11 +505,25 @@ export const useTasksStore = defineStore('tasks', {
           } else if (assistantMsg.status === 'streaming') {
             assistantMsg.status = 'complete'
           }
-          thread.status = 'idle'
+          // Don't set thread.status = 'idle' yet — check for pending tools first
           thread.updatedAt = new Date().toISOString()
           this._cleanupListeners(thread)
           if (provider === 'shoulders') workspace.refreshShouldersBalance()
-          this.saveThreads()
+
+          // If tool calls are pending, execute them (race: done event can beat message_delta)
+          // Keep thread.status as 'streaming' to block sendMessage during tool execution.
+          const hasPending = assistantMsg.toolCalls?.some(tc => tc.status === 'pending')
+          if (hasPending) {
+            this._executeToolCalls(thread).catch(e => {
+              console.error('[tasks] Tool execution failed:', e)
+              thread.status = 'idle'
+              if (assistantMsg) assistantMsg.status = 'error'
+              this.saveThreads()
+            })
+          } else {
+            thread.status = 'idle'
+            this.saveThreads()
+          }
         })
 
         thread._unlistenError = await listen(`chat-error-${thread.id}`, (event) => {
@@ -922,7 +937,29 @@ export const useTasksStore = defineStore('tasks', {
           }
 
           if (msg.content) content += msg.content
-          apiMessages.push({ role: 'user', content: content.trim() })
+
+          const trimmed = content.trim()
+
+          // If previous assistant had tool calls, include tool_results
+          // (handles corrupted sessions where a user message was interleaved during tool execution)
+          if (idx > 0) {
+            const prevMsg = thread.messages[idx - 1]
+            if (prevMsg.role === 'assistant' && prevMsg.toolCalls && prevMsg.toolCalls.length > 0) {
+              const toolResults = prevMsg.toolCalls.map(tc => ({
+                type: 'tool_result',
+                tool_use_id: tc.id,
+                content: tc.output || '',
+              }))
+              if (trimmed) {
+                apiMessages.push({ role: 'user', content: [...toolResults, { type: 'text', text: trimmed }] })
+              } else {
+                apiMessages.push({ role: 'user', content: toolResults })
+              }
+              continue
+            }
+          }
+
+          apiMessages.push({ role: 'user', content: trimmed })
         } else if (msg.role === 'assistant') {
           const hasToolCalls = msg.toolCalls?.length > 0
           const hasThinking = msg._thinkingBlocks?.length > 0

@@ -419,7 +419,8 @@ export const useChatStore = defineStore('chat', {
                     useUsageStore().record({ usage: assistantMsg.usage, feature: 'chat', provider, modelId: access.model, sessionId: session.id })
                   })
                   assistantMsg.status = 'complete'
-                  session.status = 'idle'
+                  // Keep session.status as 'streaming' — blocks sendMessage during tool execution.
+                  // _executeToolCalls → _streamResponse will manage status from here.
                   this._cleanupListeners(session)
                   if (provider === 'shoulders') workspace.refreshShouldersBalance()
                   this._executeToolCalls(session).catch(e => {
@@ -495,7 +496,7 @@ export const useChatStore = defineStore('chat', {
           } else if (assistantMsg.status === 'streaming') {
             assistantMsg.status = 'complete'
           }
-          session.status = 'idle'
+          // Don't set session.status = 'idle' yet — check for pending tools first
           session.updatedAt = new Date().toISOString()
           this._cleanupListeners(session)
 
@@ -503,6 +504,7 @@ export const useChatStore = defineStore('chat', {
           if (provider === 'shoulders') workspace.refreshShouldersBalance()
 
           // If tool calls are pending, execute them (race: done event can beat message_delta)
+          // Keep session.status as 'streaming' to block sendMessage during tool execution.
           const hasPending = assistantMsg.toolCalls?.some(tc => tc.status === 'pending')
           if (hasPending) {
             this._executeToolCalls(session).catch(e => {
@@ -512,6 +514,7 @@ export const useChatStore = defineStore('chat', {
               this.saveSession(session.id)
             })
           } else {
+            session.status = 'idle'
             this.saveSession(session.id)
             // Auto-cleanup background sessions
             if (session._background) {
