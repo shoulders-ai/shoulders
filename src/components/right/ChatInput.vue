@@ -50,7 +50,7 @@
           ref="textareaRef"
           v-model="text"
           class="w-full resize-none bg-transparent px-2.5 py-2 ui-text-2xl outline-none"
-          style="color: var(--fg-primary); font-family: inherit; line-height: 1.5; min-height: 36px; max-height: 160px; overflow-y: auto; border: none;"
+          style="color: var(--fg-primary); font-family: inherit; line-height: 1.5; min-height: 36px; max-height: 280px; overflow-y: auto; border: none;"
           :placeholder="placeholder"
           :disabled="isStreaming"
           autocorrect="off"

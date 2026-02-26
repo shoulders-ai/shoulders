@@ -30,7 +30,7 @@
           ref="textareaRef"
           v-model="text"
           class="w-full resize-none bg-transparent px-2.5 py-2 ui-text-xl outline-none"
-          style="color: var(--fg-primary); font-family: inherit; line-height: 1.5; min-height: 36px; max-height: 100px; overflow-y: auto; border: none;"
+          style="color: var(--fg-primary); font-family: inherit; line-height: 1.5; min-height: 36px; max-height: 280px; overflow-y: auto; border: none;"
           placeholder="Reply... (@ to attach files)"
           :disabled="isStreaming"
           autocorrect="off"
