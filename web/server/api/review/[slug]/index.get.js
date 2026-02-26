@@ -8,12 +8,12 @@ export default defineEventHandler((event) => {
 
   const review = db.select().from(reviews).where(eq(reviews.slug, slug)).get()
 
-  if (!review) {
+  if (!review || review.status === 'deleted') {
     throw createError({ statusCode: 404, statusMessage: 'Review not found' })
   }
 
   // Check expiry
-  if (review.expiresAt && new Date(review.expiresAt) < new Date()) {
+  if (review.status === 'expired' || (review.expiresAt && new Date(review.expiresAt) < new Date())) {
     throw createError({ statusCode: 410, statusMessage: 'This review has expired' })
   }
 

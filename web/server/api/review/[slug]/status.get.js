@@ -11,8 +11,12 @@ export default defineEventHandler((event) => {
     .where(eq(reviews.slug, slug))
     .get()
 
-  if (!review) {
+  if (!review || review.status === 'deleted') {
     throw createError({ statusCode: 404, statusMessage: 'Review not found' })
+  }
+
+  if (review.status === 'expired') {
+    throw createError({ statusCode: 410, statusMessage: 'This review has expired' })
   }
 
   return { status: review.status }

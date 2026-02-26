@@ -14,8 +14,8 @@ function runCleanup() {
     // Drain old auth_tokens table
     sqlite.exec(`DELETE FROM auth_tokens WHERE expires_at < '${now}'`)
 
-    // Clean expired reviews
-    sqlite.exec(`DELETE FROM reviews WHERE expires_at IS NOT NULL AND expires_at < '${now}'`)
+    // Redact expired reviews (keep email + metadata for outreach)
+    sqlite.exec(`UPDATE reviews SET status = 'expired', html = NULL, markdown = NULL, anchored_html = NULL, report = NULL, comments_json = NULL, tech_notes = NULL WHERE status NOT IN ('expired', 'deleted') AND expires_at IS NOT NULL AND expires_at < '${now}'`)
 
     // Purge page_views older than 180 days
     const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString()

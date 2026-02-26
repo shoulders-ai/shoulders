@@ -91,7 +91,7 @@
           </div>
 
           <p class="text-center text-xs text-stone-400 mt-6">
-            Reviews are available for 48 hours. No account required.
+            Reviews are available for 7 days. No account required.
           </p>
         </template>
 

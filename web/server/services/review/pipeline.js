@@ -175,7 +175,7 @@ export async function runReviewPipeline(id, buffer, filename, email) {
 
     // Mark complete
     const now = new Date()
-    const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
     updateReview(id, {
       status: 'complete',

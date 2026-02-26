@@ -5,6 +5,14 @@ import { reviews } from '../../../db/schema.js'
 export default defineEventHandler((event) => {
   const slug = getRouterParam(event, 'slug')
   const db = useDb()
-  db.delete(reviews).where(eq(reviews.slug, slug)).run()
+  db.update(reviews).set({
+    status: 'deleted',
+    html: null,
+    markdown: null,
+    anchoredHtml: null,
+    report: null,
+    commentsJson: null,
+    techNotes: null,
+  }).where(eq(reviews.slug, slug)).run()
   return { ok: true }
 })
