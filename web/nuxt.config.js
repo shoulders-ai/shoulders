@@ -13,6 +13,7 @@ export default defineNuxtConfig({
     anthropicApiKey: '',
     openaiApiKey: '',
     googleApiKey: '',
+    zApiKey: '',
     resendApiKey: '',
     baseUrl: 'http://localhost:3000',
     githubRepo: 'user/shoulders',

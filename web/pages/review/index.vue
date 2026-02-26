@@ -26,7 +26,7 @@
             <p class="text-xs font-semibold text-cadet-500 uppercase tracking-[0.15em] mb-4">Free Research Preview</p>
             <h1 class="text-2xl md:text-3xl font-serif font-semibold tracking-tight text-stone-900">AI Peer Review</h1>
             <p class="mt-5 text-base text-stone-600 leading-relaxed">
-              Upload a Word document and receive an AI review within a few minutes.
+              Upload a research paper (.docx or .pdf) and receive an AI review within a few minutes.
             </p>
           </div>
 
@@ -40,12 +40,12 @@
             <div v-if="!selectedFile" class="text-center">
               <IconFileUpload :size="36" :stroke-width="1.25" class="text-stone-300 mx-auto mb-3" />
               <p class="text-sm text-stone-600 mb-4">
-                Drag and drop a <strong class="font-medium text-stone-900">.docx</strong> file here
+                Drag and drop a <strong class="font-medium text-stone-900">.docx</strong> or <strong class="font-medium text-stone-900">.pdf</strong> file here
               </p>
               <label class="inline-flex items-center gap-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-medium px-5 py-2 rounded tracking-wide cursor-pointer transition-colors">
                 <IconUpload :size="16" :stroke-width="1.5" />
                 Choose file
-                <input type="file" accept=".docx" class="hidden" @change="handleFileSelect" />
+                <input type="file" accept=".docx,.pdf" class="hidden" @change="handleFileSelect" />
               </label>
             </div>
 
@@ -126,8 +126,9 @@ function handleFileSelect(e) {
 
 function validateAndSet(file) {
   errorMsg.value = ''
-  if (!file.name.toLowerCase().endsWith('.docx')) {
-    errorMsg.value = 'Only .docx files are accepted.'
+  const name = file.name.toLowerCase()
+  if (!name.endsWith('.docx') && !name.endsWith('.pdf')) {
+    errorMsg.value = 'Only .docx and .pdf files are accepted.'
     return
   }
   if (file.size > 50 * 1024 * 1024) {

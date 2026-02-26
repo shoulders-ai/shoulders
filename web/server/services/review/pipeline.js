@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../../db/index.js'
 import { reviews } from '../../db/schema.js'
 import { convertDocx } from '../../utils/docx'
+import { convertPdf } from '../../utils/pdfOcr'
 import { anchorCommentsInHtml } from '../../utils/anchorComments'
 import { calculateCostCents } from '../../utils/pricing'
 import { sendReviewEmail } from '../../utils/reviewEmail'
@@ -40,8 +41,20 @@ export async function runReviewPipeline(id, buffer, filename, email) {
   try {
     // Stage 1: Extract
     console.log(`[Review ${id}] Stage 1: Extract`)
-    const { html, markdown, images } = await convertDocx(buffer)
-    console.log(`[Review ${id}] Extracted: html=${html.length} chars, md=${markdown.length} chars, images=${images.length}`)
+    const isPdf = filename.toLowerCase().endsWith('.pdf')
+    const extraction = isPdf
+      ? await convertPdf(buffer)
+      : await convertDocx(buffer)
+    const { html, markdown, images } = extraction
+    console.log(`[Review ${id}] Extracted (${isPdf ? 'pdf' : 'docx'}): html=${html.length} chars, md=${markdown.length} chars, images=${images.length}`)
+
+    // Track OCR cost for PDF extraction
+    if (extraction.ocrUsage?.total_tokens) {
+      const ocrTokens = extraction.ocrUsage.total_tokens
+      totalUsage.input += ocrTokens
+      totalCostCents += calculateCostCents(ocrTokens, 0, 'glm-ocr')
+      techNotes.stages.ocr = { tokens: ocrTokens }
+    }
 
     updateReview(id, { html, markdown, status: 'processing' })
 

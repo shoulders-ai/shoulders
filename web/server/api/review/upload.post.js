@@ -5,18 +5,19 @@ import { runReviewPipeline } from '../../services/review/pipeline'
 
 export default defineEventHandler(async (event) => {
   const formData = await readMultipartFormData(event)
-  const docxFile = formData?.find(f => f.name === 'file')
+  const uploadedFile = formData?.find(f => f.name === 'file')
   const emailField = formData?.find(f => f.name === 'email')
 
-  if (!docxFile) {
-    throw createError({ statusCode: 400, statusMessage: 'DOCX file is required' })
+  if (!uploadedFile) {
+    throw createError({ statusCode: 400, statusMessage: 'A .docx or .pdf file is required' })
   }
 
-  if (!docxFile.filename?.toLowerCase().endsWith('.docx')) {
-    throw createError({ statusCode: 400, statusMessage: 'Only .docx files are accepted' })
+  const fname = uploadedFile.filename?.toLowerCase()
+  if (!fname?.endsWith('.docx') && !fname?.endsWith('.pdf')) {
+    throw createError({ statusCode: 400, statusMessage: 'Only .docx and .pdf files are accepted' })
   }
 
-  if (docxFile.data.length > 50 * 1024 * 1024) {
+  if (uploadedFile.data.length > 50 * 1024 * 1024) {
     throw createError({ statusCode: 400, statusMessage: 'File exceeds 50MB limit' })
   }
 
@@ -34,12 +35,12 @@ export default defineEventHandler(async (event) => {
     slug,
     status: 'processing',
     email,
-    filename: docxFile.filename,
+    filename: uploadedFile.filename,
     createdAt: new Date().toISOString(),
   }).run()
 
   // Fire-and-forget
-  runReviewPipeline(id, docxFile.data, docxFile.filename, email)
+  runReviewPipeline(id, uploadedFile.data, uploadedFile.filename, email)
     .catch(e => console.error(`[Review ${id}] Background pipeline error:`, e))
 
   return { slug }

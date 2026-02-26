@@ -49,6 +49,12 @@ const tokenPrices = {
     input: 0.05 / 1_000_000,
     output: 0.40 / 1_000_000,
   },
+
+  // Z (GLM-OCR)
+  'glm-ocr': {
+    input: 0.03 / 1_000_000,
+    output: 0.03 / 1_000_000,
+  },
 }
 
 /**

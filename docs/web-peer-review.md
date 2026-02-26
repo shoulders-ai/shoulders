@@ -1,6 +1,6 @@
 # Peer Review (`web/pages/review/`)
 
-Free promotional tool on shoulde.rs: users upload a .docx, receive an AI-powered peer review with a structured report and inline comments anchored to specific passages. No account required. Reviews expire after 48 hours.
+Free promotional tool on shoulde.rs: users upload a .docx or .pdf, receive an AI-powered peer review with a structured report and inline comments anchored to specific passages. No account required. Reviews expire after 48 hours.
 
 
 ---
@@ -18,6 +18,7 @@ Free promotional tool on shoulde.rs: users upload a .docx, receive an AI-powered
 - Guidance system: `web/server/services/review/guidanceLoader.js` + `guidance/` directory (markdown chapters)
 - AI abstraction: `web/server/utils/ai.js` — `callAnthropic()` (tool loop), `callGemini()`
 - DOCX conversion: `web/server/utils/docx.js` — mammoth + turndown + image extraction
+- PDF conversion: `web/server/utils/pdfOcr.js` — Z OCR API (GLM-OCR) → markdown → marked HTML
 - Comment anchoring: `web/server/utils/anchorComments.js` — injects `<mark>` tags in HTML
 - PDF export: `web/server/utils/reviewToTypst.js` + `web/server/api/review/[slug]/pdf.get.js`
 - Email: `web/server/utils/reviewEmail.js` — Resend notification
@@ -32,7 +33,7 @@ Free promotional tool on shoulde.rs: users upload a .docx, receive an AI-powered
 
 ## User Flow
 
-1. **Upload** (`/review`) — User drops a .docx and enters their email (required). On submit, server creates a review record and runs the pipeline in the background. Page shows a confirmation message (no redirect).
+1. **Upload** (`/review`) — User drops a .docx or .pdf and enters their email (required). On submit, server creates a review record and runs the pipeline in the background. Page shows a confirmation message (no redirect).
 2. **Processing** — Pipeline extracts text, runs AI review, generates report + comments, anchors comments to document passages. User receives an email when ready.
 3. **View** (`/review/[slug]`) — Split layout: report + annotated document (left), positioned comments column (right). Comments align vertically with their marks in the document via scroll sync.
 4. **Export** — Download PDF (Typst) or .md. Delete when done.
@@ -42,11 +43,13 @@ Free promotional tool on shoulde.rs: users upload a .docx, receive an AI-powered
 ## Architecture
 
 ```
-Upload (.docx)
+Upload (.docx or .pdf)
   → POST /api/review/upload
   → Creates DB record (status: processing)
   → Background: runReviewPipeline()
-      Stage 1: DOCX → HTML (mammoth) + markdown (turndown) + images (base64)
+      Stage 1: Extract (branches by file type)
+               .docx → HTML (mammoth) + markdown (turndown) + images (base64)
+               .pdf  → markdown (Z OCR / GLM-OCR) → HTML (marked)
       Stage 2: Gatekeeper (Gemini Flash Lite) — is this a research paper?
       Stage 3: Three review agents run in parallel (Claude Sonnet):
                ├── Technical Reviewer — methods, statistics, validity
@@ -106,6 +109,7 @@ web/
 │       ├── ai.js                    # AI provider abstraction: callAnthropic (tool loop), callGemini
 │       ├── pricing.js               # Per-model token pricing + cost calculation (cents)
 │       ├── docx.js                  # DOCX → HTML (mammoth) + markdown (turndown) + image extraction
+│       ├── pdfOcr.js                # PDF → markdown (Z OCR / GLM-OCR) → HTML (marked)
 │       ├── referenceVerify.js       # Batch search Crossref + OpenAlex — returns raw results, no judgment
 │       ├── anchorComments.js        # Injects <mark> tags into HTML at text_snippet positions
 │       ├── reviewEmail.js           # Resend: sends "review ready" or "review failed" notification email
@@ -121,7 +125,10 @@ The pipeline runs in the background after upload. Each stage updates the DB row 
 
 ### Stage 1: Extract
 
-`convertDocx(buffer)` — mammoth converts DOCX → HTML, turndown converts HTML → markdown (for AI consumption), images extracted as base64 with content types. Display HTML uses inline data URIs.
+Branches by file extension:
+
+- **DOCX**: `convertDocx(buffer)` — mammoth converts DOCX → HTML, turndown converts HTML → markdown (for AI consumption), images extracted as base64 with content types. Display HTML uses inline data URIs.
+- **PDF**: `convertPdf(buffer)` — Z OCR API (GLM-OCR model, `api.z.ai`) converts PDF → clean markdown with headings, structure, formulas, tables. `marked` then renders markdown → HTML for display + comment anchoring. No image extraction (agents review without figures). OCR cost tracked separately (~$0.002 per paper).
 
 ### Stage 2: Gatekeeper
 
@@ -430,3 +437,4 @@ Print view (Cmd+P fallback) shows report + comments appendix only:
 
 - **Node.js** 25+ (Nuxt server)
 - **Typst** CLI for PDF export: `sudo snap install typst` (Ubuntu) / `brew install typst` (macOS)
+- **`NUXT_Z_API_KEY`** in `.env` — Z OCR API key for PDF intake (required for PDF uploads, DOCX works without it)

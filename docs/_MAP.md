@@ -36,7 +36,7 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 | Ghost suggestions (deep) | [ghost-work.md](ghost-work.md) | SuperDoc rendering pipeline, run node creation, mark vs runProperties, debugging, prompt engineering |
 | Gotchas & lessons | [gotchas.md](gotchas.md) | Full details, file paths, and additional edge cases beyond the summary above |
 | **Web backend** | [web-backend.md](web-backend.md) | Nuxt server: auth, AI proxy, credits, contact form, telemetry, admin dashboard, email (Resend), deployment |
-| **Peer review** | [web-peer-review.md](web-peer-review.md) | Free promo tool: .docx upload → multi-agent AI review (gatekeeper + technical/editorial/reference-checker reviewers + report writer), inline comments with Google Docs-style positioning, Typst PDF export, guidance document system |
+| **Peer review** | [web-peer-review.md](web-peer-review.md) | Free promo tool: .docx/.pdf upload → multi-agent AI review (gatekeeper + technical/editorial/reference-checker reviewers + report writer), inline comments with Google Docs-style positioning, Typst PDF export, guidance document system. PDF intake via Z OCR API (GLM-OCR). |
 | **Auth system** | [auth-system.md](auth-system.md) | Refresh token rotation, desktop login (polling + deep link), OS keychain, production checklist, debugging |
 | **Admin system** | [admin-system.md](admin-system.md) | Admin dashboard (JWT cookie auth, CSRF), 7 pages (dashboard, users, calls, reviews, decks, analytics), anonymous page view tracking, all admin API endpoints |
 | **Auto-updates** | [building.md](building.md#auto-updates) | tauri-plugin-updater, signing keypair, version bump, server endpoint, platform notes |
