@@ -24,11 +24,23 @@ function escapeTypst(text) {
 function markdownToTypst(md) {
   if (!md) return ''
   return md
-    .replace(/^##### (.+)$/gm, '===== $1')
-    .replace(/^#### (.+)$/gm, '==== $1')
-    .replace(/^### (.+)$/gm, '=== $1')
-    .replace(/^## (.+)$/gm, '== $1')
+    // Escape Typst-special chars that don't conflict with markdown syntax
+    .replace(/\\/g, '\\\\')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]')
+    .replace(/\$/g, '\\$')
+    .replace(/@/g, '\\@')
+    .replace(/</g, '\\<')
+    .replace(/>/g, '\\>')
+    .replace(/`/g, '\\`')
+    .replace(/"/g, '\\"')
+    // Markdown → Typst conversions
+    .replace(/^#{5} (.+)$/gm, '===== $1')
+    .replace(/^#{4} (.+)$/gm, '==== $1')
+    .replace(/^#{3} (.+)$/gm, '=== $1')
+    .replace(/^#{2} (.+)$/gm, '== $1')
     .replace(/^# (.+)$/gm, '= $1')
+    .replace(/#/g, '\\#')
     // Bold/italic: use placeholders to avoid collision
     .replace(/\*\*(.+?)\*\*/g, '\x00BOLD\x01$1\x00/BOLD\x01')
     .replace(/\*(.+?)\*/g, '_$1_')
