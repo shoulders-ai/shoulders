@@ -5,7 +5,7 @@
         <div class="col-span-2 md:col-span-1">
           <NuxtLink to="/" class="font-serif text-lg font-semibold text-stone-900">Shoulders</NuxtLink>
           <p class="mt-2 text-xs text-stone-400 leading-relaxed max-w-[200px]">
-            The AI workspace for researchers.
+            The AI workspace for researchers
           </p>
           <a href="mailto:contact@shoulde.rs" class="block mt-3 text-xs text-stone-400 hover:text-stone-600 transition-colors">contact@shoulde.rs</a>
         </div>
