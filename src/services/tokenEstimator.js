@@ -27,7 +27,8 @@ export function estimateConversationTokens(system, apiMessages) {
 
 /**
  * Sliding-window truncation: keeps first user message + last N messages.
- * Removes middle messages until under budget.
+ * Removes assistant+user pairs from the front until under budget.
+ * Always removes pairs of 2 to preserve message alternation and tool_use/tool_result pairing.
  */
 export function truncateToFitBudget(apiMessages, maxTokens, system) {
   if (apiMessages.length <= 2) return apiMessages
@@ -35,13 +36,18 @@ export function truncateToFitBudget(apiMessages, maxTokens, system) {
   const systemTokens = estimateTokens(system)
   const budget = maxTokens - systemTokens
 
-  // Keep first message (has workspace-meta) and try progressively removing from front
+  // Keep first message (has workspace-meta) and progressively remove pairs from front
   let msgs = [...apiMessages]
   let est = estimateConversationTokens('', msgs)
 
   while (est > budget && msgs.length > 2) {
-    // Remove second message (keep first, always keep last)
-    msgs.splice(1, 1)
+    // Remove a complete assistant+user pair from position 1.
+    // This preserves message alternation and tool_use/tool_result pairing.
+    if (msgs.length >= 3) {
+      msgs.splice(1, 2)
+    } else {
+      break
+    }
     est = estimateConversationTokens('', msgs)
   }
 

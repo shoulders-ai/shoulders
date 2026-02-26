@@ -241,6 +241,26 @@ export async function buildApiMessagesWithToolResults(session, provider = 'anthr
       if (msg.content) textParts.push(msg.content)
 
       const text = textParts.join('\n\n').trim()
+
+      // If previous assistant had tool calls, include tool_results
+      // (handles corrupted sessions where a user message was interleaved during tool execution)
+      if (idx > 0) {
+        const prevMsg = session.messages[idx - 1]
+        if (prevMsg.role === 'assistant' && prevMsg.toolCalls && prevMsg.toolCalls.length > 0) {
+          const toolResults = await Promise.all(
+            prevMsg.toolCalls.map(tc => buildToolResultBlock(tc, provider))
+          )
+          if (text || docBlocks.length > 0) {
+            const extra = [...docBlocks]
+            if (text) extra.push({ type: 'text', text })
+            apiMessages.push({ role: 'user', content: [...toolResults, ...extra] })
+          } else {
+            apiMessages.push({ role: 'user', content: toolResults })
+          }
+          continue
+        }
+      }
+
       apiMessages.push({ role: 'user', content: buildUserContent(text, docBlocks) })
     } else if (msg.role === 'assistant') {
       const hasToolCalls = msg.toolCalls?.length > 0
