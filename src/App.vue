@@ -152,6 +152,11 @@ onMounted(async () => {
   workspace.restoreTheme()
   workspace.applyFontSizes()
 
+  // Silent update check (non-blocking, respects user preference)
+  if (isAutoCheckEnabled()) {
+    silentUpdateCheck()
+  }
+
   // Try to restore last workspace
   const lastWorkspace = localStorage.getItem('lastWorkspace')
   if (lastWorkspace) {
@@ -167,12 +172,6 @@ onMounted(async () => {
     }
   }
   // No workspace to restore — launcher will show automatically (workspace.isOpen is false)
-
-  // Silent update check (non-blocking, respects user preference)
-  if (isAutoCheckEnabled()) {
-    silentUpdateCheck()
-  }
-
 })
 
 async function silentUpdateCheck() {
