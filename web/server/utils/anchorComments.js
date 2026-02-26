@@ -15,16 +15,22 @@ export function anchorCommentsInHtml(html, comments) {
   for (const c of withSnippets) {
     const snippet = c.text_snippet.trim()
     let idx = text.indexOf(snippet)
+    let matchLen = snippet.length
 
     // Fallback: whitespace-normalized matching
     if (idx === -1) {
       const normalizedText = text.replace(/\s+/g, ' ')
       const normalizedSnippet = snippet.replace(/\s+/g, ' ')
-      idx = normalizedText.indexOf(normalizedSnippet)
-      if (idx === -1) continue
+      const nIdx = normalizedText.indexOf(normalizedSnippet)
+      if (nIdx === -1) continue
+      // Map normalized positions back to original text positions
+      idx = normToOrigIndex(text, nIdx)
+      const origEnd = normToOrigIndex(text, nIdx + normalizedSnippet.length)
+      matchLen = origEnd - idx
     }
 
-    const end = idx + snippet.length
+    const end = idx + matchLen
+
     let overlaps = false
     for (let i = idx; i < end; i++) {
       if (used.has(i)) { overlaps = true; break }
@@ -71,11 +77,16 @@ function mapTextPositions(html) {
       if (semi !== -1 && semi - i < 10) {
         const entity = html.slice(i, semi + 1)
         const decoded = decodeEntity(entity)
-        starts.push(i)
-        ends.push(semi + 1)
-        text += decoded
-        i = semi + 1
-        continue
+        if (decoded.length === 1) {
+          // Successfully decoded to single char — one position entry
+          starts.push(i)
+          ends.push(semi + 1)
+          text += decoded
+          i = semi + 1
+          continue
+        }
+        // Unknown entity: fall through — treat '&' as a literal character
+        // so each char gets its own position entry (preserves text↔position alignment)
       }
     }
 
@@ -88,7 +99,47 @@ function mapTextPositions(html) {
   return { text, starts, ends }
 }
 
+/**
+ * Map a position in whitespace-normalized text back to the original text.
+ * Each whitespace run in the original counts as 1 char in normalized text.
+ */
+function normToOrigIndex(text, normIdx) {
+  let ni = 0
+  let oi = 0
+  while (ni < normIdx && oi < text.length) {
+    if (/\s/.test(text[oi])) {
+      while (oi < text.length && /\s/.test(text[oi])) oi++
+      ni++
+    } else {
+      oi++
+      ni++
+    }
+  }
+  return oi
+}
+
 function decodeEntity(entity) {
-  const map = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&nbsp;': ' ' }
-  return map[entity] || entity
+  const map = {
+    '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&nbsp;': ' ',
+    '&mdash;': '\u2014', '&ndash;': '\u2013',
+    '&lsquo;': '\u2018', '&rsquo;': '\u2019', '&ldquo;': '\u201C', '&rdquo;': '\u201D',
+    '&hellip;': '\u2026', '&bull;': '\u2022',
+    '&copy;': '\u00A9', '&reg;': '\u00AE', '&trade;': '\u2122',
+    '&deg;': '\u00B0', '&plusmn;': '\u00B1', '&times;': '\u00D7', '&divide;': '\u00F7',
+    '&frac12;': '\u00BD', '&frac14;': '\u00BC', '&frac34;': '\u00BE',
+    '&pound;': '\u00A3', '&euro;': '\u20AC', '&yen;': '\u00A5', '&cent;': '\u00A2',
+    '&sect;': '\u00A7', '&para;': '\u00B6', '&micro;': '\u00B5',
+    '&laquo;': '\u00AB', '&raquo;': '\u00BB',
+  }
+  if (map[entity]) return map[entity]
+
+  // Handle numeric character references: &#NNN; and &#xHHH;
+  if (entity.startsWith('&#')) {
+    const code = entity[2] === 'x' || entity[2] === 'X'
+      ? parseInt(entity.slice(3, -1), 16)
+      : parseInt(entity.slice(2, -1), 10)
+    if (!isNaN(code)) return String.fromCodePoint(code)
+  }
+
+  return entity // unknown — caller handles multi-char case
 }
