@@ -1,6 +1,6 @@
 # Peer Review (`web/pages/review/`)
 
-Free promotional tool on shoulde.rs: users upload a .docx or .pdf, receive an AI-powered peer review with a structured report and inline comments anchored to specific passages. No account required. Reviews expire after 48 hours.
+Free promotional tool on shoulde.rs: users upload a .docx or .pdf, receive an AI-powered peer review with a structured report and inline comments anchored to specific passages. No account required. Reviews expire after 7 days.
 
 
 ---
@@ -162,7 +162,7 @@ Cost is tracked per-stage at the correct model rate: Gemini Flash Lite (gatekeep
 
 ### Email Notification
 
-`sendReviewEmail(email, slug, status)` — sends via Resend. Success email has a "View Review" CTA button + 48h expiry notice. Failure email has a "Try Again" link. Graceful no-op if `RESEND_API_KEY` is not set.
+`sendReviewEmail(email, slug, status)` — sends via Resend. Success email has a "View Review" CTA button + 7-day expiry notice. Failure email has a "Try Again" link. Graceful no-op if `RESEND_API_KEY` is not set.
 
 ---
 
@@ -300,7 +300,7 @@ Single `reviews` table (SQLite, see `server/db/schema.js`):
 | outputTokens | integer | Total output tokens across all stages |
 | techNotes | text | JSON: internal diagnostics (gatekeeper result, agent stats, errors) |
 | completedAt | text | ISO 8601 timestamp when review finished |
-| expiresAt | text | ISO 8601 timestamp (48h from creation) |
+| expiresAt | text | ISO 8601 timestamp (7 days from creation) |
 | created_at | text | ISO 8601 |
 
 ---
