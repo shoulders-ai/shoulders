@@ -139,9 +139,8 @@ Workflow: `.github/workflows/build.yml`
 
 | Trigger | Builds | Release? |
 |---|---|---|
-| Push to `main` | macOS ARM, macOS Intel, Linux, Windows | No — artifacts only |
-| Pull request | macOS ARM, macOS Intel, Linux, Windows | No — artifacts only |
 | Tag push (`v*`) | macOS ARM, macOS Intel, Linux, Windows | Yes — draft release created |
+| Manual (`workflow_dispatch`) | macOS ARM, macOS Intel, Linux, Windows | No — artifacts only |
 
 CI builds separate ARM and Intel bundles (not a universal binary). This keeps each download smaller and simplifies the build matrix.
 
@@ -160,7 +159,9 @@ For macOS CI builds to be signed + notarized, 6 secrets must be configured in th
 
 The `tauri-apps/tauri-action` automatically installs the certificate and handles signing + notarization when these env vars are present. The workflow passes them only on macOS build steps.
 
-### Downloading artifacts (every push)
+### Downloading artifacts
+
+Artifacts are produced on every build (tagged or manual). To download:
 
 1. Go to repo → **Actions** tab
 2. Click the workflow run
