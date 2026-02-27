@@ -160,12 +160,19 @@ When switching models mid-conversation (Google → Anthropic), `tool_use` blocks
 **Fix:** Strip in `formatAnthropic()` (client-side, direct key) AND `stripExtraFields()` (server-side, proxy passthrough for Anthropic).
 
 ### Google streaming sends text + finishReason in the same chunk
-Google's Gemini API can include `finishReason: 'STOP'` in the same SSE chunk that has text content. If the translator returns early after processing the text part, the stop signal is lost and the stream hangs. **Fix:** Collect all events (text deltas + stop) into an array per chunk, emit all of them.
+Google's Gemini API can include `finishReason: 'STOP'` in the same SSE chunk that has text content (thinking, text deltas, tool calls). `interpretGoogle()` collects parts into a `results` array — but previously only checked `finishReason` when `results.length === 0`. When the final chunk had both content and `finishReason: 'STOP'`, the stop signal was silently dropped and the stream hung forever.
+
+**Fix:** In `interpretGoogle()` (`chatProvider.js`), always append a `message_delta` stop event when `candidate.finishReason === 'STOP'`, regardless of whether there are content parts in the same chunk. Also detects tool calls in results to emit `stopReason: 'tool_use'` vs `'end_turn'`.
 
 ### Google `thoughtSignature` splits SSE across TCP chunks
 Google's `thoughtSignature` base64 blob can be thousands of characters, making the SSE `data:` line exceed a single TCP packet. If the proxy splits by `\n` and tries `JSON.parse` on each line without buffering, the split line fails silently (incomplete JSON), and the continuation chunk has no `data: ` prefix so it's skipped entirely. The `finishReason: 'STOP'` embedded in that same payload is lost — the client never gets the stop signal and the session hangs in "streaming" forever.
 
 **Fix:** Buffer incomplete SSE lines across `pull()` calls in the proxy's `ReadableStream`. When the last line doesn't end with `\n`, carry it to the next chunk. This is the same `remainingBuffer` pattern the client-side `parseSSEChunk` uses.
+
+### Thinking blocks with null signatures crash Anthropic on provider switch
+When switching providers mid-conversation (e.g. Haiku → GPT-5-mini → Haiku), assistant messages from non-Anthropic providers store `_thinkingBlocks` with `signature: null` (only Anthropic emits `signature_delta`). Sending `{ type: 'thinking', signature: null }` back to Anthropic fails: `messages.N.content.0.thinking.signature.str: Input should be a valid string`.
+
+**Fix:** In `chatMessages.js`, `buildApiMessages` and `buildApiMessagesWithToolResults` filter out thinking blocks where `signature` is not a non-empty string. Provider-specific converters in `chatProvider.js` handle thinking blocks their own way (OpenAI drops them, Google converts to `thought: true`).
 
 ### Anthropic API rejects extra fields in `tool_result`
 Adding debugging fields like `_toolName` to tool_result blocks causes the API to reject the entire request.
