@@ -616,7 +616,13 @@ function interpretGoogle(event) {
     return null
   }
 
-  // Attach usage to the last result
-  results[results.length - 1].usage = rawUsage
+  // Append stop signal — Google sends finishReason in the same chunk as content
+  if (candidate.finishReason === 'STOP') {
+    const hasToolCalls = results.some(r => r.type === 'google_tool_call')
+    results.push({ type: 'message_delta', stopReason: hasToolCalls ? 'tool_use' : 'end_turn', usage: rawUsage })
+  } else {
+    // Attach usage to the last result
+    results[results.length - 1].usage = rawUsage
+  }
   return results
 }

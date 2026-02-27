@@ -150,7 +150,11 @@ export async function buildApiMessages(session, provider = 'anthropic') {
         const blocks = []
         if (hasThinking) {
           for (const tb of msg._thinkingBlocks) {
-            blocks.push({ type: 'thinking', thinking: tb.thinking, signature: tb.signature })
+            // Only include thinking blocks with a valid signature (Anthropic requirement).
+            // Blocks from non-Anthropic providers have signature: null and must be skipped.
+            if (typeof tb.signature === 'string' && tb.signature) {
+              blocks.push({ type: 'thinking', thinking: tb.thinking, signature: tb.signature })
+            }
           }
         }
         if (msg.content) blocks.push({ type: 'text', text: msg.content })
@@ -161,7 +165,7 @@ export async function buildApiMessages(session, provider = 'anthropic') {
             blocks.push(block)
           }
         }
-        apiMessages.push({ role: 'assistant', content: blocks })
+        apiMessages.push({ role: 'assistant', content: blocks.length > 0 ? blocks : (msg.content || '') })
       } else {
         apiMessages.push({ role: 'assistant', content: msg.content || '' })
       }
@@ -270,7 +274,11 @@ export async function buildApiMessagesWithToolResults(session, provider = 'anthr
         const blocks = []
         if (hasThinking) {
           for (const tb of msg._thinkingBlocks) {
-            blocks.push({ type: 'thinking', thinking: tb.thinking, signature: tb.signature })
+            // Only include thinking blocks with a valid signature (Anthropic requirement).
+            // Blocks from non-Anthropic providers have signature: null and must be skipped.
+            if (typeof tb.signature === 'string' && tb.signature) {
+              blocks.push({ type: 'thinking', thinking: tb.thinking, signature: tb.signature })
+            }
           }
         }
         if (msg.content) blocks.push({ type: 'text', text: msg.content })
@@ -281,7 +289,7 @@ export async function buildApiMessagesWithToolResults(session, provider = 'anthr
             blocks.push(block)
           }
         }
-        apiMessages.push({ role: 'assistant', content: blocks })
+        apiMessages.push({ role: 'assistant', content: blocks.length > 0 ? blocks : (msg.content || '') })
       } else {
         apiMessages.push({ role: 'assistant', content: msg.content || '' })
       }
