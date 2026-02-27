@@ -36,7 +36,11 @@ function loadChapter(category, chapterId) {
   return readFileSync(join(dir, match), 'utf-8')
 }
 
+const MAX_GUIDANCE_CHARS = 300_000
+
 export function createGuidanceTool(categories) {
+  let loadedChars = 0
+
   return {
     name: 'getGuidance',
     description: `Load guidance documents for the review. Available categories: ${categories.join(', ')}. First call with action "list" to see available chapters, then "load" to read specific ones.`,
@@ -54,6 +58,11 @@ export function createGuidanceTool(categories) {
       if (action === 'load' && chapterId) {
         const content = loadChapter(category, chapterId)
         if (!content) return { error: `Chapter "${chapterId}" not found in ${category}` }
+        if (loadedChars + content.length > MAX_GUIDANCE_CHARS) {
+          console.log(`[GuidanceTool] Budget exceeded: ${loadedChars}/${MAX_GUIDANCE_CHARS} chars, rejected chapter "${chapterId}" (${content.length} chars)`)
+          return { error: `Guidance budget exceeded (${loadedChars} of ${MAX_GUIDANCE_CHARS} chars used). You cannot load more chapters — work with the guidance you already have.` }
+        }
+        loadedChars += content.length
         return { content }
       }
       return { error: 'Invalid action or missing chapterId' }

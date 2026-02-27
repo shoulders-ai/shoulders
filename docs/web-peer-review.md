@@ -136,7 +136,7 @@ Branches by file extension:
 
 ### Stage 3: Review Agents (parallel)
 
-Three agents run concurrently via `Promise.all`, each with a 10-minute timeout:
+Three agents run concurrently via `Promise.all`, each with a 10-minute timeout and 1 automatic retry on failure (5s pause between attempts):
 
 **Technical Reviewer** (`technicalReviewer.js`) — Claude Sonnet. Focuses on statistical methods, effect sizes, sample size, reproducibility. Has access to `getGuidance` tool with 18 statistics chapters.
 
@@ -145,6 +145,11 @@ Three agents run concurrently via `Promise.all`, each with a 10-minute timeout:
 **Reference Checker** (`referenceChecker.js`) — Claude Sonnet. Verifies bibliography entries against Crossref/OpenAlex databases, audits citation coverage. Uses `search_references` tool — a dumb search pipe that returns raw database results (title, year, authors, journal, DOI). The LLM sees what the databases returned and decides whether it matches. Can call the tool multiple times. Quick-exits if no bibliography section found.
 
 Technical and Editorial agents follow the same pattern — see [Agent Pattern](#agent-pattern) below. Reference Checker uses a different tool (`search_references` + `submit_citation_report`) but the same anchor validation on output.
+
+**Input guards** (applied before agents receive the paper):
+- **Paper truncation**: markdown capped at 150,000 characters (~37K tokens). If truncated, a note is appended telling agents to acknowledge the limitation.
+- **Image payload cap**: total base64 image payload capped at 5MB per agent. Omitted figures are noted so the agent can inform the user.
+- **Guidance budget**: each agent's `getGuidance` tool has a 300,000-character budget (~75K tokens). Once exceeded, further chapter loads are refused.
 
 Comments are deduplicated across all agents by snippet before passing to Stage 4.
 
@@ -158,7 +163,7 @@ Comments are deduplicated across all agents by snippet before passing to Stage 4
 
 ### Cost Tracking
 
-Cost is tracked per-stage at the correct model rate: Gemini Flash Lite (gatekeeper), Sonnet (technical, editorial, reference checker, report writer). `calculateCostCents()` is called per-stage and accumulated. Stored in `reviews.costCents`, `reviews.inputTokens`, `reviews.outputTokens`.
+Cost is tracked per-stage at the correct model rate: Gemini Flash Lite (gatekeeper), Sonnet (technical, editorial, reference checker, report writer). `calculateCostCents()` is called per-stage with cache-aware pricing and accumulated. Stored in `reviews.costCents`, `reviews.inputTokens`, `reviews.outputTokens`. Prompt caching reduces input costs by ~80% on tool loop steps 2+ (system prompt + paper content cached).
 
 ### Email Notification
 
@@ -261,20 +266,21 @@ If an agent times out or crashes, the pipeline continues with partial results (c
 
 Two provider functions used by the pipeline:
 
-- **`callAnthropic({ model, system, messages, tools, maxTokens, maxSteps })`** — Anthropic Messages API with built-in tool-calling loop. Executes tools server-side (no client round-trips), accumulates token usage across steps. Used by all three reviewer agents and the report writer.
+- **`callAnthropic({ model, system, messages, tools, maxTokens, maxSteps })`** — Anthropic Messages API with built-in tool-calling loop. Executes tools server-side (no client round-trips), accumulates token usage across steps. Used by all three reviewer agents and the report writer. Features: prompt caching (system prompt + first user message cached via `cache_control: ephemeral`), 120-second per-fetch timeout, detailed error logging on failure (cause, body size, step number).
 - **`callGemini({ model, system, messages, maxTokens })`** — Google Gemini API. No tool support. Used by the gatekeeper (fast, cheap classification).
 
 ### `utils/pricing.js`
 
-Per-model token pricing for Anthropic (Opus, Sonnet, Haiku), Google (Flash Lite, Flash, Pro), and OpenAI (GPT-5.2, GPT-5-mini, GPT-5 Nano). `calculateCostCents(input, output, model)` returns cents rounded to 2 decimal places.
+Per-model token pricing for Anthropic (Opus, Sonnet, Haiku), Google (Flash Lite, Flash, Pro), and OpenAI (GPT-5.2, GPT-5-mini, GPT-5 Nano). `calculateCostCents(input, output, model, { cacheRead, cacheCreation })` returns cents rounded to 2 decimal places. Cache-aware: accounts for Anthropic's cache read (10% of input) and cache write (125% of input) pricing.
 
 ### Guidance System (`guidanceLoader.js`)
 
 Creates a `getGuidance` tool that agents can call to load reference material during review:
 - `action: "list"` — returns available chapters in a category (parsed from markdown frontmatter: `id`, `name`, `applies_to`)
 - `action: "load"` — returns the full content of a specific chapter
+- **Budget**: 300,000 characters per tool instance (~75K tokens). Once exceeded, further loads are refused with an error message. Each agent gets its own budget.
 
-Guidance chapters are markdown files in `server/services/review/guidance/{category}/`. Currently 3 categories: `statistics` (18 chapters), `reporting-standards` (1 chapter), `general` (1 chapter).
+Guidance chapters are markdown files in `server/services/review/guidance/{category}/`. Currently 3 categories: `statistics` (18 chapters, ~450KB total), `reporting-standards` (1 chapter), `general` (1 chapter).
 
 ---
 

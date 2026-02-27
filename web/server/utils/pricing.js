@@ -73,7 +73,7 @@ function resolveModelPriceKey(modelId) {
  * Calculate cost in cents for a given model + token counts.
  * Returns cents rounded to 2 decimal places (hundredths of a cent).
  */
-export function calculateCostCents(inputTokens, outputTokens, model) {
+export function calculateCostCents(inputTokens, outputTokens, model, { cacheRead = 0, cacheCreation = 0 } = {}) {
   const key = resolveModelPriceKey(model)
   if (!key) {
     // Fallback: ~$3/MTok input, ~$15/MTok output (Sonnet-tier)
@@ -82,7 +82,9 @@ export function calculateCostCents(inputTokens, outputTokens, model) {
   }
 
   const prices = tokenPrices[key]
-  const usd = (inputTokens * prices.input) + (outputTokens * prices.output)
+  let usd = (inputTokens * prices.input) + (outputTokens * prices.output)
+  if (cacheRead && prices.cacheRead) usd += cacheRead * prices.cacheRead
+  if (cacheCreation && prices.cacheWrite) usd += cacheCreation * prices.cacheWrite
   return Math.round(usd * 10000) / 100
 }
 

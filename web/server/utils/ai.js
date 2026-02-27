@@ -4,7 +4,7 @@ export async function callAnthropic({ model = 'claude-sonnet-4-6', system, messa
   const apiKey = config().anthropicApiKey
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured')
 
-  const totalUsage = { input: 0, output: 0 }
+  const totalUsage = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
   let currentMessages = [...messages]
   let steps = 0
   let finalText = ''
@@ -15,6 +15,22 @@ export async function callAnthropic({ model = 'claude-sonnet-4-6', system, messa
     return { name: t.name, description: t.description, input_schema: t.input_schema }
   })
 
+  // Add cache_control to the first user message (the paper)
+  // Normalize string content to array format so cache_control can be applied
+  if (currentMessages[0]) {
+    if (typeof currentMessages[0].content === 'string') {
+      currentMessages[0] = {
+        ...currentMessages[0],
+        content: [{ type: 'text', text: currentMessages[0].content, cache_control: { type: 'ephemeral' } }],
+      }
+    } else if (Array.isArray(currentMessages[0].content)) {
+      const lastBlock = currentMessages[0].content[currentMessages[0].content.length - 1]
+      if (lastBlock && !lastBlock.cache_control) {
+        lastBlock.cache_control = { type: 'ephemeral' }
+      }
+    }
+  }
+
   while (steps < maxSteps) {
     steps++
 
@@ -23,21 +39,35 @@ export async function callAnthropic({ model = 'claude-sonnet-4-6', system, messa
       max_tokens: maxTokens,
       messages: currentMessages,
     }
-    if (system) body.system = system
+    // System prompt with cache_control for prompt caching
+    if (system) {
+      body.system = [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
+    }
     if (apiTools?.length) body.tools = apiTools
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify(body),
-    })
+    const bodyJson = JSON.stringify(body)
+
+    let res
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        signal: AbortSignal.timeout(120_000),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: bodyJson,
+      })
+    } catch (fetchErr) {
+      const detail = fetchErr.cause?.message || fetchErr.cause?.code || fetchErr.message
+      console.error(`[callAnthropic] Fetch failed on step ${steps}/${maxSteps}, model=${model}, bodySize=${bodyJson.length} chars: ${detail}`)
+      throw new Error(`Anthropic fetch failed (step ${steps}, ~${bodyJson.length} chars): ${detail}`, { cause: fetchErr })
+    }
 
     if (!res.ok) {
       const err = await res.text()
+      console.error(`[callAnthropic] API error on step ${steps}/${maxSteps}, model=${model}, status=${res.status}: ${err.slice(0, 500)}`)
       throw new Error(`Anthropic API error ${res.status}: ${err}`)
     }
 
@@ -46,6 +76,8 @@ export async function callAnthropic({ model = 'claude-sonnet-4-6', system, messa
     if (data.usage) {
       totalUsage.input += data.usage.input_tokens || 0
       totalUsage.output += data.usage.output_tokens || 0
+      totalUsage.cacheRead += data.usage.cache_read_input_tokens || 0
+      totalUsage.cacheCreation += data.usage.cache_creation_input_tokens || 0
     }
 
     const textBlocks = data.content?.filter(b => b.type === 'text') || []

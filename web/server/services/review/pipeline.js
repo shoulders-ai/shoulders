@@ -13,6 +13,7 @@ import { runReferenceCheck } from './agents/referenceChecker'
 import { writeReport } from './agents/reportWriter'
 
 const AGENT_TIMEOUT = 600_000
+const MAX_PAPER_CHARS = 150_000
 
 function deduplicateComments(comments) {
   const seen = new Set()
@@ -31,6 +32,13 @@ function updateReview(id, data) {
     data.techNotes = JSON.stringify(data.techNotes)
   }
   db.update(reviews).set(data).where(eq(reviews.id, id)).run()
+}
+
+function addCacheAwareCost(totalCostCents, usage, model) {
+  return totalCostCents + calculateCostCents(usage.input, usage.output, model, {
+    cacheRead: usage.cacheRead || 0,
+    cacheCreation: usage.cacheCreation || 0,
+  })
 }
 
 export async function runReviewPipeline(id, buffer, filename, email) {
@@ -77,6 +85,15 @@ export async function runReviewPipeline(id, buffer, filename, email) {
 
     updateReview(id, { domainHint: gateResult.domain_hint })
 
+    // Truncate paper for review agents if too long
+    let reviewMarkdown = markdown
+    if (markdown.length > MAX_PAPER_CHARS) {
+      reviewMarkdown = markdown.slice(0, MAX_PAPER_CHARS) +
+        `\n\n---\n\nNote: This paper was truncated for review (original: ${markdown.length} characters, limit: ${MAX_PAPER_CHARS}). The review covers only the content above. Please mention in your comments that later sections were not reviewed.`
+      console.log(`[Review ${id}] Paper truncated: ${markdown.length} → ${MAX_PAPER_CHARS} chars`)
+      techNotes.stages.paperTruncated = { original: markdown.length, limit: MAX_PAPER_CHARS }
+    }
+
     // Stage 3: Review agents (parallel) — images sent directly to Sonnet
     console.log(`[Review ${id}] Stage 3: Review agents (parallel)`)
 
@@ -85,21 +102,27 @@ export async function runReviewPipeline(id, buffer, filename, email) {
     const refShared = { allValid: [], techNotes: [] }
 
     const runAgent = async (fn, md, imgs, shared, label) => {
-      try {
-        return await Promise.race([
-          fn(md, imgs, shared),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Agent timeout')), AGENT_TIMEOUT)),
-        ])
-      } catch (e) {
-        console.error(`[Review ${id}] ${label} FAILED: ${e.message}`)
-        return null
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          return await Promise.race([
+            fn(md, imgs, shared),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Agent timeout')), AGENT_TIMEOUT)),
+          ])
+        } catch (e) {
+          const cause = e.cause ? ` (cause: ${e.cause.message || e.cause.code || e.cause})` : ''
+          console.error(`[Review ${id}] ${label} FAILED (attempt ${attempt}/2): ${e.message}${cause}`)
+          if (attempt === 2) return null
+          await new Promise(r => setTimeout(r, 5_000))
+          console.log(`[Review ${id}] ${label} retrying...`)
+        }
       }
+      return null
     }
 
     const [technicalResult, editorialResult, referenceResult] = await Promise.all([
-      runAgent(runTechnicalReview, markdown, images, techShared, 'Technical reviewer'),
-      runAgent(runEditorialReview, markdown, images, editShared, 'Editorial reviewer'),
-      runAgent(runReferenceCheck, markdown, images, refShared, 'Reference checker'),
+      runAgent(runTechnicalReview, reviewMarkdown, images, techShared, 'Technical reviewer'),
+      runAgent(runEditorialReview, reviewMarkdown, images, editShared, 'Editorial reviewer'),
+      runAgent(runReferenceCheck, reviewMarkdown, images, refShared, 'Reference checker'),
     ])
 
     const technicalComments = (technicalResult?.comments || techShared.allValid.map(c => ({ ...c, reviewer: 'Technical Reviewer' })))
@@ -109,15 +132,15 @@ export async function runReviewPipeline(id, buffer, filename, email) {
 
     if (technicalResult?.usage) {
       totalUsage.input += technicalResult.usage.input; totalUsage.output += technicalResult.usage.output
-      totalCostCents += calculateCostCents(technicalResult.usage.input, technicalResult.usage.output, 'claude-sonnet-4-6')
+      totalCostCents = addCacheAwareCost(totalCostCents, technicalResult.usage, 'claude-sonnet-4-6')
     }
     if (editorialResult?.usage) {
       totalUsage.input += editorialResult.usage.input; totalUsage.output += editorialResult.usage.output
-      totalCostCents += calculateCostCents(editorialResult.usage.input, editorialResult.usage.output, 'claude-sonnet-4-6')
+      totalCostCents = addCacheAwareCost(totalCostCents, editorialResult.usage, 'claude-sonnet-4-6')
     }
     if (referenceResult?.usage) {
       totalUsage.input += referenceResult.usage.input; totalUsage.output += referenceResult.usage.output
-      totalCostCents += calculateCostCents(referenceResult.usage.input, referenceResult.usage.output, 'claude-sonnet-4-6')
+      totalCostCents = addCacheAwareCost(totalCostCents, referenceResult.usage, 'claude-sonnet-4-6')
     }
 
     console.log(`[Review ${id}] Technical: ${technicalComments.length} comments${!technicalResult ? ' (partial)' : ''}`)
@@ -143,7 +166,7 @@ export async function runReviewPipeline(id, buffer, filename, email) {
       report = reportResult.text
       if (reportResult.usage) {
         totalUsage.input += reportResult.usage.input; totalUsage.output += reportResult.usage.output
-        totalCostCents += calculateCostCents(reportResult.usage.input, reportResult.usage.output, 'claude-sonnet-4-6')
+        totalCostCents = addCacheAwareCost(totalCostCents, reportResult.usage, 'claude-sonnet-4-6')
       }
       techNotes.stages.report = { length: report?.length }
     } catch (e) {

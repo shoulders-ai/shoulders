@@ -27,6 +27,8 @@ Each comment must:
 
 Be thorough but fair. Aim for 8-20 comments. Focus on substance.`
 
+const MAX_IMAGE_BASE64_CHARS = 5_000_000
+
 export async function runEditorialReview(text, images, shared = { allValid: [], techNotes: [] }) {
   const allValid = shared.allValid
   const techNotes = shared.techNotes
@@ -34,10 +36,24 @@ export async function runEditorialReview(text, images, shared = { allValid: [], 
   const guidanceTool = createGuidanceTool(['reporting-standards', 'general'])
 
   const userContent = []
-  for (const img of (images || [])) {
+  let imageBytes = 0
+  let omittedImages = 0
+  for (let i = 0; i < (images || []).length; i++) {
+    const img = images[i]
+    if (imageBytes + img.base64.length > MAX_IMAGE_BASE64_CHARS) {
+      omittedImages++
+      continue
+    }
     userContent.push({ type: 'image', source: { type: 'base64', media_type: img.contentType, data: img.base64 } })
+    imageBytes += img.base64.length
   }
-  userContent.push({ type: 'text', text: `Please review the following paper:\n\n${text}` })
+
+  let paperNote = `Please review the following paper:\n\n${text}`
+  if (omittedImages > 0) {
+    console.log(`[EditorialReviewer] ${omittedImages} images omitted (total base64: ${imageBytes} chars, limit: ${MAX_IMAGE_BASE64_CHARS})`)
+    paperNote += `\n\nNote: ${omittedImages} figure(s) were omitted from this review because the total image size exceeded the limit. Please acknowledge this in your review so the author knows these figures were not assessed.`
+  }
+  userContent.push({ type: 'text', text: paperNote })
 
   const submitReviewTool = {
     name: 'submit_review',
