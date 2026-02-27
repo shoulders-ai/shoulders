@@ -46,7 +46,7 @@ async function buildToolResultBlock(tc, provider) {
     ...(tc.status === 'error' ? { is_error: true } : {}),
   }
 
-  if (tc._pdfPath && provider !== 'openai') {
+  if (tc._pdfPath && provider === 'google') {
     try {
       const base64 = await invoke('read_file_base64', { path: tc._pdfPath })
       block.content = [
@@ -198,7 +198,7 @@ export async function buildApiMessagesWithToolResults(session, provider = 'anthr
       if (msg._isToolResult && msg._toolResults) {
         const processed = await Promise.all(
           msg._toolResults.map(async ({ _toolName, _pdfPath, ...rest }) => {
-            if (_pdfPath && provider !== 'openai') {
+            if (_pdfPath && provider === 'google') {
               try {
                 const base64 = await invoke('read_file_base64', { path: _pdfPath })
                 return {

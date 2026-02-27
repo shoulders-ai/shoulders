@@ -172,6 +172,13 @@ Adding debugging fields like `_toolName` to tool_result blocks causes the API to
 
 **Fix:** Only include `type`, `tool_use_id`, `content`, and `is_error`.
 
+### PDF `document` blocks in `tool_result` cause infinite tool loops on Anthropic
+Anthropic's API accepts `document` blocks inside `tool_result.content` per the docs, but in practice, sending a base64 PDF as a `document` block inside a `tool_result` causes Claude to not see the content and call the same tool repeatedly in an infinite loop. The same PDF works fine when sent as extracted text in `tool_result.content` (string), or as a top-level `document` block in user messages (@file references).
+
+Only Google's client-side converter (`_convertToGoogleContents` in `chatProvider.js`) properly handles `document` blocks inside `tool_result` by converting them to `inlineData`. All other providers (Anthropic, OpenAI, Shoulders) should use extracted text for PDF tool results.
+
+**Fix:** In `chatMessages.js`, `buildToolResultBlock()` and `buildApiMessagesWithToolResults()` use `provider === 'google'` (not `provider !== 'openai'`) to gate native PDF document blocks in tool results. All other providers get the already-extracted text content from `tc.output`.
+
 ### File write + merge view race condition
 When AI tools write files, the merge view compares against `filesStore.fileContents`. If content isn't updated before recording the pending edit, the editor shows stale content and the diff is wrong.
 
