@@ -178,32 +178,31 @@ async function silentUpdateCheck() {
   const update = await checkForUpdate()
   if (!update?.available) return
 
-  toastStore.show(`Shoulders ${update.version} available`, {
+  const toastId = toastStore.show(`Shoulders ${update.version} available`, {
     type: 'info',
     duration: 0,
     action: {
       label: 'Download',
-      onClick: () => startUpdateDownload(update),
+      onClick: () => startUpdateDownload(update, toastId),
     },
   })
 }
 
-async function startUpdateDownload(update) {
-  toastStore.show('Downloading update...', { type: 'info', duration: 0 })
+async function startUpdateDownload(update, toastId) {
+  toastStore.update(toastId, 'Downloading update...', { type: 'info', action: null })
   const ok = await downloadUpdate(update, (pct) => {
     // Progress updates handled in Settings if open; toast stays as "Downloading..."
   })
   if (ok) {
-    toastStore.show('Update ready. Restart to apply.', {
+    toastStore.update(toastId, 'Update ready. Restart to apply.', {
       type: 'success',
-      duration: 0,
       action: {
         label: 'Restart',
         onClick: () => installAndRestart(),
       },
     })
   } else {
-    toastStore.show('Download failed. Try again from Settings.', { type: 'error', duration: 5000 })
+    toastStore.update(toastId, 'Download failed. Try again from Settings.', { type: 'error', duration: 5000 })
   }
 }
 

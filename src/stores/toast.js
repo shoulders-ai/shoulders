@@ -14,6 +14,19 @@ export const useToastStore = defineStore('toast', {
       if (duration > 0) {
         setTimeout(() => this.dismiss(id), duration)
       }
+      return id
+    },
+
+    /** Update an existing toast in-place (same position, no re-animation). */
+    update(id, message, { type, action, duration } = {}) {
+      const toast = this.toasts.find(t => t.id === id)
+      if (!toast) return
+      toast.message = message
+      if (type !== undefined) toast.type = type
+      toast.action = action !== undefined ? action : toast.action
+      if (duration > 0) {
+        setTimeout(() => this.dismiss(id), duration)
+      }
     },
 
     /**
