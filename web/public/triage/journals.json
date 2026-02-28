@@ -1,0 +1,62 @@
+[
+  {
+    "id": "nature",
+    "name": "Nature",
+    "scope": "Original research across all fields of science and technology with broad significance."
+  },
+  {
+    "id": "science",
+    "name": "Science",
+    "scope": "Original research and reviews across all scientific disciplines with broad impact."
+  },
+  {
+    "id": "lancet",
+    "name": "The Lancet",
+    "scope": "Clinical medicine, global health, and health policy with emphasis on clinical impact."
+  },
+  {
+    "id": "nejm",
+    "name": "New England Journal of Medicine",
+    "scope": "Clinical research, clinical practice, health policy, and medical education."
+  },
+  {
+    "id": "bmj",
+    "name": "BMJ",
+    "scope": "General medical journal covering clinical research, education, news, and commentary."
+  },
+  {
+    "id": "jama",
+    "name": "JAMA",
+    "scope": "Clinical research, reviews, and opinion in medicine and health."
+  },
+  {
+    "id": "plos-one",
+    "name": "PLOS ONE",
+    "scope": "Multidisciplinary research with sound methodology regardless of perceived significance."
+  },
+  {
+    "id": "jme",
+    "name": "Journal of Medical Ethics",
+    "scope": "Medical ethics, bioethics, healthcare ethics, and related health law and policy."
+  },
+  {
+    "id": "health-economics",
+    "name": "Health Economics",
+    "scope": "Economic analysis of health care systems, health policy, and health outcomes."
+  },
+  {
+    "id": "value-in-health",
+    "name": "Value in Health",
+    "scope": "Health economics, outcomes research, health technology assessment, and decision sciences."
+  },
+  {
+    "id": "pharmacoeconomics",
+    "name": "PharmacoEconomics",
+    "scope": "Pharmacoeconomic evaluation, drug pricing, cost-effectiveness, and health technology assessment."
+  },
+  {
+    "id": "social-science-medicine",
+    "name": "Social Science & Medicine",
+    "scope": "Social science perspectives on health, illness, and health care systems."
+  }
+]

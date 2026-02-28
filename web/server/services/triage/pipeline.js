@@ -28,7 +28,7 @@ function addCost(totalCostCents, usage, model) {
   })
 }
 
-export async function runTriagePipeline(id, buffer, filename) {
+export async function runTriagePipeline(id, buffer, filename, { journalScope, customInstructions } = {}) {
   const techNotes = { stages: {} }
   const totalUsage = { input: 0, output: 0 }
   let totalCostCents = 0
@@ -58,7 +58,16 @@ export async function runTriagePipeline(id, buffer, filename) {
     // Compute stats
     const wordCount = markdown.split(/\s+/).filter(Boolean).length
     const pageEstimate = isPdf ? Math.ceil(wordCount / 350) : null
-    stepDetails.extracted = { wordCount, pageEstimate, chars: markdown.length }
+    const tableCount = (markdown.match(/(?:^|\n)\|.+\|.+\|/g) || []).length > 0
+      ? new Set(markdown.split('\n').reduce((acc, line, i, lines) => {
+          if (/^\|.+\|/.test(line) && (i === 0 || !/^\|.+\|/.test(lines[i - 1]))) acc.push(i)
+          return acc
+        }, [])).size
+      : 0
+    const figureCount = new Set(
+      (markdown.match(/\b(?:Figure|Fig\.?)\s*(\d+)/gi) || []).map(m => m.match(/\d+/)?.[0])
+    ).size
+    stepDetails.extracted = { wordCount, pageEstimate, chars: markdown.length, tableCount, figureCount }
     console.log(`[Triage ${id}] Extracted: ${wordCount} words, ~${pageEstimate || '?'} pages`)
 
     updateTriage(id, { markdown, stepDetails })
@@ -107,15 +116,15 @@ export async function runTriagePipeline(id, buffer, filename) {
 
     // Build step details for progressive UI
     const verified = refCheckResult.results.filter(r => r.status === 'verified').length
-    const corrected = refCheckResult.results.filter(r => r.status === 'corrected').length
-    const notFound = refCheckResult.results.filter(r => r.status === 'not_found').length
-    stepDetails.referencesChecked = { verified, corrected, notFound, total: refCheckResult.results.length }
+    const errors = refCheckResult.results.filter(r => r.status === 'error').length
+    const unverified = refCheckResult.results.filter(r => r.status === 'unverified').length
+    stepDetails.referencesChecked = { verified, errors, unverified, total: refCheckResult.results.length }
     stepDetails.pangram = pangramResult.available
       ? { aiScore: pangramResult.aiScore, humanScore: pangramResult.humanScore }
       : { available: false }
     stepDetails.novelty = { paperCount: noveltyResult.relatedPapers.length }
 
-    console.log(`[Triage ${id}] Refs: ${verified} verified, ${corrected} corrected, ${notFound} not found`)
+    console.log(`[Triage ${id}] Refs: ${verified} verified, ${errors} errors, ${unverified} unverified`)
     console.log(`[Triage ${id}] Pangram: ${pangramResult.available ? `${Math.round((pangramResult.aiScore || 0) * 100)}% AI` : 'unavailable'}`)
     console.log(`[Triage ${id}] Novelty: ${noveltyResult.relatedPapers.length} related papers`)
 
@@ -135,6 +144,8 @@ export async function runTriagePipeline(id, buffer, filename) {
       refCheckResults: refCheckResult,
       pangramResult,
       noveltyResult,
+      journalScope,
+      customInstructions,
     })
 
     if (assessmentUsage) {

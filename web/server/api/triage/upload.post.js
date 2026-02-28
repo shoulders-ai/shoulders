@@ -20,6 +20,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'File exceeds 50MB limit' })
   }
 
+  // Extract text fields from multipart form
+  const journalScope = formData.find(f => f.name === 'journalScope')?.data?.toString() || null
+  const customInstructions = formData.find(f => f.name === 'customInstructions')?.data?.toString() || null
+
   const id = generateId()
   const slug = generateSlug()
   const db = useDb()
@@ -30,11 +34,13 @@ export default defineEventHandler(async (event) => {
     status: 'processing',
     currentStep: 'extracting',
     filename: uploadedFile.filename,
+    journalScope,
+    customInstructions,
     createdAt: new Date().toISOString(),
   }).run()
 
   // Fire-and-forget
-  runTriagePipeline(id, uploadedFile.data, uploadedFile.filename)
+  runTriagePipeline(id, uploadedFile.data, uploadedFile.filename, { journalScope, customInstructions })
     .catch(e => console.error(`[Triage ${id}] Background pipeline error:`, e))
 
   return { slug }

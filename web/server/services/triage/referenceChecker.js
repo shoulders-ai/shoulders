@@ -11,13 +11,15 @@ WORKFLOW:
 1. Call search_references with all references (up to 30).
 2. For each reference, compare the paper's entry against database results:
    - "verified": title, authors, year, and journal closely match a database result
-   - "corrected": a match was found but with a significant discrepancy (wrong DOI, wrong year by >1, wrong journal). Include what was corrected.
-   - "not_found": no matching result in any database. Books, reports, and non-indexed sources often won't appear — that's expected for those types.
+   - "error": a match was found but with a significant metadata error (wrong DOI, wrong year by >1, wrong journal, missing authors, wrong volume/pages). The note MUST describe what is wrong — e.g. "Missing authors (Gold, Menzel). Volume should be 38(9). Pages should be 982-988."
+   - "unverified": no matching result in any database. The note MUST explain why — is this expected (grey literature, dataset, report, book chapter) or suspicious (a journal article that should be findable)? e.g. "Book chapter — could not be confirmed in academic databases." or "Journal article not found in Crossref or OpenAlex — may not exist."
 3. Call submit_results with your structured findings.
 
 IMPORTANT:
 - Year ±1 is normal (preprint vs published). Minor author spelling variations are normal. These count as "verified".
-- Only mark "corrected" for genuinely wrong metadata (wrong DOI, wrong journal, substantially wrong title).
+- Only mark "error" for genuinely wrong metadata (wrong DOI, wrong journal, substantially wrong title, missing authors, wrong volume/pages).
+- For "error" status: describe what is wrong, not that it was "corrected". The editor needs to know the specific discrepancy.
+- For "unverified" status: distinguish between expected (grey literature, datasets, reports) and suspicious (journal articles not found).
 - Be efficient — call search_references once with all refs, then analyze results.
 
 You MUST call submit_results to complete your task.`
@@ -82,8 +84,8 @@ export async function checkReferences(references) {
             type: 'object',
             properties: {
               key: { type: 'string', description: 'Reference identifier' },
-              status: { type: 'string', enum: ['verified', 'corrected', 'not_found'] },
-              note: { type: 'string', description: 'What was corrected or why not found (optional)' },
+              status: { type: 'string', enum: ['verified', 'error', 'unverified'] },
+              note: { type: 'string', description: 'For error: describe the specific metadata error. For unverified: explain why (grey lit, suspicious, etc.)' },
             },
             required: ['key', 'status'],
           },

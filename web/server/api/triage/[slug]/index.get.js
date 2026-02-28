@@ -22,6 +22,8 @@ export default defineEventHandler((event) => {
     novelty: safeJson(row.noveltyJson),
     assessment: safeJson(row.assessmentJson),
     costCents: row.costCents || 0,
+    inputTokens: row.inputTokens || 0,
+    outputTokens: row.outputTokens || 0,
     createdAt: row.createdAt,
     completedAt: row.completedAt,
   }

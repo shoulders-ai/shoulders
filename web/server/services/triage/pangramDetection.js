@@ -1,7 +1,7 @@
 /**
- * Pangram AI content detection.
- * Docs: https://pangram.so/docs
- * Returns { available, aiScore, humanScore, segments? } or graceful fallback.
+ * Pangram AI content detection (v3 API).
+ * Docs: https://docs.pangram.com/api-reference/ai-detection
+ * Returns { available, aiScore, humanScore, prediction, segments? } or graceful fallback.
  */
 export async function detectAiContent(text) {
   const config = useRuntimeConfig()
@@ -11,9 +11,9 @@ export async function detectAiContent(text) {
     return { available: false, error: 'Pangram API key not configured' }
   }
 
-  // Pangram accepts up to ~25k characters
+  // Pangram v3 accepts up to ~25k characters
   const truncated = text.slice(0, 25000)
-  const url = 'https://api.pangram.so/v1/detect'
+  const url = 'https://text.api.pangram.com/v3'
 
   console.log(`[pangramDetection] Calling ${url} with ${truncated.length} chars, key prefix: ${apiKey.slice(0, 8)}...`)
 
@@ -22,7 +22,7 @@ export async function detectAiContent(text) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'x-api-key': apiKey,
       },
       body: JSON.stringify({ text: truncated }),
       signal: AbortSignal.timeout(30_000),
@@ -35,21 +35,25 @@ export async function detectAiContent(text) {
     }
 
     const data = await res.json()
-    console.log(`[pangramDetection] Response keys: ${Object.keys(data).join(', ')}`)
+    console.log(`[pangramDetection] Response: prediction=${data.prediction_short}, ai=${data.fraction_ai}, human=${data.fraction_human}, ai_assisted=${data.fraction_ai_assisted}`)
 
-    // Pangram response format varies by version — handle both
-    const aiScore = data.ai_score ?? data.score ?? null
-    const humanScore = data.human_score ?? (aiScore != null ? 1 - aiScore : null)
+    // v3 response fields
+    const aiScore = data.fraction_ai ?? data.ai_score ?? data.score ?? null
+    const aiAssistedScore = data.fraction_ai_assisted ?? null
+    const humanScore = data.fraction_human ?? data.human_score ?? (aiScore != null ? 1 - aiScore : null)
 
     return {
       available: true,
-      score: data.score,
       aiScore,
+      aiAssistedScore,
       humanScore,
-      segments: data.segments || data.sentences || [],
+      prediction: data.prediction_short || null,
+      headline: data.headline || null,
+      segments: data.windows || data.segments || data.sentences || [],
     }
   } catch (e) {
-    console.error(`[pangramDetection] Fetch failed: ${e.message}${e.cause ? ` (cause: ${e.cause.message || e.cause.code || e.cause})` : ''}`)
+    const cause = e.cause ? ` (cause: ${e.cause.message || e.cause.code || e.cause})` : ''
+    console.error(`[pangramDetection] Fetch failed: ${e.message}${cause}`)
     return { available: false, error: `Fetch failed: ${e.message}` }
   }
 }

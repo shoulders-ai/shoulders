@@ -151,6 +151,8 @@ export const triages = sqliteTable('triages', {
   currentStep: text('current_step'),
   stepDetails: text('step_details'),
   filename: text('filename'),
+  journalScope: text('journal_scope'),
+  customInstructions: text('custom_instructions'),
   markdown: text('markdown'),
   referencesJson: text('references_json'),
   refCheckJson: text('ref_check_json'),

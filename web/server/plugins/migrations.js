@@ -224,6 +224,15 @@ export default defineNitroPlugin(() => {
     CREATE INDEX IF NOT EXISTS idx_triages_created ON triages(created_at);
   `)
 
+  // Triage additive columns
+  const triageAlters = [
+    `ALTER TABLE triages ADD COLUMN journal_scope TEXT`,
+    `ALTER TABLE triages ADD COLUMN custom_instructions TEXT`,
+  ]
+  for (const stmt of triageAlters) {
+    try { sqlite.exec(stmt) } catch {}
+  }
+
   // Seed existing deck shares (idempotent)
   const seedShares = [
     ['seed_fe6kc', 'fe6kc-ch160-yw8c', 'deck-antler', 'faerber',       '2026-02-16T10:17:44.567Z'],
