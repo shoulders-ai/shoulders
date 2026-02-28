@@ -211,6 +211,8 @@ export const useFilesStore = defineStore('files', {
       } else if (name.endsWith('.tex')) {
         const title = name.replace(/\.tex$/, '').replace(/-/g, ' ')
         content = `\\documentclass{article}\n\\title{${title}}\n\\author{}\n\\date{}\n\n\\begin{document}\n\\maketitle\n\n\n\n\\end{document}\n`
+      } else if (name.endsWith('.canvas')) {
+        content = JSON.stringify({ version: 1, viewport: { x: 0, y: 0, zoom: 1 }, nodes: [], edges: [], aiState: { messages: {} } }, null, 2) + '\n'
       }
       try {
         await invoke('create_file', { path: fullPath, content })

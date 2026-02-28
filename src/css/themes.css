@@ -54,6 +54,15 @@
 
   --hl-list: var(--warning);
 
+  /* Canvas node colors */
+  --canvas-yellow: #3d3520;
+  --canvas-blue: #1e2d4a;
+  --canvas-green: #1a3024;
+  --canvas-pink: #3a1e2e;
+  --canvas-purple: #2d1f3d;
+  --canvas-orange: #3d2a1a;
+  --canvas-gray: #2a2e38;
+
   --editor-font-size: 14px;
   --ui-font-size: 13px;
 
@@ -74,6 +83,14 @@
 
 /* ===== Light (Cadet Blue) ===== */
 .theme-light {
+  --canvas-yellow: #fef3c7;
+  --canvas-blue: #dbeafe;
+  --canvas-green: #dcfce7;
+  --canvas-pink: #fce7f3;
+  --canvas-purple: #f3e8ff;
+  --canvas-orange: #ffedd5;
+  --canvas-gray: #e2e8f0;
+
   --bg-primary: #ffffff;
   --bg-secondary: #f5f6f8;
   --bg-tertiary: #e8eaed;
@@ -127,6 +144,14 @@
 
 /* ===== Monokai ===== */
 .theme-monokai {
+  --canvas-yellow: #3e3a1e;
+  --canvas-blue: #1e2a3e;
+  --canvas-green: #1e3a22;
+  --canvas-pink: #3e1e2e;
+  --canvas-purple: #2e1e3e;
+  --canvas-orange: #3e2e1e;
+  --canvas-gray: #383830;
+
   --bg-primary: #272822;
   --bg-secondary: #1e1f1c;
   --bg-tertiary: #3e3d32;
@@ -179,6 +204,14 @@
 
 /* ===== Nord ===== */
 .theme-nord {
+  --canvas-yellow: #3b3422;
+  --canvas-blue: #2a3550;
+  --canvas-green: #2a3a2e;
+  --canvas-pink: #3e2a34;
+  --canvas-purple: #342a42;
+  --canvas-orange: #3e3228;
+  --canvas-gray: #3b4252;
+
   --bg-primary: #2e3440;
   --bg-secondary: #3b4252;
   --bg-tertiary: #434c5e;
@@ -231,6 +264,14 @@
 
 /* ===== Solarized Light ===== */
 .theme-solarized {
+  --canvas-yellow: #f5e6b8;
+  --canvas-blue: #d6e4f0;
+  --canvas-green: #d8e8d0;
+  --canvas-pink: #f0dce0;
+  --canvas-purple: #e8ddf0;
+  --canvas-orange: #f0e0c8;
+  --canvas-gray: #e0dcc8;
+
   --bg-primary: #fdf6e3;
   --bg-secondary: #eee8d5;
   --bg-tertiary: #e4dcc8;
@@ -283,6 +324,14 @@
 
 /* ===== Humane ===== */
 .theme-humane {
+  --canvas-yellow: #f2ebd0;
+  --canvas-blue: #dde6ee;
+  --canvas-green: #dde8d8;
+  --canvas-pink: #f0ddd8;
+  --canvas-purple: #e8dde8;
+  --canvas-orange: #f0e2d0;
+  --canvas-gray: #e2ddd0;
+
   --bg-primary: #faf9f5;
   --bg-secondary: #f2f0e7;
   --bg-tertiary: #eae7dc;
@@ -336,6 +385,14 @@
 
 /* ===== One Light (Atom) ===== */
 .theme-one-light {
+  --canvas-yellow: #fef3c7;
+  --canvas-blue: #dbeafe;
+  --canvas-green: #dcfce7;
+  --canvas-pink: #fce7f3;
+  --canvas-purple: #f3e8ff;
+  --canvas-orange: #ffedd5;
+  --canvas-gray: #e5e5e6;
+
   --bg-primary: #fafafa;
   --bg-secondary: #f0f0f1;
   --bg-tertiary: #e5e5e6;
@@ -388,6 +445,14 @@
 
 /* ===== Dracula ===== */
 .theme-dracula {
+  --canvas-yellow: #3a3520;
+  --canvas-blue: #1e2a42;
+  --canvas-green: #1e3528;
+  --canvas-pink: #3a1e30;
+  --canvas-purple: #30203e;
+  --canvas-orange: #3a2a1e;
+  --canvas-gray: #343746;
+
   --bg-primary: #282a36;
   --bg-secondary: #21222c;
   --bg-tertiary: #343746;

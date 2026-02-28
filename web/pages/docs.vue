@@ -116,7 +116,7 @@ const router = useRouter()
 const mobileOpen = ref(false)
 const scrollContainer = ref(null)
 
-const activeId = ref('getting-started')
+const activeId = ref(route.query.section || 'getting-started')
 const activeSection = computed(() => allSections.find(s => s.id === activeId.value))
 
 const selectSection = (id, headingTitle = null) => {

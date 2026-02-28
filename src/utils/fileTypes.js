@@ -37,6 +37,7 @@ export function getViewerType(path) {
   if (DOCX_EXTS.includes(ext)) return 'docx'
   if (IMAGE_EXTS.includes(ext)) return 'image'
   if (ext === 'ipynb') return 'notebook'
+  if (ext === 'canvas') return 'canvas'
   return 'text'
 }
 
@@ -131,6 +132,7 @@ const ICON_MAP = {
   qmd: 'IconFileText',
   jl: 'IconFileCode',
   ipynb: 'IconNotebook',
+  canvas: 'IconVectorSpline',
   tex: 'IconMath',
   bib: 'IconFileText',
   lua: 'IconFileCode',

@@ -78,6 +78,12 @@
         :filePath="activeTab"
         :paneId="paneId"
       />
+      <CanvasEditor
+        v-else-if="activeTab && viewerType === 'canvas'"
+        :key="activeTab"
+        :filePath="activeTab"
+        :paneId="paneId"
+      />
       <MarkdownPreview
         v-else-if="activeTab && viewerType === 'markdown-preview'"
         :key="activeTab"
@@ -190,6 +196,7 @@ const NotebookEditor = defineAsyncComponent(() => import('./NotebookEditor.vue')
 const NotebookReviewBar = defineAsyncComponent(() => import('./NotebookReviewBar.vue'))
 const LatexPdfViewer = defineAsyncComponent(() => import('./LatexPdfViewer.vue'))
 const MarkdownPreview = defineAsyncComponent(() => import('./MarkdownPreview.vue'))
+const CanvasEditor = defineAsyncComponent(() => import('./CanvasEditor.vue'))
 
 const props = defineProps({
   paneId: { type: String, required: true },

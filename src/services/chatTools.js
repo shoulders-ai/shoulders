@@ -470,6 +470,91 @@ export function getToolDefinitions(workspace) {
     },
   )
 
+  // Canvas tools — only available when a .canvas file is active
+  tools.push(
+    {
+      name: 'read_canvas',
+      description: 'Read the full graph structure of the currently open canvas (nodes, edges, content summaries). Only works when a .canvas file is active.',
+      input_schema: { type: 'object', properties: {}, required: [] },
+    },
+    {
+      name: 'add_node',
+      description: 'Add a node to the canvas. Only works when a .canvas file is active.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['text', 'prompt', 'file'], description: 'Node type' },
+          content: { type: 'string', description: 'Node content (text/prompt) or file path (file)' },
+          x: { type: 'number', description: 'X position (default 0)' },
+          y: { type: 'number', description: 'Y position (default 0)' },
+          connect_to: { type: 'string', description: 'Optional node ID to connect this node to (creates edge from connect_to → new node)' },
+          title: { type: 'string', description: 'Optional title for text nodes' },
+        },
+        required: ['type', 'content'],
+      },
+    },
+    {
+      name: 'edit_node',
+      description: 'Modify content of an existing node on the canvas.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          node_id: { type: 'string', description: 'The node ID to edit' },
+          content: { type: 'string', description: 'New content for the node' },
+          title: { type: 'string', description: 'New title (null to remove)' },
+        },
+        required: ['node_id'],
+      },
+    },
+    {
+      name: 'delete_node',
+      description: 'Remove a node and its connected edges from the canvas.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          node_id: { type: 'string', description: 'The node ID to delete' },
+        },
+        required: ['node_id'],
+      },
+    },
+    {
+      name: 'move_node',
+      description: 'Reposition a node on the canvas.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          node_id: { type: 'string', description: 'The node ID to move' },
+          x: { type: 'number', description: 'New X position' },
+          y: { type: 'number', description: 'New Y position' },
+        },
+        required: ['node_id', 'x', 'y'],
+      },
+    },
+    {
+      name: 'add_edge',
+      description: 'Connect two nodes on the canvas with a directed edge.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          source: { type: 'string', description: 'Source node ID' },
+          target: { type: 'string', description: 'Target node ID' },
+        },
+        required: ['source', 'target'],
+      },
+    },
+    {
+      name: 'remove_edge',
+      description: 'Remove an edge (connection) from the canvas.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          edge_id: { type: 'string', description: 'The edge ID to remove' },
+        },
+        required: ['edge_id'],
+      },
+    },
+  )
+
   // Filter out disabled tools
   const disabled = workspace?.disabledTools
   if (disabled && disabled.length > 0) {
@@ -1379,6 +1464,116 @@ export async function executeSingleTool(name, input, workspace) {
       filesStore.fileContents[path] = newContent
 
       return `Deleted ${deleted.type} cell at index ${input.index}.`
+    }
+
+    // --- Canvas tools ---
+
+    case 'read_canvas': {
+      const { useCanvasStore } = await import('../stores/canvas')
+      const canvasStore = useCanvasStore()
+      if (!canvasStore._editor) return 'No canvas is currently open.'
+      const { buildGraphSummary } = await import('./canvasMessages')
+      const nodes = canvasStore._editor.getNodes()
+      const edges = canvasStore._editor.getEdges()
+      return buildGraphSummary(nodes, edges)
+    }
+
+    case 'add_node': {
+      const { useCanvasStore } = await import('../stores/canvas')
+      const canvasStore = useCanvasStore()
+      if (!canvasStore._editor) return 'No canvas is currently open.'
+      const pos = { x: input.x || 0, y: input.y || 0 }
+      let newId
+      if (input.type === 'text') {
+        newId = canvasStore._editor.addTextNode(pos, { content: input.content, title: input.title || null })
+      } else if (input.type === 'prompt') {
+        newId = canvasStore._editor.addPromptNode(pos, { content: input.content })
+      } else if (input.type === 'file') {
+        newId = canvasStore._editor.addFileNode(pos, { filePath: input.content, preview: input.content.split('/').pop() })
+      } else {
+        return `Unknown node type: ${input.type}`
+      }
+      // Connect if requested
+      if (input.connect_to && newId) {
+        const edges = canvasStore._editor.getEdges()
+        const { nanoid: nid } = await import('../stores/utils')
+        edges.push({ id: `e_${nid(8)}`, source: input.connect_to, target: newId, type: 'smoothstep' })
+        canvasStore._editor.scheduleSave()
+      }
+      return `Created ${input.type} node: ${newId}`
+    }
+
+    case 'edit_node': {
+      const { useCanvasStore } = await import('../stores/canvas')
+      const canvasStore = useCanvasStore()
+      if (!canvasStore._editor) return 'No canvas is currently open.'
+      const nodes = canvasStore._editor.getNodes()
+      const node = nodes.find(n => n.id === input.node_id)
+      if (!node) return `Node not found: ${input.node_id}`
+      const patch = {}
+      if (input.content !== undefined) patch.content = input.content
+      if (input.title !== undefined) patch.title = input.title
+      canvasStore._editor.updateNodeData(input.node_id, patch)
+      canvasStore._editor.scheduleSave()
+      return `Updated node ${input.node_id}`
+    }
+
+    case 'delete_node': {
+      const { useCanvasStore } = await import('../stores/canvas')
+      const canvasStore = useCanvasStore()
+      if (!canvasStore._editor) return 'No canvas is currently open.'
+      const nodes = canvasStore._editor.getNodes()
+      const edges = canvasStore._editor.getEdges()
+      const idx = nodes.findIndex(n => n.id === input.node_id)
+      if (idx === -1) return `Node not found: ${input.node_id}`
+      canvasStore.pushSnapshot(nodes, edges)
+      // Remove connected edges
+      const filtered = edges.filter(e => e.source !== input.node_id && e.target !== input.node_id)
+      edges.splice(0, edges.length, ...filtered)
+      nodes.splice(idx, 1)
+      canvasStore._editor.scheduleSave()
+      return `Deleted node ${input.node_id}`
+    }
+
+    case 'move_node': {
+      const { useCanvasStore } = await import('../stores/canvas')
+      const canvasStore = useCanvasStore()
+      if (!canvasStore._editor) return 'No canvas is currently open.'
+      const nodes = canvasStore._editor.getNodes()
+      const node = nodes.find(n => n.id === input.node_id)
+      if (!node) return `Node not found: ${input.node_id}`
+      node.position = { x: input.x, y: input.y }
+      canvasStore._editor.scheduleSave()
+      return `Moved node ${input.node_id} to (${input.x}, ${input.y})`
+    }
+
+    case 'add_edge': {
+      const { useCanvasStore } = await import('../stores/canvas')
+      const canvasStore = useCanvasStore()
+      if (!canvasStore._editor) return 'No canvas is currently open.'
+      const nodes = canvasStore._editor.getNodes()
+      const edges = canvasStore._editor.getEdges()
+      if (!nodes.find(n => n.id === input.source)) return `Source node not found: ${input.source}`
+      if (!nodes.find(n => n.id === input.target)) return `Target node not found: ${input.target}`
+      const { nanoid: nid } = await import('../stores/utils')
+      const edgeId = `e_${nid(8)}`
+      canvasStore.pushSnapshot(nodes, edges)
+      edges.push({ id: edgeId, source: input.source, target: input.target, type: 'smoothstep' })
+      canvasStore._editor.scheduleSave()
+      return `Created edge ${edgeId}: ${input.source} → ${input.target}`
+    }
+
+    case 'remove_edge': {
+      const { useCanvasStore } = await import('../stores/canvas')
+      const canvasStore = useCanvasStore()
+      if (!canvasStore._editor) return 'No canvas is currently open.'
+      const edges = canvasStore._editor.getEdges()
+      const idx = edges.findIndex(e => e.id === input.edge_id)
+      if (idx === -1) return `Edge not found: ${input.edge_id}`
+      canvasStore.pushSnapshot(canvasStore._editor.getNodes(), edges)
+      edges.splice(idx, 1)
+      canvasStore._editor.scheduleSave()
+      return `Removed edge ${input.edge_id}`
     }
 
     default:
