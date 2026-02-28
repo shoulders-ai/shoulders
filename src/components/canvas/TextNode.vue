@@ -7,6 +7,7 @@
       'streaming': isStreaming,
       [`border-${data.borderWidth || 'thin'}`]: true,
       [`font-${data.fontSize || 'medium'}`]: true,
+      [`align-${data.textAlign || 'left'}`]: true,
     }"
     :data-color="data.color || undefined"
   >
@@ -163,6 +164,11 @@ function onResize(resizeEvent) {
 .canvas-text-node.font-medium { font-size: 13px; }
 .canvas-text-node.font-large { font-size: 15px; }
 
+/* Text alignment */
+.canvas-text-node.align-left { text-align: left; }
+.canvas-text-node.align-center { text-align: center; }
+.canvas-text-node.align-right { text-align: right; }
+
 .node-title-input {
   display: block;
   width: 100%;
@@ -283,9 +289,10 @@ function onResize(resizeEvent) {
   opacity: 1;
 }
 
-/* Resize handles */
+/* Resize handles — wide invisible hit area for easier grabbing */
 :deep(.resize-line) {
   border-color: transparent !important;
+  border-width: 6px !important;
 }
 
 :deep(.resize-handle) {

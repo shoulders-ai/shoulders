@@ -13,20 +13,29 @@
       @resize="onResize"
     />
 
-    <!-- Prompt textarea -->
+    <!-- Content: edit or display mode -->
     <textarea
+      v-if="editing"
       ref="textareaRef"
       class="prompt-textarea nopan nodrag"
       :value="data.content"
       placeholder="Ask a question..."
       @input="onInput"
+      @blur="editing = false"
       @keydown.stop="onKeydown"
       @mousedown.stop
     />
+    <div
+      v-else
+      class="prompt-display"
+      @dblclick.stop="startEditing"
+    >
+      {{ data.content || 'Double-click to write a prompt...' }}
+    </div>
 
     <!-- Bottom bar: model + run count + run button -->
     <div class="prompt-footer">
-      <button class="model-label nopan nodrag" @mousedown.stop @click.stop="cycleModel">
+      <button ref="modelLabelRef" class="model-label nopan nodrag" @mousedown.stop @click.stop="toggleModelPopover">
         {{ displayModel }}
       </button>
       <span v-if="data.runCount > 0" class="run-count">{{ data.runCount }}×</span>
@@ -47,6 +56,24 @@
       </button>
     </div>
 
+    <!-- Model selector popover -->
+    <Teleport to="body">
+      <div v-if="modelPopoverOpen" class="fixed inset-0 z-50" style="background: transparent;" @click="modelPopoverOpen = false">
+        <div class="model-popover" :style="modelPopoverStyle" @click.stop>
+          <div
+            v-for="model in availableModels"
+            :key="model.id"
+            class="model-option nopan nodrag"
+            :class="{ active: model.id === currentModelId }"
+            @click.stop="selectModel(model.id)"
+          >
+            <span class="model-option-name">{{ model.name }}</span>
+            <span class="model-option-provider">{{ model.provider }}</span>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Connection handles -->
     <Handle type="target" :position="Position.Top" class="canvas-handle" />
     <Handle type="source" :position="Position.Bottom" class="canvas-handle" />
@@ -56,7 +83,7 @@
 </template>
 
 <script setup>
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, nextTick } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import { useCanvasStore } from '../../stores/canvas'
@@ -71,6 +98,9 @@ const props = defineProps({
 const canvasStore = useCanvasStore()
 const workspace = useWorkspaceStore()
 const textareaRef = ref(null)
+const modelLabelRef = ref(null)
+const editing = ref(false)
+const modelPopoverOpen = ref(false)
 
 const canvasNodeUpdate = inject('canvasNodeUpdate', null)
 const canvasNodeResize = inject('canvasNodeResize', null)
@@ -82,17 +112,44 @@ function emit(event, payload) {
 
 const isStreaming = computed(() => canvasStore.streamingNodeId !== null)
 
-const displayModel = computed(() => {
-  const id = props.data.modelId || workspace.selectedModelId || 'sonnet'
-  if (id.includes('sonnet')) return 'Sonnet'
-  if (id.includes('opus')) return 'Opus'
-  if (id.includes('haiku')) return 'Haiku'
-  if (id.includes('gpt-4')) return 'GPT-4o'
-  if (id.includes('o1')) return 'o1'
-  if (id.includes('o3')) return 'o3'
-  if (id.includes('gemini')) return 'Gemini'
-  return id.split('/').pop()?.split('-')[0] || id
+const currentModelId = computed(() => props.data.modelId || workspace.selectedModelId || 'sonnet')
+
+const availableModels = computed(() => {
+  return workspace.modelsConfig?.models || [{ id: 'sonnet', name: 'Sonnet', provider: 'anthropic' }]
 })
+
+const displayModel = computed(() => {
+  const model = availableModels.value.find(m => m.id === currentModelId.value)
+  return model?.name || currentModelId.value
+})
+
+const modelPopoverStyle = computed(() => {
+  if (!modelLabelRef.value) return {}
+  const rect = modelLabelRef.value.getBoundingClientRect()
+  const popoverHeight = availableModels.value.length * 30 + 8
+  const maxY = window.innerHeight - popoverHeight - 8
+  return {
+    left: rect.left + 'px',
+    top: Math.min(rect.top - popoverHeight - 4, maxY) + 'px',
+  }
+})
+
+function toggleModelPopover() {
+  modelPopoverOpen.value = !modelPopoverOpen.value
+}
+
+function selectModel(id) {
+  emit('update', { modelId: id })
+  workspace.setSelectedModelId(id)
+  modelPopoverOpen.value = false
+}
+
+function startEditing() {
+  editing.value = true
+  nextTick(() => {
+    textareaRef.value?.focus()
+  })
+}
 
 function onInput(e) {
   emit('update', { content: e.target.value })
@@ -108,14 +165,6 @@ function onKeydown(e) {
 function runPrompt() {
   if (!props.data.content?.trim() || isStreaming.value) return
   canvasStore.sendPrompt(props.id)
-}
-
-function cycleModel() {
-  const models = workspace.modelsConfig?.models?.map(m => m.id) || ['sonnet']
-  const current = props.data.modelId || workspace.selectedModelId || models[0]
-  const idx = models.indexOf(current)
-  const next = models[(idx + 1) % models.length]
-  emit('update', { modelId: next })
 }
 
 function onResize(resizeEvent) {
@@ -145,6 +194,26 @@ function onResize(resizeEvent) {
 
 .canvas-prompt-node.streaming {
   border-style: solid;
+}
+
+.prompt-display {
+  flex: 1;
+  padding: 10px 12px 6px;
+  color: var(--fg-primary);
+  font-family: var(--font-sans, system-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: default;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: hidden;
+  min-height: 36px;
+}
+
+.prompt-display:empty::before,
+.prompt-display:only-child:not(:focus)::before {
+  color: var(--fg-muted);
+  font-style: italic;
 }
 
 .prompt-textarea {
@@ -244,7 +313,7 @@ function onResize(resizeEvent) {
   opacity: 1;
 }
 
-:deep(.resize-line) { border-color: transparent !important; }
+:deep(.resize-line) { border-color: transparent !important; border-width: 6px !important; }
 :deep(.resize-handle) {
   width: 10px !important; height: 10px !important;
   border-radius: 2px !important;
@@ -256,4 +325,49 @@ function onResize(resizeEvent) {
 }
 .canvas-prompt-node.selected :deep(.resize-handle) { opacity: 0.6; }
 .canvas-prompt-node.selected :deep(.resize-handle:hover) { opacity: 1; }
+
+/* Model popover */
+.model-popover {
+  position: fixed;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  min-width: 160px;
+  z-index: 51;
+}
+
+.model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--fg-primary);
+  transition: background 0.1s;
+}
+
+.model-option:hover {
+  background: var(--bg-secondary);
+}
+
+.model-option.active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.model-option-name {
+  font-weight: 500;
+}
+
+.model-option-provider {
+  font-size: 9px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 </style>

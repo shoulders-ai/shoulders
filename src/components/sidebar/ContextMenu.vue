@@ -28,6 +28,11 @@
             <span class="flex-1">LaTeX</span>
             <span class="context-menu-ext">.tex</span>
           </div>
+          <div class="context-menu-item" @click="$emit('create', { ext: '.canvas' })">
+            <IconVectorSpline :size="14" :stroke-width="1.5" />
+            <span class="flex-1">Canvas</span>
+            <span class="context-menu-ext">.canvas</span>
+          </div>
           <div class="context-menu-separator"></div>
           <div class="context-menu-item" @click="$emit('create', { ext: '.R' })">
             <IconCode :size="14" :stroke-width="1.5" />
@@ -101,7 +106,7 @@ import { computed } from 'vue'
 import {
   IconFileText, IconNotebook, IconMath, IconCode, IconBrandPython,
   IconFilePlus, IconFolderPlus, IconPencil, IconCopy, IconTrash, IconClock,
-  IconExternalLink, IconBook2,
+  IconExternalLink, IconBook2, IconVectorSpline,
 } from '@tabler/icons-vue'
 import { isMac } from '../../platform'
 

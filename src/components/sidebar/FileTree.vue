@@ -179,6 +179,11 @@
             <span class="flex-1">LaTeX</span>
             <span class="context-menu-ext">.tex</span>
           </div>
+          <div class="context-menu-item" @click="handleNewMenuCreate({ ext: '.canvas' })">
+            <IconVectorSpline :size="14" :stroke-width="1.5" />
+            <span class="flex-1">Canvas</span>
+            <span class="context-menu-ext">.canvas</span>
+          </div>
           <div class="context-menu-separator"></div>
           <div class="context-menu-item" @click="handleNewMenuCreate({ ext: '.R' })">
             <IconCode :size="14" :stroke-width="1.5" />
@@ -221,7 +226,7 @@ import { isMod } from '../../platform'
 import ContextMenu from './ContextMenu.vue'
 import {
   IconSearch, IconX, IconPlus, IconFileText, IconNotebook, IconMath,
-  IconCode, IconBrandPython, IconFilePlus, IconFolderPlus,
+  IconCode, IconBrandPython, IconFilePlus, IconFolderPlus, IconVectorSpline,
 } from '@tabler/icons-vue'
 import { ask } from '@tauri-apps/plugin-dialog'
 
@@ -684,13 +689,14 @@ function onDragStart({ path, event }) {
       return
     }
 
+    const endPaths = [...draggedPaths]
     dragGhostVisible.value = false
     dragOverDir.value = null
     draggedPaths = []
     document.body.classList.remove('tab-dragging')
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
-    window.dispatchEvent(new CustomEvent('filetree-drag-end'))
+    window.dispatchEvent(new CustomEvent('filetree-drag-end', { detail: { paths: endPaths, x: ev.clientX, y: ev.clientY } }))
   }
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', onMouseUp)
@@ -881,6 +887,15 @@ async function createTypedFile(dir, ext) {
 
   const path = await files.createFile(dir, name)
   if (path) {
+    // Write initial content for canvas files
+    if (ext === '.canvas') {
+      const content = JSON.stringify({
+        version: 1, viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [], edges: [], aiState: { messages: {} },
+      }, null, 2) + '\n'
+      await invoke('write_file', { path, content })
+      files.fileContents[path] = content
+    }
     editor.openFile(path)
     // Wait for Vue to render the new FileTreeItem before starting rename
     await nextTick()

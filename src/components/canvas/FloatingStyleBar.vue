@@ -89,6 +89,33 @@
         </div>
       </div>
 
+      <!-- Alignment picker -->
+      <div class="picker-wrap">
+        <button
+          class="bar-btn"
+          title="Text alignment"
+          @click.stop="togglePopover('align')"
+        >
+          <svg v-if="currentAlign === 'center'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg>
+          <svg v-else-if="currentAlign === 'right'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg>
+          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg>
+        </button>
+        <div v-if="activePopover === 'align'" class="popover" @click.stop>
+          <button class="popover-btn" :class="{ active: currentAlign === 'left' }" @click="$emit('update-style', { textAlign: 'left' }); activePopover = null">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg>
+            <span class="popover-label">Left</span>
+          </button>
+          <button class="popover-btn" :class="{ active: currentAlign === 'center' }" @click="$emit('update-style', { textAlign: 'center' }); activePopover = null">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg>
+            <span class="popover-label">Center</span>
+          </button>
+          <button class="popover-btn" :class="{ active: currentAlign === 'right' }" @click="$emit('update-style', { textAlign: 'right' }); activePopover = null">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg>
+            <span class="popover-label">Right</span>
+          </button>
+        </div>
+      </div>
+
       <div class="bar-sep" />
 
       <!-- Title toggle -->
@@ -100,6 +127,26 @@
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 4v16M18 4v16M6 4h12M6 12h12" />
+        </svg>
+      </button>
+
+      <!-- Expand / Collapse height -->
+      <button
+        class="bar-btn"
+        title="Expand to full content"
+        @click="$emit('expand-height')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5" />
+        </svg>
+      </button>
+      <button
+        class="bar-btn"
+        title="Collapse to compact"
+        @click="$emit('collapse-height')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v18M5 10l7 2 7-2M5 14l7-2 7 2" />
         </svg>
       </button>
 
@@ -122,7 +169,7 @@ const props = defineProps({
   nodes: { type: Array, required: true },
 })
 
-defineEmits(['update-style', 'delete', 'toggle-type', 'toggle-title'])
+defineEmits(['update-style', 'delete', 'toggle-type', 'toggle-title', 'expand-height', 'collapse-height'])
 
 const activePopover = ref(null)
 
@@ -175,6 +222,7 @@ const currentBorderPx = computed(() => {
   return map[currentBorder.value] || '1px'
 })
 const currentFont = computed(() => firstNode.value?.data?.fontSize || 'medium')
+const currentAlign = computed(() => firstNode.value?.data?.textAlign || 'left')
 const currentFontDisplay = computed(() => {
   const map = { small: 'S', medium: 'M', large: 'L' }
   return map[currentFont.value] || 'M'

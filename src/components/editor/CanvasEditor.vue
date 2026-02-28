@@ -1,5 +1,5 @@
 <template>
-  <div class="canvas-editor h-full" @keydown="onKeydown">
+  <div class="canvas-editor h-full" @keydown="onKeydown" @contextmenu.prevent>
     <VueFlow
       v-model:nodes="nodes"
       v-model:edges="edges"
@@ -14,6 +14,7 @@
       :zoom-on-double-click="false"
       :pan-on-scroll="true"
       :pan-on-scroll-mode="'free'"
+      :edges-updatable="true"
       @connect="onConnect"
       @connect-start="onConnectStart"
       @connect-end="onConnectEnd"
@@ -46,9 +47,9 @@
       @close="contextMenu.show = false"
       @add-text-node="addTextNodeAtMenu"
       @add-prompt-node="addPromptNodeAtMenu"
-      @delete-selected="deleteSelected"
-      @duplicate-selected="duplicateSelected"
-      @select-all="selectAll"
+      @delete-selected="deleteFromContextMenu"
+      @duplicate-selected="duplicateFromContextMenu"
+      @select-all="selectAllFromContextMenu"
     />
 
     <!-- Floating style bar -->
@@ -59,6 +60,8 @@
       @delete="deleteSelected"
       @toggle-type="onToggleType"
       @toggle-title="onToggleTitle"
+      @expand-height="onExpandHeight"
+      @collapse-height="onCollapseHeight"
     />
   </div>
 </template>
@@ -402,6 +405,7 @@ function onMoveEnd(event) {
 }
 
 function onPaneContextMenu(event) {
+  if (event.preventDefault) event.preventDefault()
   contextMenu.show = true
   contextMenu.x = event.clientX || event.x
   contextMenu.y = event.clientY || event.y
@@ -422,6 +426,9 @@ function onNodeContextMenu({ event, node }) {
 
 function onEdgeContextMenu({ event, edge }) {
   event.preventDefault()
+  // Select the edge so Delete key works
+  const e = edges.value.find(ed => ed.id === edge.id)
+  if (e) e.selected = true
   contextMenu.show = true
   contextMenu.x = event.clientX
   contextMenu.y = event.clientY
@@ -438,6 +445,28 @@ function addTextNodeAtMenu() {
 function addPromptNodeAtMenu() {
   const pos = contextMenu._flowPosition || { x: 100, y: 100 }
   addPromptNode(pos)
+  contextMenu.show = false
+}
+
+// Context menu action wrappers — close menu + handle edge-specific deletion
+function deleteFromContextMenu() {
+  if (contextMenu.type === 'edge' && contextMenu.edgeId) {
+    canvasStore.pushSnapshot(nodes.value, edges.value)
+    edges.value = edges.value.filter(e => e.id !== contextMenu.edgeId)
+    scheduleSave()
+  } else {
+    deleteSelected()
+  }
+  contextMenu.show = false
+}
+
+function duplicateFromContextMenu() {
+  duplicateSelected()
+  contextMenu.show = false
+}
+
+function selectAllFromContextMenu() {
+  selectAll()
   contextMenu.show = false
 }
 
@@ -555,6 +584,29 @@ function onDrop(event) {
   })
 }
 
+// Handle file tree custom drag (mouse-based, not HTML5 drag API)
+function onFileTreeDragEnd(event) {
+  const { paths, x, y } = event.detail || {}
+  if (!paths?.length || !x || !y) return
+
+  // Check if the drop landed over our canvas
+  const canvasEl = document.querySelector('.canvas-editor .vue-flow')
+  if (!canvasEl) return
+  const rect = canvasEl.getBoundingClientRect()
+  if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return
+
+  const flowPos = screenToFlowCoordinate({ x, y })
+  canvasStore.pushSnapshot(nodes.value, edges.value)
+  for (let i = 0; i < paths.length; i++) {
+    const filePath = paths[i]
+    const fileName = filePath.split('/').pop() || filePath
+    addFileNode(
+      { x: flowPos.x + i * 30, y: flowPos.y + i * 30 },
+      { filePath, preview: fileName }
+    )
+  }
+}
+
 // --- Node events from custom nodes ---
 function handleNodeUpdate(nodeId, patch) {
   const node = nodes.value.find(n => n.id === nodeId)
@@ -606,6 +658,26 @@ function onToggleTitle() {
   scheduleSave()
 }
 
+function onExpandHeight() {
+  for (const node of selectedNodes.value) {
+    // Remove explicit height — let content determine height
+    const newStyle = { ...node.style }
+    delete newStyle.height
+    node.style = newStyle
+    if (node.dimensions) delete node.dimensions.height
+  }
+  scheduleSave()
+}
+
+function onCollapseHeight() {
+  for (const node of selectedNodes.value) {
+    // Set to compact 3-line height (~70px)
+    node.style = { ...node.style, height: '70px' }
+    node.dimensions = { ...node.dimensions, height: 70 }
+  }
+  scheduleSave()
+}
+
 // Expose methods for canvas store to call
 canvasStore.setEditorMethods({
   addTextNode,
@@ -626,6 +698,8 @@ onMounted(() => {
     const el = document.querySelector('.canvas-editor .vue-flow__pane')
     if (el) el.addEventListener('dblclick', handleDblClick)
   })
+  // Listen for file tree drag-and-drop onto canvas
+  window.addEventListener('filetree-drag-end', onFileTreeDragEnd)
 })
 
 onUnmounted(() => {
@@ -638,6 +712,7 @@ onUnmounted(() => {
 
   const el = document.querySelector('.canvas-editor .vue-flow__pane')
   if (el) el.removeEventListener('dblclick', handleDblClick)
+  window.removeEventListener('filetree-drag-end', onFileTreeDragEnd)
 })
 
 // Provide node event handlers to child components via provide/inject
@@ -699,6 +774,14 @@ provide('canvasNodeResize', handleNodeResize)
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 6px;
+}
+
+/* Node selection — remove default outline, nodes handle their own selected state */
+.canvas-editor :deep(.vue-flow__node.selected),
+.canvas-editor :deep(.vue-flow__node:focus),
+.canvas-editor :deep(.vue-flow__node:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* Selection box */
