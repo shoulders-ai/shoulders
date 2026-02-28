@@ -1,0 +1,37 @@
+# Shoulders
+
+> An AI workspace for researchers. Writing, reference management, coding, and AI assistance — designed as one system. Local-first, open source, multi-format.
+
+Shoulders is a desktop application that integrates text editing, reference management, code execution, and AI assistance for researchers. It handles Markdown (with PDF export via Typst), LaTeX (via Tectonic), Word documents (.docx), Jupyter notebooks, and code files in a single workspace. Built on Tauri v2 (Rust + Vue 3), all files remain on the researcher's machine.
+
+The name comes from Newton: "If I have seen further, it is by standing on the shoulders of giants." The project aims to integrate AI into research in a way that preserves agency and critical thinking.
+
+## Docs
+
+- [Getting Started](https://shoulde.rs/docs?section=getting-started): Installation, workspace setup, UI layout (sidebar + editor + right panel), keyboard essentials
+- [Markdown](https://shoulde.rs/docs?section=markdown): Formatting shortcuts, wiki links, live preview, PDF export via Typst with 5 templates (Article, Report, Essay, Letter, Plain)
+- [Word Documents](https://shoulde.rs/docs?section=word): Native .docx editing, formatting toolbar, tracked changes, AI features (inline suggestions, chat edits)
+- [LaTeX](https://shoulde.rs/docs?section=latex): Tectonic engine (self-contained), auto-compile, SyncTeX forward/backward navigation, error panel
+- [References & Citations](https://shoulde.rs/docs?section=references): CSL-JSON library, import via DOI/BibTeX/PDF drag-and-drop, 30 citation styles (APA, Chicago, IEEE, etc.), Pandoc-compatible syntax
+- [AI Setup](https://shoulde.rs/docs?section=ai-setup): Multi-provider (Anthropic, OpenAI, Google), bring-your-own-keys or subscription, per-tool privacy controls, usage tracking
+- [Inline Suggestions](https://shoulde.rs/docs?section=inline-suggestions): Ghost text triggered with ++, multi-alternative cycling, works across Markdown, code, .docx, and notebook cells
+- [AI Chat](https://shoulde.rs/docs?section=ai-chat): Sidebar chat with automatic workspace context, file attachments, multi-session tabs, model switching
+- [Task Threads](https://shoulde.rs/docs?section=ai-tasks): Select text to start threaded AI conversations, proposed edits shown as inline diffs
+- [Tools & Review](https://shoulde.rs/docs?section=ai-tools): 28 tools across 5 categories (workspace, references, feedback, notebooks, web), all edits shown as reviewable inline diffs
+- [Code & Notebooks](https://shoulde.rs/docs?section=code): R/Python/Julia execution, Jupyter .ipynb editing with inline outputs, embedded terminal, code chunks in .rmd/.qmd
+- [Navigation & Settings](https://shoulde.rs/docs?section=navigation): File tree, outline panel, search, split panes, themes, configuration
+- [Keyboard Shortcuts](https://shoulde.rs/docs?section=shortcuts): Complete shortcut reference
+- [Privacy & Data](https://shoulde.rs/docs?section=privacy): Local-first architecture, no vendor lock-in, plain-text files, optional account for AI credits
+
+## About
+
+- [About Shoulders](https://shoulde.rs/about): Mission and philosophy — AI research tools built with intention, preserving researcher agency
+- [Pricing](https://shoulde.rs/pricing): Free with own API keys, or $15/month Shoulders AI subscription
+- [Download](https://shoulde.rs/download): Desktop application for macOS
+- [Enterprise](https://shoulde.rs/enterprise): Managed deployment, data governance, site licenses
+- [GitHub](https://github.com/shoulders-ai/shoulders): Source code
+
+## Optional
+
+- [Terms of Service](https://shoulde.rs/terms)
+- [Privacy Policy](https://shoulde.rs/privacy-policy)

@@ -227,6 +227,7 @@ The `/web` folder contains both the web front and backend (Nuxt) of the Shoulder
 
 #### Want to change the web frontend?
 - Style guide: `docs/web-style-guide.md`
+- LLM discoverability: `web/public/llms.txt` — served at `shoulde.rs/llms.txt`, structured index of product and docs for AI agents
 
 #### Want to change the peer review system?
 - See [peer-review.md](peer-review.md)
