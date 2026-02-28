@@ -1,20 +1,21 @@
 import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { streamText, stepCountIs, convertToModelMessages, tool } from 'ai'
+import { z } from 'zod'
 import { nanoid } from './utils'
 import { useWorkspaceStore } from './workspace'
 import { useFilesStore } from './files'
 import { useEditorStore } from './editor'
 import { useReviewsStore } from './reviews'
-import { formatRequest, parseSSEChunk, interpretEvent } from '../services/chatProvider'
 import { resolveApiAccess } from '../services/apiClient'
 import { getContextWindow, getThinkingConfig } from '../services/chatModels'
-import { normalizeUsage, mergeUsage, calculateCost, createEmptyUsage } from '../services/tokenUsage'
-import { estimateConversationTokens, truncateToFitBudget } from '../services/tokenEstimator'
+import { calculateCost } from '../services/tokenUsage'
 import { noApiKeyMessage, formatChatApiError, formatInvokeError } from '../utils/errorMessages'
 import { buildWorkspaceMeta } from '../services/workspaceMeta'
-import { getToolDefinitions, executeSingleTool } from '../services/chatTools'
+import { getAiTools } from '../services/chatTools'
 import { buildBaseSystemPrompt } from '../services/systemPrompt'
+import { createModel, buildProviderOptions, convertSdkUsage } from '../services/aiSdk'
+import { createTauriFetch } from '../services/tauriFetch'
 
 export const useTasksStore = defineStore('tasks', {
   state: () => ({
@@ -63,12 +64,8 @@ export const useTasksStore = defineStore('tasks', {
         cellType: cellContext?.cellType || null,
         cellOutputs: cellContext?.cellOutputs || null,
         cellLanguage: cellContext?.cellLanguage || null,
-        // Runtime-only (not persisted)
-        _sseBuffer: '',
-        _currentToolInputJson: {},
-        _unlistenChunk: null,
-        _unlistenDone: null,
-        _unlistenError: null,
+        // Runtime-only
+        _abortController: null,
       }
       this.threads.push(thread)
       this.activeThreadId = id
@@ -126,11 +123,7 @@ export const useTasksStore = defineStore('tasks', {
         status: 'idle',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        _sseBuffer: '',
-        _currentToolInputJson: {},
-        _unlistenChunk: null,
-        _unlistenDone: null,
-        _unlistenError: null,
+        _abortController: null,
       }
       this.threads.push(thread)
       // Do NOT set activeThreadId — user clicks gutter dot to view
@@ -175,18 +168,16 @@ export const useTasksStore = defineStore('tasks', {
     async abortThread(threadId) {
       const thread = this.threads.find(t => t.id === threadId)
       if (!thread || thread.status !== 'streaming') return
-      await invoke('chat_abort', { sessionId: threadId })
+      if (thread._abortController) thread._abortController.abort()
     },
 
     removeThread(threadId) {
       const thread = this.threads.find(t => t.id === threadId)
       if (!thread) return
 
-      if (thread.status === 'streaming') {
-        invoke('chat_abort', { sessionId: threadId }).catch(() => {})
+      if (thread.status === 'streaming' && thread._abortController) {
+        thread._abortController.abort()
       }
-      this._cleanupListeners(thread)
-      invoke('chat_cleanup', { sessionId: threadId }).catch(() => {})
 
       const idx = this.threads.indexOf(thread)
       this.threads.splice(idx, 1)
@@ -219,392 +210,165 @@ export const useTasksStore = defineStore('tasks', {
       }
     },
 
-    // --- Streaming orchestration (mirrors chat.js:_streamResponse) ---
+    // --- Streaming via AI SDK streamText() ---
 
     async _streamResponse(thread, apiMessages) {
+      console.log('[tasks] _streamResponse starting for thread:', thread.id, 'messages:', apiMessages.length)
       const workspace = useWorkspaceStore()
       const access = await resolveApiAccess({ modelId: thread.modelId }, workspace)
       if (!access) {
-        const errMsg = {
-          id: `msg-${nanoid()}`,
-          role: 'assistant',
+        thread.messages.push({
+          id: `msg-${nanoid()}`, role: 'assistant',
           content: noApiKeyMessage(thread.modelId),
-          fileRefs: [],
-          toolCalls: [],
-          thinking: null,
-          status: 'error',
-          createdAt: new Date().toISOString(),
-        }
-        thread.messages.push(errMsg)
+          fileRefs: [], toolCalls: [], thinking: null,
+          status: 'error', createdAt: new Date().toISOString(),
+        })
         return
       }
 
       // Create assistant message placeholder
       thread.messages.push({
-        id: `msg-${nanoid()}`,
-        role: 'assistant',
-        content: '',
-        fileRefs: [],
-        toolCalls: [],
-        thinking: null,
-        _thinkingBlocks: [],
-        status: 'streaming',
-        createdAt: new Date().toISOString(),
+        id: `msg-${nanoid()}`, role: 'assistant',
+        content: '', fileRefs: [], toolCalls: [],
+        thinking: null, _thinkingBlocks: [],
+        status: 'streaming', createdAt: new Date().toISOString(),
       })
-      // IMPORTANT: get reactive proxy reference
       const assistantMsg = thread.messages[thread.messages.length - 1]
       thread.status = 'streaming'
-      thread._sseBuffer = ''
-      thread._currentToolInputJson = {}
 
-      // Build system prompt: shared base + task-specific section
+      // Build system prompt
       let system = buildBaseSystemPrompt(workspace)
-
       if (thread.cellId) {
-        // Notebook cell task context
         system += `\n\n# Current Task\nReviewing a notebook cell.\n\nFile: ${thread.fileId}\nCell ${thread.cellIndex != null ? thread.cellIndex : '?'} (${thread.cellType || 'code'}, ${thread.cellLanguage || 'python'})\n\nCell source:\n\`\`\`${thread.cellLanguage || 'python'}\n${thread.selectedText}\n\`\`\``
         if (thread.cellOutputs) system += `\n\nCell output:\n---\n${thread.cellOutputs}\n---`
       } else {
-        // Text selection task context
         system += `\n\n# Current Task\nReviewing selected text in a document.\n\nFile: ${thread.fileId}`
         if (thread.contextBefore) system += `\n\nContext before selection:\n---\n${thread.contextBefore}\n---`
         system += `\n\nSelected text:\n---\n${thread.selectedText}\n---`
         if (thread.contextAfter) system += `\n\nContext after selection:\n---\n${thread.contextAfter}\n---`
       }
-
       system += `\n\nYou have propose_edit to suggest text replacements. The user reviews before applying.`
-
       if (workspace.systemPrompt) system += '\n\n' + workspace.systemPrompt
       if (workspace.instructions) system += '\n\n' + workspace.instructions
 
-      // Build tool set: propose_edit + filtered subset of chat tools
-      const proposeEditTool = {
-        name: 'propose_edit',
-        description: 'Propose a text edit to replace the selected text or a portion of it. The user can review and apply the edit.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            old_string: { type: 'string', description: 'The exact text to find and replace' },
-            new_string: { type: 'string', description: 'The replacement text' },
-          },
-          required: ['old_string', 'new_string'],
-        },
-      }
-      const tools = [proposeEditTool, ...getToolDefinitions(workspace)]
-
-      // Token budget: estimate, truncate if needed
-      const contextWindow = getContextWindow(thread.modelId, workspace)
+      // Build tool set
+      const tauriFetch = createTauriFetch()
+      const model = createModel(access, tauriFetch)
+      const provider = access.providerHint || access.provider
       const modelEntry = workspace.modelsConfig?.models?.find(m => m.id === thread.modelId)
-      const thinkingConfig = getThinkingConfig(access.model, access.provider, modelEntry?.thinking)
-      const outputReserve = thinkingConfig ? 32768 : 16384
-      const maxBudget = contextWindow - outputReserve
-      let estimated = estimateConversationTokens(system, apiMessages)
-      if (estimated > maxBudget) {
-        apiMessages = truncateToFitBudget(apiMessages, maxBudget, system)
-        estimated = estimateConversationTokens(system, apiMessages)
-      }
-      thread._estimatedTokens = estimated
+      const thinkingConfig = getThinkingConfig(access.model, provider, modelEntry?.thinking)
+      const providerOptions = buildProviderOptions(thinkingConfig, provider)
 
-      const { provider } = access
+      const tools = {
+        propose_edit: tool({
+          description: 'Propose a text edit to replace the selected text or a portion of it. The user can review and apply the edit.',
+          inputSchema: z.object({
+            old_string: z.string().describe('The exact text to find and replace'),
+            new_string: z.string().describe('The replacement text'),
+          }),
+          execute: async ({ old_string, new_string }) => {
+            return 'Proposal recorded. User will review.'
+          },
+        }),
+        ...getAiTools(workspace),
+      }
+
+      // AbortController for this stream
+      const abortController = new AbortController()
+      thread._abortController = abortController
 
       try {
-        const request = formatRequest(provider, {
-          url: access.url,
-          apiKey: access.apiKey,
-          model: access.model,
-          messages: apiMessages,
+        console.log('[tasks] Starting streamText:', { model: access.model, provider, toolCount: Object.keys(tools).length })
+        const result = streamText({
+          model,
           system,
+          messages: apiMessages,
           tools,
-          maxTokens: thinkingConfig ? 32768 : 16384,
-          providerHint: access.providerHint,
-          thinking: thinkingConfig,
-        })
-
-        // Setup listeners
-        this._cleanupListeners(thread)
-
-        let currentBlockType = null
-        let currentToolCall = null
-        let currentThinkingBlock = null
-        let usageAccumulator = createEmptyUsage()
-
-        thread._unlistenChunk = await listen(`chat-chunk-${thread.id}`, (event) => {
-          const raw = event.payload?.data
-          if (!raw) return
-
-          const { events, remainingBuffer } = parseSSEChunk(provider, raw, thread._sseBuffer)
-          thread._sseBuffer = remainingBuffer
-
-          for (const evt of events) {
-            const rawInterpreted = interpretEvent(provider, evt)
-            if (!rawInterpreted) continue
-            // Google returns arrays (multiple parts per chunk), others return single events
-            const interpretedList = Array.isArray(rawInterpreted) ? rawInterpreted : [rawInterpreted]
-
-            for (const interpreted of interpretedList) {
-
-            // Accumulate token usage from any event that carries it
-            if (interpreted.usage) {
-              const partial = normalizeUsage(provider, interpreted.usage)
-              usageAccumulator = mergeUsage(usageAccumulator, partial)
-            }
-
-            switch (interpreted.type) {
-              case 'usage':
-                break
-
-              case 'block_start':
-                currentBlockType = interpreted.blockType
-                if (interpreted.blockType === 'tool_use') {
-                  assistantMsg.toolCalls.push({
-                    id: interpreted.toolId || `tool-${nanoid()}`,
-                    name: interpreted.toolName,
-                    input: {},
-                    output: '',
-                    status: 'pending',
-                    _googleThoughtSignature: interpreted.thoughtSignature || null,
-                  })
-                  currentToolCall = assistantMsg.toolCalls[assistantMsg.toolCalls.length - 1]
-                  thread._currentToolInputJson[currentToolCall.id] = ''
-                } else if (interpreted.blockType === 'thinking') {
-                  currentThinkingBlock = { type: 'thinking', thinking: '', signature: null }
-                }
-                break
-
-              case 'text_delta':
-                assistantMsg.content += interpreted.text
-                break
-
-              case 'thinking_delta':
-                if (!assistantMsg.thinking) assistantMsg.thinking = ''
-                assistantMsg.thinking += interpreted.text
-                // Auto-create thinking block for Google (no block_start/block_stop)
-                if (!currentThinkingBlock && (provider === 'google' || provider === 'openai')) {
-                  currentThinkingBlock = { type: 'thinking', thinking: '', signature: null }
-                }
-                if (currentThinkingBlock) currentThinkingBlock.thinking += interpreted.text
-                break
-
-              case 'signature_delta':
-                if (currentThinkingBlock) currentThinkingBlock.signature = interpreted.signature
-                break
-
-              case 'tool_input_delta':
-                if (currentToolCall) {
-                  thread._currentToolInputJson[currentToolCall.id] =
-                    (thread._currentToolInputJson[currentToolCall.id] || '') + interpreted.json
-                }
-                break
-
-              case 'block_stop':
-                if (currentBlockType === 'tool_use' && currentToolCall) {
-                  try {
-                    currentToolCall.input = JSON.parse(
-                      thread._currentToolInputJson[currentToolCall.id] || '{}'
-                    )
-                  } catch (e) {
-                    currentToolCall.input = {}
-                  }
-                } else if (currentBlockType === 'thinking' && currentThinkingBlock) {
-                  assistantMsg._thinkingBlocks.push({ ...currentThinkingBlock })
-                  currentThinkingBlock = null
-                }
-                currentBlockType = null
-                currentToolCall = null
-                break
-
-              case 'message_delta':
-                // Finalize any open non-Anthropic thinking block before processing stop
-                if (currentThinkingBlock && provider !== 'anthropic' && provider !== 'shoulders') {
-                  assistantMsg._thinkingBlocks.push({ ...currentThinkingBlock })
-                  currentThinkingBlock = null
-                }
-                if (interpreted.stopReason === 'tool_use') {
-                  usageAccumulator.cost = calculateCost(usageAccumulator, access.model)
-                  assistantMsg.usage = { ...usageAccumulator }
-                  import('./usage').then(({ useUsageStore }) => {
-                    useUsageStore().record({ usage: assistantMsg.usage, feature: 'tasks', provider, modelId: access.model, sessionId: thread.id })
-                  }).catch(e => console.warn('[tasks] usage record failed:', e))
-                  assistantMsg.status = 'complete'
-                  // Keep thread.status as 'streaming' — blocks sendMessage during tool execution.
-                  // _executeToolCalls → _streamResponse will manage status from here.
-                  this._cleanupListeners(thread)
-                  this._executeToolCalls(thread).catch(e => {
-                    console.error('[tasks] Tool execution failed:', e)
-                    thread.status = 'idle'
-                    if (assistantMsg) assistantMsg.status = 'error'
-                    this.saveThreads()
-                  })
-                  return
-                }
-                if (interpreted.stopReason === 'end_turn') {
-                  usageAccumulator.cost = calculateCost(usageAccumulator, access.model)
-                  assistantMsg.usage = { ...usageAccumulator }
-                  import('./usage').then(({ useUsageStore }) => {
-                    useUsageStore().record({ usage: assistantMsg.usage, feature: 'tasks', provider, modelId: access.model, sessionId: thread.id })
-                  }).catch(e => console.warn('[tasks] usage record failed:', e))
-                  assistantMsg.status = 'complete'
-                  thread.status = 'idle'
-                  thread.updatedAt = new Date().toISOString()
-                  this._cleanupListeners(thread)
-                  this.saveThreads()
-                }
-                break
-
-              case 'message_stop':
-                // Finalize any open Google thinking block
-                if (currentThinkingBlock && provider === 'google') {
-                  assistantMsg._thinkingBlocks.push({ ...currentThinkingBlock })
-                  currentThinkingBlock = null
-                }
-                if (assistantMsg.status === 'streaming') {
-                  if (usageAccumulator.total > 0) {
-                    usageAccumulator.cost = calculateCost(usageAccumulator, access.model)
-                    assistantMsg.usage = { ...usageAccumulator }
-                    import('./usage').then(({ useUsageStore }) => {
-                      useUsageStore().record({ usage: assistantMsg.usage, feature: 'tasks', provider, modelId: access.model, sessionId: thread.id })
-                    }).catch(e => console.warn('[tasks] usage record failed:', e))
-                  }
-                  assistantMsg.status = 'complete'
-                  thread.status = 'idle'
-                  thread.updatedAt = new Date().toISOString()
-                  this._cleanupListeners(thread)
-                  this.saveThreads()
-                }
-                break
-
-              case 'google_tool_call':
-                // Google sends tool calls as complete objects with thought signatures
-                assistantMsg.toolCalls.push({
-                  id: `tool-${nanoid()}`,
-                  name: interpreted.toolName,
-                  input: interpreted.toolInput || {},
-                  output: '',
-                  status: 'pending',
-                  _googleThoughtSignature: interpreted.thoughtSignature || null,
+          stopWhen: stepCountIs(10),
+          providerOptions,
+          abortSignal: abortController.signal,
+          onStepFinish({ usage, providerMetadata }) {
+            if (usage) {
+              const normalized = convertSdkUsage(usage, providerMetadata, provider)
+              normalized.cost = calculateCost(normalized, access.model)
+              assistantMsg.usage = normalized
+              import('./usage').then(({ useUsageStore }) => {
+                useUsageStore().record({
+                  usage: normalized, feature: 'tasks',
+                  provider, modelId: access.model, sessionId: thread.id,
                 })
-                break
+              }).catch(() => {})
+              if (access.provider === 'shoulders') workspace.refreshShouldersBalance()
             }
-
-            } // end interpretedList loop
-          }
-        })
-
-        thread._unlistenDone = await listen(`chat-done-${thread.id}`, (event) => {
-          // Finalize usage
-          if (usageAccumulator.total > 0 && !assistantMsg.usage) {
-            usageAccumulator.cost = calculateCost(usageAccumulator, access.model)
-            assistantMsg.usage = { ...usageAccumulator }
-            import('./usage').then(({ useUsageStore }) => {
-              useUsageStore().record({ usage: assistantMsg.usage, feature: 'tasks', provider, modelId: access.model, sessionId: thread.id })
-            }).catch(e => console.warn('[tasks] usage record failed:', e))
-          }
-          if (event.payload?.aborted) {
-            assistantMsg.status = 'aborted'
-            assistantMsg.content += '\n\n*[Aborted]*'
-          } else if (assistantMsg.status === 'streaming') {
-            assistantMsg.status = 'complete'
-          }
-          // Don't set thread.status = 'idle' yet — check for pending tools first
-          thread.updatedAt = new Date().toISOString()
-          this._cleanupListeners(thread)
-          if (provider === 'shoulders') workspace.refreshShouldersBalance()
-
-          // If tool calls are pending, execute them (race: done event can beat message_delta)
-          // Keep thread.status as 'streaming' to block sendMessage during tool execution.
-          const hasPending = assistantMsg.toolCalls?.some(tc => tc.status === 'pending')
-          if (hasPending) {
-            this._executeToolCalls(thread).catch(e => {
-              console.error('[tasks] Tool execution failed:', e)
-              thread.status = 'idle'
-              if (assistantMsg) assistantMsg.status = 'error'
-              this.saveThreads()
-            })
-          } else {
-            thread.status = 'idle'
-            this.saveThreads()
-          }
-        })
-
-        thread._unlistenError = await listen(`chat-error-${thread.id}`, (event) => {
-          console.error('[task-error]', event.payload)
-          assistantMsg.content += '\n\n' + formatChatApiError(event.payload?.error)
-          assistantMsg.status = 'error'
-          thread.status = 'idle'
-          this._cleanupListeners(thread)
-        })
-
-        // Fire the request
-        await invoke('chat_stream', {
-          sessionId: thread.id,
-          request: {
-            url: request.url,
-            headers: request.headers,
-            body: request.body,
           },
         })
-      } catch (e) {
-        assistantMsg.content = formatInvokeError(e)
-        assistantMsg.status = 'error'
-        thread.status = 'idle'
-        this._cleanupListeners(thread)
-      }
-    },
 
-    _cleanupListeners(thread) {
-      if (thread._unlistenChunk) { thread._unlistenChunk(); thread._unlistenChunk = null }
-      if (thread._unlistenDone) { thread._unlistenDone(); thread._unlistenDone = null }
-      if (thread._unlistenError) { thread._unlistenError(); thread._unlistenError = null }
-    },
-
-    async _executeToolCalls(thread) {
-      const lastAssistant = [...thread.messages].reverse().find(m => m.role === 'assistant')
-      if (!lastAssistant) return
-
-      const workspace = useWorkspaceStore()
-      const pendingTools = lastAssistant.toolCalls.filter(tc => tc.status === 'pending')
-
-      for (const tc of pendingTools) {
-        if (tc.name === 'propose_edit') {
-          tc.output = 'Proposal recorded. User will review.'
-          tc.status = 'done'
-        } else {
-          tc.status = 'running'
-          try {
-            const result = await executeSingleTool(tc.name, tc.input, workspace)
-            tc.output = typeof result === 'string' ? result : String(result ?? '')
-            tc.status = 'done'
-          } catch (e) {
-            tc.output = `Error: ${e.message || e}`
-            tc.status = 'error'
+        // Consume the stream → update assistantMsg reactively
+        for await (const part of result.fullStream) {
+          switch (part.type) {
+            case 'text-delta':
+              assistantMsg.content += part.textDelta
+              break
+            case 'reasoning':
+              if (!assistantMsg.thinking) assistantMsg.thinking = ''
+              assistantMsg.thinking += part.text
+              if (!assistantMsg._thinkingBlocks.length || assistantMsg._thinkingBlocks[assistantMsg._thinkingBlocks.length - 1]._done) {
+                assistantMsg._thinkingBlocks.push({ type: 'thinking', thinking: '', signature: null })
+              }
+              assistantMsg._thinkingBlocks[assistantMsg._thinkingBlocks.length - 1].thinking += part.text
+              break
+            case 'tool-call':
+              assistantMsg.toolCalls.push({
+                id: part.toolCallId,
+                name: part.toolName,
+                input: part.args,
+                output: '',
+                status: 'running',
+              })
+              break
+            case 'tool-result':
+              // Update matching tool call with result
+              for (const tc of assistantMsg.toolCalls) {
+                if (tc.id === part.toolCallId) {
+                  const output = part.result
+                  tc.output = typeof output === 'string' ? output : JSON.stringify(output)
+                  tc.status = 'done'
+                  break
+                }
+              }
+              break
+            case 'step-finish':
+              // Mark thinking block as done so next reasoning creates a new one
+              if (assistantMsg._thinkingBlocks.length) {
+                assistantMsg._thinkingBlocks[assistantMsg._thinkingBlocks.length - 1]._done = true
+              }
+              break
+            case 'error':
+              assistantMsg.content += `\n\n${formatChatApiError(part.error?.message || String(part.error))}`
+              assistantMsg.status = 'error'
+              break
           }
         }
+
+        // Stream finished
+        assistantMsg.status = 'complete'
+        thread.status = 'idle'
+        thread.updatedAt = new Date().toISOString()
+        this.saveThreads()
+      } catch (e) {
+        if (e.name === 'AbortError' || abortController.signal.aborted) {
+          assistantMsg.content += '\n\n*[Aborted]*'
+          assistantMsg.status = 'aborted'
+        } else {
+          assistantMsg.content += '\n\n' + formatChatApiError(e.message || String(e))
+          assistantMsg.status = 'error'
+        }
+        thread.status = 'idle'
+        thread.updatedAt = new Date().toISOString()
+        this.saveThreads()
+      } finally {
+        thread._abortController = null
       }
-
-      // Build tool result message and continue
-      const toolResultBlocks = lastAssistant.toolCalls.map(tc => ({
-        type: 'tool_result',
-        tool_use_id: tc.id,
-        content: tc.output || '',
-      }))
-
-      const toolResultMsg = {
-        id: `msg-${nanoid()}`,
-        role: 'user',
-        content: '',
-        fileRefs: [],
-        toolCalls: [],
-        thinking: null,
-        status: 'complete',
-        createdAt: new Date().toISOString(),
-        _isToolResult: true,
-        _toolResults: toolResultBlocks,
-      }
-      thread.messages.push(toolResultMsg)
-
-      // Re-build API messages and continue streaming
-      const apiMessages = await this._buildApiMessagesWithToolResults(thread)
-      await this._streamResponse(thread, apiMessages)
     },
 
     // --- Apply proposed edit → review system (Phase 5) ---
@@ -995,13 +759,9 @@ export const useTasksStore = defineStore('tasks', {
       const workspace = useWorkspaceStore()
       if (!workspace.shouldersDir) return
 
-      // Clean up streaming listeners from previous workspace threads
+      // Abort any streaming threads
       for (const thread of this.threads) {
-        this._cleanupListeners(thread)
-        if (thread.status === 'streaming') {
-          invoke('chat_abort', { sessionId: thread.id }).catch(() => {})
-        }
-        invoke('chat_cleanup', { sessionId: thread.id }).catch(() => {})
+        if (thread._abortController) thread._abortController.abort()
       }
 
       this.threads = []
@@ -1017,12 +777,7 @@ export const useTasksStore = defineStore('tasks', {
         if (!Array.isArray(data)) return
 
         for (const t of data) {
-          // Restore runtime fields
-          t._sseBuffer = ''
-          t._currentToolInputJson = {}
-          t._unlistenChunk = null
-          t._unlistenDone = null
-          t._unlistenError = null
+          t._abortController = null
           t.status = 'idle'
           this.threads.push(t)
         }

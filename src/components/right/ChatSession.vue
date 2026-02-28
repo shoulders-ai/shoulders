@@ -1,9 +1,10 @@
 <template>
   <div class="flex flex-col h-full">
     <!-- Messages area -->
+     
     <div ref="messagesRef" class="flex-1 overflow-y-auto px-3 pt-4 pb-8" @scroll="onScroll">
       <!-- Empty state -->
-      <div v-if="session.messages.length === 0"
+      <div v-if="messages.length === 0"
         class="flex flex-col justify-center h-full px-4 pb-20 max-w-xl mx-auto"
         style="color: var(--fg-muted);">
 
@@ -36,14 +37,14 @@
       </div>
 
       <!-- Messages -->
-       <div class="max-w-[100ch] mx-auto" v-if="visibleMessages.length > 0">
-      <div v-for="(msg, idx) in visibleMessages" :key="msg.id"
+       <div class="max-w-[100ch] mx-auto" v-if="messages.length > 0">
+      <div v-for="(msg, idx) in messages" :key="msg.id"
         class="group"
-        :class="idx > 0 && visibleMessages[idx - 1].role !== msg.role ? 'mt-4' : 'mt-2'"
+        :class="idx > 0 && messages[idx - 1].role !== msg.role ? 'mt-4' : 'mt-2'"
         :style="idx === 0 ? 'margin-top: 0' : ''">
         <ChatMessage
           :message="msg"
-          :prevRole="idx > 0 ? visibleMessages[idx - 1].role : null"
+          :prevRole="idx > 0 ? messages[idx - 1].role : null"
           @proposal-select="onProposalSelect"
         />
       </div>
@@ -68,9 +69,9 @@
     <!-- Input -->
     <ChatInput
       ref="chatInputRef"
-      :isStreaming="session.status === 'streaming'"
+      :isStreaming="isStreaming"
       :modelId="session.modelId"
-      :estimatedTokens="session._estimatedTokens || 0"
+      :estimatedTokens="0"
       :contextWindow="getContextWindow(session.modelId, workspace)"
       @send="onSend"
       @abort="onAbort"
@@ -80,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
 import { useChatStore } from '../../stores/chat'
@@ -95,8 +96,39 @@ const props = defineProps({
 
 const workspace = useWorkspaceStore()
 const editorStore = useEditorStore()
-
 const chatStore = useChatStore()
+
+// ─── Chat instance reactive state ─────────────────────────────────
+
+const chat = computed(() => {
+  const instance = chatStore.getChatInstance(props.session.id)
+  console.log('[ChatSession] getChatInstance:', props.session.id, '→', instance ? 'found' : 'null')
+  return instance
+})
+
+/**
+ * Messages: prefer Chat instance messages (reactive), fall back to session.messages.
+ * Filter out tool-result messages for display.
+ */
+const messages = computed(() => {
+  if (chat.value) {
+    const raw = chat.value.state.messagesRef.value
+    const filtered = raw.filter(m => !m._isToolResult)
+    console.log('[ChatSession] messages computed:', filtered.length, 'messages (raw:', raw.length, ')')
+    return filtered
+  }
+  return (props.session.messages || []).filter(m => !m._isToolResult)
+})
+
+const isStreaming = computed(() => {
+  if (chat.value) {
+    const status = chat.value.state.statusRef.value
+    return status === 'submitted' || status === 'streaming'
+  }
+  return props.session.status === 'streaming'
+})
+
+// ─── Recent sessions ──────────────────────────────────────────────
 
 const recentSessions = computed(() => {
   const liveIds = new Set(chatStore.sessions.map(s => s.id))
@@ -125,6 +157,8 @@ function relativeTime(iso) {
   return `${months}mo ago`
 }
 
+// ─── Suggestion chips ─────────────────────────────────────────────
+
 const suggestionChips = computed(() => {
   const chips = []
   const activeFile = editorStore.activeTab
@@ -147,16 +181,13 @@ function setSuggestion(text) {
   window.dispatchEvent(new CustomEvent('chat-set-input', { detail: { message: text } }))
 }
 
+// ─── Scroll management ───────────────────────────────────────────
+
 const messagesRef = ref(null)
 const bottomAnchor = ref(null)
 const chatInputRef = ref(null)
 const showScrollButton = ref(false)
 const isAutoScrolling = ref(true)
-
-// Filter out synthetic tool-result messages from display
-const visibleMessages = computed(() => {
-  return props.session.messages.filter(m => !m._isToolResult)
-})
 
 function onSend(payload) {
   chatStore.sendMessage(props.session.id, payload)
@@ -195,29 +226,13 @@ function scrollToBottom() {
 }
 
 // Auto-scroll on new content when user is at bottom
-watch(
-  () => {
-    const last = props.session.messages[props.session.messages.length - 1]
-    return last?.content?.length || 0
-  },
-  () => {
-    if (isAutoScrolling.value) {
-      nextTick(() => {
-        bottomAnchor.value?.scrollIntoView({ behavior: 'auto' })
-      })
-    }
-  },
-)
-
-// Auto-scroll on new messages
-watch(
-  () => props.session.messages.length,
-  () => {
-    if (isAutoScrolling.value) {
-      nextTick(() => scrollToBottom())
-    }
-  },
-)
+watch(messages, () => {
+  if (isAutoScrolling.value) {
+    nextTick(() => {
+      bottomAnchor.value?.scrollIntoView({ behavior: 'auto' })
+    })
+  }
+}, { deep: true })
 
 function focus() {
   chatInputRef.value?.focus()

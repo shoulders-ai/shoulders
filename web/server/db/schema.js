@@ -143,3 +143,24 @@ export const pageViews = sqliteTable('page_views', {
   eventMeta: text('event_meta'),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 })
+
+export const triages = sqliteTable('triages', {
+  id: text('id').primaryKey(),
+  slug: text('slug').unique().notNull(),
+  status: text('status').notNull().default('processing'),
+  currentStep: text('current_step'),
+  stepDetails: text('step_details'),
+  filename: text('filename'),
+  markdown: text('markdown'),
+  referencesJson: text('references_json'),
+  refCheckJson: text('ref_check_json'),
+  pangramJson: text('pangram_json'),
+  noveltyJson: text('novelty_json'),
+  assessmentJson: text('assessment_json'),
+  techNotes: text('tech_notes'),
+  costCents: integer('cost_cents'),
+  inputTokens: integer('input_tokens'),
+  outputTokens: integer('output_tokens'),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  completedAt: text('completed_at'),
+})

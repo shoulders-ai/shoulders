@@ -198,6 +198,32 @@ export default defineNitroPlugin(() => {
     CREATE INDEX IF NOT EXISTS idx_page_views_event_type ON page_views(event_type);
   `)
 
+  // Triages table (paper triage pipeline)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS triages (
+      id TEXT PRIMARY KEY,
+      slug TEXT UNIQUE NOT NULL,
+      status TEXT NOT NULL DEFAULT 'processing',
+      current_step TEXT,
+      step_details TEXT,
+      filename TEXT,
+      markdown TEXT,
+      references_json TEXT,
+      ref_check_json TEXT,
+      pangram_json TEXT,
+      novelty_json TEXT,
+      assessment_json TEXT,
+      tech_notes TEXT,
+      cost_cents INTEGER,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_triages_slug ON triages(slug);
+    CREATE INDEX IF NOT EXISTS idx_triages_created ON triages(created_at);
+  `)
+
   // Seed existing deck shares (idempotent)
   const seedShares = [
     ['seed_fe6kc', 'fe6kc-ch160-yw8c', 'deck-antler', 'faerber',       '2026-02-16T10:17:44.567Z'],

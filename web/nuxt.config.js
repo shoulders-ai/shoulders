@@ -25,6 +25,7 @@ export default defineNuxtConfig({
     stripeWebhookSecret: '',
     stripePriceId: '',
     shouldersSurchargeMultiplier: '',
+    pangramApiKey: '',
   },
 
   nitro: {
@@ -55,8 +56,9 @@ export default defineNuxtConfig({
     '/account': { ssr: false },
     '/admin/**': { ssr: false },
     '/d/**': { ssr: false },
+    '/triage/**': { ssr: false },
   },
   sitemap: {
-    exclude: ['/admin/**', '/review/**', '/auth/**', '/d/**', '/verify-email', '/reset-password', '/login', '/signup', '/account', '/subscribe'],
+    exclude: ['/admin/**', '/review/**', '/auth/**', '/d/**', '/triage/**', '/verify-email', '/reset-password', '/login', '/signup', '/account', '/subscribe'],
     }, 
 })

@@ -1,0 +1,57 @@
+/**
+ * Custom ChatTransport for AI SDK Chat composable.
+ *
+ * Creates a ToolLoopAgent + DirectChatTransport per request,
+ * reading fresh workspace state each time.
+ */
+
+import { DirectChatTransport, ToolLoopAgent, stepCountIs } from 'ai'
+import { createModel, buildProviderOptions, convertSdkUsage } from './aiSdk'
+import { createTauriFetch } from './tauriFetch'
+import { getAiTools } from './chatTools'
+
+/**
+ * Create a ChatTransport for the AI SDK Chat composable.
+ *
+ * @param {Function} getConfig - Async function returning fresh config per request:
+ *   { access, workspace, systemPrompt, thinkingConfig, provider, onUsage }
+ * @returns {object} ChatTransport implementation
+ */
+export function createChatTransport(getConfig) {
+  return {
+    async sendMessages({ messages, abortSignal }) {
+      console.log('[transport] sendMessages called, message count:', messages.length)
+      if (messages.length > 0) {
+        const first = messages[0]
+        console.log('[transport] First message:', { role: first.role, partsCount: first.parts?.length, partTypes: first.parts?.map(p => p.type) })
+      }
+      const config = await getConfig()
+      console.log('[transport] Config resolved:', { provider: config.provider, model: config.access?.model, hasTools: !!config.workspace, systemLen: config.systemPrompt?.length })
+      const tauriFetch = createTauriFetch()
+      const model = createModel(config.access, tauriFetch)
+      const tools = getAiTools(config.workspace)
+      const providerOptions = buildProviderOptions(config.thinkingConfig, config.provider)
+
+      const agent = new ToolLoopAgent({
+        model,
+        tools,
+        instructions: config.systemPrompt,
+        stopWhen: stepCountIs(15),
+        providerOptions,
+        onStepFinish(event) {
+          if (config.onUsage && event.usage) {
+            const normalized = convertSdkUsage(event.usage, event.providerMetadata, config.provider)
+            config.onUsage(normalized, config.access.model)
+          }
+        },
+      })
+
+      const inner = new DirectChatTransport({ agent, sendReasoning: true })
+      return inner.sendMessages({ messages, abortSignal })
+    },
+
+    async reconnectToStream() {
+      return null
+    },
+  }
+}

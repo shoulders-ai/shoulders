@@ -6,6 +6,7 @@
       <NuxtLink to="/admin/users" class="text-xs" :class="route.path === '/admin/users' ? 'text-stone-900 font-medium' : 'text-stone-400 hover:text-stone-600'">Users</NuxtLink>
       <NuxtLink to="/admin/calls" class="text-xs" :class="route.path === '/admin/calls' ? 'text-stone-900 font-medium' : 'text-stone-400 hover:text-stone-600'">API Calls</NuxtLink>
       <NuxtLink to="/admin/reviews" class="text-xs" :class="route.path === '/admin/reviews' ? 'text-stone-900 font-medium' : 'text-stone-400 hover:text-stone-600'">Reviews</NuxtLink>
+      <NuxtLink to="/admin/triages" class="text-xs" :class="route.path === '/admin/triages' ? 'text-stone-900 font-medium' : 'text-stone-400 hover:text-stone-600'">Triages</NuxtLink>
       <NuxtLink to="/admin/decks" class="text-xs" :class="route.path === '/admin/decks' ? 'text-stone-900 font-medium' : 'text-stone-400 hover:text-stone-600'">Decks</NuxtLink>
       <NuxtLink to="/admin/contacts" class="text-xs" :class="route.path === '/admin/contacts' ? 'text-stone-900 font-medium' : 'text-stone-400 hover:text-stone-600'">Contacts</NuxtLink>
       <NuxtLink to="/admin/analytics" class="text-xs" :class="route.path === '/admin/analytics' ? 'text-stone-900 font-medium' : 'text-stone-400 hover:text-stone-600'">Analytics</NuxtLink>

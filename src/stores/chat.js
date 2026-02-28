@@ -1,35 +1,161 @@
 import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { watch } from 'vue'
+import { Chat } from '@ai-sdk/vue'
+import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import { nanoid } from './utils'
 import { useWorkspaceStore } from './workspace'
-import { formatRequest, parseSSEChunk, interpretEvent } from '../services/chatProvider'
 import { resolveApiAccess } from '../services/apiClient'
-import { getToolDefinitions, executeSingleTool } from '../services/chatTools'
-import { buildApiMessages, buildApiMessagesWithToolResults } from '../services/chatMessages'
 import { getContextWindow, getThinkingConfig } from '../services/chatModels'
-import { estimateConversationTokens, truncateToFitBudget } from '../services/tokenEstimator'
 import { buildBaseSystemPrompt } from '../services/systemPrompt'
-import { normalizeUsage, mergeUsage, calculateCost, createEmptyUsage } from '../services/tokenUsage'
-import { noApiKeyMessage, formatChatApiError, formatInvokeError } from '../utils/errorMessages'
+import { calculateCost } from '../services/tokenUsage'
+import { cleanPartsForStorage } from '../services/aiSdk'
+import { createChatTransport } from '../services/chatTransport'
+import { buildWorkspaceMeta } from '../services/workspaceMeta'
+import { noApiKeyMessage, formatChatApiError } from '../utils/errorMessages'
+
+// Chat instances live OUTSIDE Pinia (non-reactive container).
+// Each Chat's internal messages/status use Vue ref() — reactive when accessed.
+const chatInstances = new Map() // sessionId → Chat
 
 export const useChatStore = defineStore('chat', {
   state: () => ({
     sessions: [],
     activeSessionId: null,
-    allSessionsMeta: [], // [{ id, label, updatedAt, messageCount }] — all persisted sessions
+    allSessionsMeta: [], // [{ id, label, updatedAt, messageCount }]
+    _chatVersion: 0, // Reactive trigger — increment when Chat instances are created/destroyed
   }),
 
   getters: {
     activeSession(state) {
       return state.sessions.find(s => s.id === state.activeSessionId) || null
     },
-    streamingCount(state) {
-      return state.sessions.filter(s => s.status === 'streaming' && s._background).length
+    streamingCount() {
+      let count = 0
+      for (const [id, chat] of chatInstances) {
+        const session = this.sessions.find(s => s.id === id)
+        if (session?._background) {
+          const status = chat.state.statusRef.value
+          if (status === 'submitted' || status === 'streaming') count++
+        }
+      }
+      return count
     },
   },
 
   actions: {
+    // ─── Chat Instance Management ────────────────────────────────
+
+    /**
+     * Get or create a Chat instance for a session.
+     */
+    getOrCreateChat(session) {
+      if (chatInstances.has(session.id)) return chatInstances.get(session.id)
+
+      console.log('[chat] Creating Chat instance for session:', session.id)
+
+      const chat = new Chat({
+        id: session.id,
+        messages: session._savedMessages || [],
+        transport: createChatTransport(() => this._buildConfig(session)),
+        sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+
+        onToolCall: async ({ toolCall }) => {
+          // Client-side tool handling if needed
+          // The ToolLoopAgent in the transport handles server-side tools
+        },
+
+        onError: (err) => {
+          console.error(`[chat] Error in session ${session.id}:`, err)
+          session.updatedAt = new Date().toISOString()
+        },
+      })
+
+      chatInstances.set(session.id, chat)
+      this._chatVersion++ // Trigger reactivity for getChatInstance consumers
+
+      // Watch for status transitions to save on completion
+      watch(
+        () => chat.state.statusRef.value,
+        (newStatus, oldStatus) => {
+          console.log(`[chat] Session ${session.id} status: ${oldStatus} → ${newStatus}`)
+          if (newStatus === 'ready' && (oldStatus === 'streaming' || oldStatus === 'submitted')) {
+            session.updatedAt = new Date().toISOString()
+            this.saveSession(session.id)
+
+            // Auto-cleanup background sessions
+            if (session._background) {
+              this._removeFromSessions(session.id)
+            }
+          }
+        },
+      )
+
+      return chat
+    },
+
+    /**
+     * Get an existing Chat instance (without creating).
+     * Accesses _chatVersion to establish reactive dependency for computed() consumers.
+     */
+    getChatInstance(sessionId) {
+      void this._chatVersion // reactive dependency — re-evaluate when Chat instances change
+      return chatInstances.get(sessionId) || null
+    },
+
+    /**
+     * Build fresh config for the transport. Called per-request.
+     */
+    async _buildConfig(session) {
+      const workspace = useWorkspaceStore()
+      const access = await resolveApiAccess({ modelId: session.modelId }, workspace)
+
+      if (!access) throw new Error(noApiKeyMessage(session.modelId))
+
+      const provider = access.providerHint || access.provider
+      const modelEntry = workspace.modelsConfig?.models?.find(m => m.id === session.modelId)
+      const thinkingConfig = getThinkingConfig(access.model, provider, modelEntry?.thinking)
+
+      // Build system prompt (includes workspace meta for context)
+      let systemPrompt = buildBaseSystemPrompt(workspace)
+      if (workspace.systemPrompt) systemPrompt += '\n\n' + workspace.systemPrompt
+      if (workspace.instructions) systemPrompt += '\n\n' + workspace.instructions
+
+      // Add workspace meta to system prompt (not user message — keeps UI clean)
+      try {
+        const meta = await buildWorkspaceMeta(workspace.path)
+        if (meta) systemPrompt += '\n\n' + meta
+      } catch {}
+
+      console.log('[chat] _buildConfig:', { provider, model: access.model, isShoulders: access.provider === 'shoulders', systemLen: systemPrompt.length })
+
+      return {
+        access,
+        workspace,
+        systemPrompt,
+        thinkingConfig,
+        provider,
+        onUsage: (normalized, modelId) => {
+          normalized.cost = calculateCost(normalized, modelId)
+          import('./usage').then(({ useUsageStore }) => {
+            useUsageStore().record({
+              usage: normalized,
+              feature: 'chat',
+              provider,
+              modelId,
+              sessionId: session.id,
+            })
+          })
+          // Refresh Shoulders balance
+          if (access.provider === 'shoulders') {
+            workspace.refreshShouldersBalance()
+          }
+        },
+      }
+    },
+
+    // ─── Session Management ──────────────────────────────────────
+
     createSession(modelId) {
       const workspace = useWorkspaceStore()
       const configDefault = workspace.modelsConfig?.models?.find(m => m.default)?.id || 'sonnet'
@@ -39,19 +165,17 @@ export const useChatStore = defineStore('chat', {
         id,
         label: `Chat ${this.sessions.length + 1}`,
         modelId: modelId || defaultModel,
-        messages: [],
+        messages: [], // For UI display — overridden by Chat instance once created
         status: 'idle',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        // Runtime-only
-        _unlistenChunk: null,
-        _unlistenDone: null,
-        _unlistenError: null,
-        _sseBuffer: '',
-        _currentToolInputJson: {},
       }
       this.sessions.push(session)
       this.activeSessionId = id
+
+      // Pre-create Chat instance so messages are immediately reactive
+      this.getOrCreateChat(session)
+
       return id
     },
 
@@ -59,12 +183,13 @@ export const useChatStore = defineStore('chat', {
       const session = this.sessions.find(s => s.id === id)
       if (!session) return
 
-      // Abort if streaming
-      if (session.status === 'streaming') {
-        invoke('chat_abort', { sessionId: id }).catch(() => {})
+      // Stop Chat instance
+      const chat = chatInstances.get(id)
+      if (chat) {
+        try { chat.stop() } catch {}
+        chatInstances.delete(id)
+        this._chatVersion++
       }
-      this._cleanupListeners(session)
-      invoke('chat_cleanup', { sessionId: id }).catch(() => {})
 
       const idx = this.sessions.indexOf(session)
       this.sessions.splice(idx, 1)
@@ -75,24 +200,19 @@ export const useChatStore = defineStore('chat', {
         invoke('delete_path', { path: `${workspace.shouldersDir}/chats/${id}.json` }).catch(() => {})
       }
 
-      // Update active
       if (this.activeSessionId === id) {
         this.activeSessionId = this.sessions.length > 0 ? this.sessions[this.sessions.length - 1].id : null
       }
     },
 
     async reopenSession(id) {
-      // If this session is streaming in background, bring it back to foreground
       const existing = this.sessions.find(s => s.id === id)
       if (existing) {
-        if (existing._background) {
-          existing._background = false
-        }
+        if (existing._background) existing._background = false
         this.activeSessionId = id
         return
       }
 
-      // Archive current chat first (same logic as archiveAndNewChat)
       await this._archiveCurrent()
 
       const workspace = useWorkspaceStore()
@@ -101,15 +221,26 @@ export const useChatStore = defineStore('chat', {
       try {
         const content = await invoke('read_file', { path: `${workspace.shouldersDir}/chats/${id}.json` })
         const data = JSON.parse(content)
-        // Restore runtime fields
-        data._unlistenChunk = null
-        data._unlistenDone = null
-        data._unlistenError = null
-        data._sseBuffer = ''
-        data._currentToolInputJson = {}
-        data.status = 'idle'
-        this.sessions.push(data)
+
+        // Migrate old messages to UIMessage parts[] format
+        const messages = (data.messages || []).map(migrateOldMessage)
+
+        const session = {
+          id: data.id,
+          label: data.label,
+          modelId: data.modelId,
+          messages: [], // Will be populated by Chat instance
+          status: 'idle',
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          _savedMessages: messages, // Passed to Chat constructor
+        }
+
+        this.sessions.push(session)
         this.activeSessionId = id
+
+        // Pre-create Chat so messages are immediately available
+        this.getOrCreateChat(session)
       } catch (e) {
         console.warn('Failed to reopen session:', e)
       }
@@ -138,9 +269,7 @@ export const useChatStore = defineStore('chat', {
               updatedAt: data.updatedAt || data.createdAt,
               messageCount: data.messages?.length || 0,
             })
-          } catch (e) {
-            // Skip corrupt files
-          }
+          } catch {}
         }
 
         meta.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
@@ -156,8 +285,15 @@ export const useChatStore = defineStore('chat', {
 
     async archiveAndNewChat() {
       const active = this.activeSession
-      // Empty chat → no-op
-      if (!active || active.messages.length === 0) return
+      if (!active) return
+
+      // Check if Chat has any messages
+      const chat = chatInstances.get(active.id)
+      const hasMessages = chat
+        ? chat.state.messagesRef.value.length > 0
+        : active.messages.length > 0
+
+      if (!hasMessages) return
 
       await this._archiveCurrent()
       this.createSession()
@@ -165,13 +301,20 @@ export const useChatStore = defineStore('chat', {
 
     async _archiveCurrent() {
       const active = this.activeSession
-      if (!active || active.messages.length === 0) return
+      if (!active) return
 
-      if (active.status === 'streaming') {
-        // Keep streaming in background — listeners stay alive
+      const chat = chatInstances.get(active.id)
+      const hasMessages = chat
+        ? chat.state.messagesRef.value.length > 0
+        : active.messages.length > 0
+
+      if (!hasMessages) return
+
+      const isStreaming = chat && ['submitted', 'streaming'].includes(chat.state.statusRef.value)
+
+      if (isStreaming) {
         active._background = true
       } else {
-        // Save and remove from sessions array
         await this.saveSession(active.id)
         this._removeFromSessions(active.id)
       }
@@ -180,475 +323,122 @@ export const useChatStore = defineStore('chat', {
     _removeFromSessions(id) {
       const session = this.sessions.find(s => s.id === id)
       if (!session) return
-      this._cleanupListeners(session)
-      invoke('chat_cleanup', { sessionId: id }).catch(() => {})
+
+      const chat = chatInstances.get(id)
+      if (chat) {
+        try { chat.stop() } catch {}
+        chatInstances.delete(id)
+        this._chatVersion++
+      }
+
       const idx = this.sessions.indexOf(session)
       this.sessions.splice(idx, 1)
     },
 
+    // ─── Messaging ───────────────────────────────────────────────
+
     async sendMessage(sessionId, { text, fileRefs, context }) {
       const session = this.sessions.find(s => s.id === sessionId)
-      if (!session || session.status === 'streaming') return
+      if (!session) {
+        console.warn('[chat] sendMessage: session not found:', sessionId)
+        return
+      }
 
-      // Budget gate — block at 100%
+      const chat = this.getOrCreateChat(session)
+
+      // Check streaming state
+      const status = chat.state.statusRef.value
+      if (status === 'submitted' || status === 'streaming') {
+        console.warn('[chat] sendMessage: already streaming, ignoring')
+        return
+      }
+
+      // Budget gate
       const { useUsageStore } = await import('./usage')
       if (useUsageStore().isOverBudget) {
-        session.messages.push({
-          id: `msg-${nanoid()}`, role: 'assistant',
-          content: 'Monthly budget reached. Change your budget in Settings > Models to continue.',
-          fileRefs: [], context: null, toolCalls: [], thinking: null,
-          status: 'error', createdAt: new Date().toISOString(),
-        })
+        // Can't inject error messages directly into Chat — the Chat manages its own messages.
+        // We'll need to handle this differently, maybe by throwing in the transport.
+        console.warn('[chat] Budget exceeded')
         return
       }
 
       // Auto-label on first message
-      if (session.messages.length === 0 && text) {
+      const isFirst = chat.state.messagesRef.value.length === 0
+      if (isFirst && text) {
         session.label = text.slice(0, 40).replace(/\n/g, ' ').trim()
       }
 
-      const userMsg = {
-        id: `msg-${nanoid()}`,
-        role: 'user',
-        content: text || '',
-        fileRefs: fileRefs || [],
-        context: context || null,
-        toolCalls: [],
-        thinking: null,
-        status: 'complete',
-        createdAt: new Date().toISOString(),
-      }
+      // Build message text with workspace meta + file refs + context
+      const messageText = await this._buildMessageText({ text, fileRefs, context })
 
-      session.messages.push(userMsg)
-      session.updatedAt = new Date().toISOString()
-
-      const workspace = useWorkspaceStore()
-      const access = await resolveApiAccess({ modelId: session.modelId }, workspace)
-      const provider = access?.provider || 'anthropic'
-      const apiMessages = await buildApiMessages(session, provider)
-      await this._streamResponse(session, apiMessages)
+      console.log('[chat] Sending message:', { sessionId, textLen: messageText.length, msgCount: chat.state.messagesRef.value.length })
+      chat.sendMessage({ text: messageText })
     },
 
     async abortSession(sessionId) {
-      const session = this.sessions.find(s => s.id === sessionId)
-      if (!session || session.status !== 'streaming') return
-      await invoke('chat_abort', { sessionId })
+      const chat = chatInstances.get(sessionId)
+      if (!chat) return
+      chat.stop()
     },
 
-    // --- Streaming orchestration ---
+    /**
+     * Build the full message text including workspace meta, file refs, and context.
+     */
+    async _buildMessageText({ text, fileRefs, context }) {
+      const parts = []
 
-    async _streamResponse(session, apiMessages) {
-      const workspace = useWorkspaceStore()
-      const access = await resolveApiAccess({ modelId: session.modelId }, workspace)
-      if (!access) {
-        const errMsg = {
-          id: `msg-${nanoid()}`,
-          role: 'assistant',
-          content: noApiKeyMessage(session.modelId),
-          fileRefs: [],
-          context: null,
-          toolCalls: [],
-          thinking: null,
-          status: 'error',
-          createdAt: new Date().toISOString(),
-        }
-        session.messages.push(errMsg)
-        return
-      }
+      // Workspace meta is now in the system prompt (_buildConfig), not the user message.
+      // This keeps the UI clean — the user only sees their own text.
 
-      // Create assistant message placeholder
-      session.messages.push({
-        id: `msg-${nanoid()}`,
-        role: 'assistant',
-        content: '',
-        fileRefs: [],
-        context: null,
-        toolCalls: [],
-        thinking: null,
-        _thinkingBlocks: [],
-        status: 'streaming',
-        createdAt: new Date().toISOString(),
-      })
-      // IMPORTANT: get reactive proxy reference, not the raw object
-      const assistantMsg = session.messages[session.messages.length - 1]
-      session.status = 'streaming'
-      session._sseBuffer = ''
-      session._currentToolInputJson = {}
-
-      // Build system prompt
-      let system = buildBaseSystemPrompt(workspace)
-      if (workspace.systemPrompt) system += '\n\n' + workspace.systemPrompt
-      if (workspace.instructions) system += '\n\n' + workspace.instructions
-
-      // Token budget: estimate, truncate if needed, store on session
-      const contextWindow = getContextWindow(session.modelId, workspace)
-      const modelEntry = workspace.modelsConfig?.models?.find(m => m.id === session.modelId)
-      const thinkingConfig = getThinkingConfig(access.model, access.provider, modelEntry?.thinking)
-      const outputReserve = thinkingConfig ? 32768 : 16384
-      const maxBudget = contextWindow - outputReserve
-      let estimated = estimateConversationTokens(system, apiMessages)
-      if (estimated > maxBudget) {
-        apiMessages = truncateToFitBudget(apiMessages, maxBudget, system)
-        estimated = estimateConversationTokens(system, apiMessages)
-      }
-      session._estimatedTokens = estimated
-
-      const tools = getToolDefinitions(workspace)
-      const { provider } = access
-
-      try {
-        const request = formatRequest(provider, {
-          url: access.url,
-          apiKey: access.apiKey,
-          model: access.model,
-          messages: apiMessages,
-          system,
-          tools,
-          maxTokens: thinkingConfig ? 32768 : 16384,
-          providerHint: access.providerHint,
-          thinking: thinkingConfig,
-        })
-
-        // Setup listeners
-        this._cleanupListeners(session)
-
-        let currentBlockType = null
-        let currentToolCall = null
-        let currentThinkingBlock = null
-        let usageAccumulator = createEmptyUsage()
-
-        session._unlistenChunk = await listen(`chat-chunk-${session.id}`, (event) => {
-          const raw = event.payload?.data
-          if (!raw) return
-
-          const { events, remainingBuffer } = parseSSEChunk(provider, raw, session._sseBuffer)
-          session._sseBuffer = remainingBuffer
-
-          for (const evt of events) {
-            const rawInterpreted = interpretEvent(provider, evt)
-            if (!rawInterpreted) continue
-            // Google returns arrays (multiple parts per chunk), others return single events
-            const interpretedList = Array.isArray(rawInterpreted) ? rawInterpreted : [rawInterpreted]
-
-            for (const interpreted of interpretedList) {
-
-            // Accumulate token usage from any event that carries it
-            if (interpreted.usage) {
-              const partial = normalizeUsage(provider, interpreted.usage)
-              usageAccumulator = mergeUsage(usageAccumulator, partial)
-            }
-
-            switch (interpreted.type) {
-              case 'usage':
-                // Usage-only event (e.g. OpenAI final chunk) — already captured above
-                break
-
-              case 'block_start':
-                currentBlockType = interpreted.blockType
-                if (interpreted.blockType === 'tool_use') {
-                  assistantMsg.toolCalls.push({
-                    id: interpreted.toolId || `tool-${nanoid()}`,
-                    name: interpreted.toolName,
-                    input: {},
-                    output: '',
-                    status: 'pending',
-                    _googleThoughtSignature: interpreted.thoughtSignature || null,
-                  })
-                  // Get reactive proxy reference
-                  currentToolCall = assistantMsg.toolCalls[assistantMsg.toolCalls.length - 1]
-                  session._currentToolInputJson[currentToolCall.id] = ''
-                } else if (interpreted.blockType === 'thinking') {
-                  currentThinkingBlock = { type: 'thinking', thinking: '', signature: null }
-                }
-                break
-
-              case 'text_delta':
-                assistantMsg.content += interpreted.text
-                break
-
-              case 'thinking_delta':
-                if (!assistantMsg.thinking) assistantMsg.thinking = ''
-                assistantMsg.thinking += interpreted.text
-                // Auto-create thinking block for non-Anthropic (no block_start/block_stop)
-                if (!currentThinkingBlock && (provider === 'google' || provider === 'openai')) {
-                  currentThinkingBlock = { type: 'thinking', thinking: '', signature: null }
-                }
-                if (currentThinkingBlock) currentThinkingBlock.thinking += interpreted.text
-                break
-
-              case 'signature_delta':
-                if (currentThinkingBlock) currentThinkingBlock.signature = interpreted.signature
-                break
-
-              case 'tool_input_delta':
-                if (currentToolCall) {
-                  session._currentToolInputJson[currentToolCall.id] =
-                    (session._currentToolInputJson[currentToolCall.id] || '') + interpreted.json
-                }
-                break
-
-              case 'block_stop':
-                if (currentBlockType === 'tool_use' && currentToolCall) {
-                  try {
-                    currentToolCall.input = JSON.parse(
-                      session._currentToolInputJson[currentToolCall.id] || '{}'
-                    )
-                  } catch (e) {
-                    currentToolCall.input = {}
-                  }
-                } else if (currentBlockType === 'thinking' && currentThinkingBlock) {
-                  assistantMsg._thinkingBlocks.push({ ...currentThinkingBlock })
-                  currentThinkingBlock = null
-                }
-                currentBlockType = null
-                currentToolCall = null
-                break
-
-              case 'message_delta':
-                // Finalize any open non-Anthropic thinking block before processing stop
-                if (currentThinkingBlock && provider !== 'anthropic' && provider !== 'shoulders') {
-                  assistantMsg._thinkingBlocks.push({ ...currentThinkingBlock })
-                  currentThinkingBlock = null
-                }
-                if (interpreted.stopReason === 'tool_use') {
-                  // Tool use: must cleanup + execute immediately (can't wait for done event)
-                  usageAccumulator.cost = calculateCost(usageAccumulator, access.model)
-                  assistantMsg.usage = { ...usageAccumulator }
-                  // Record usage
-                  import('./usage').then(({ useUsageStore }) => {
-                    useUsageStore().record({ usage: assistantMsg.usage, feature: 'chat', provider, modelId: access.model, sessionId: session.id })
-                  })
-                  assistantMsg.status = 'complete'
-                  // Keep session.status as 'streaming' — blocks sendMessage during tool execution.
-                  // _executeToolCalls → _streamResponse will manage status from here.
-                  this._cleanupListeners(session)
-                  if (provider === 'shoulders') workspace.refreshShouldersBalance()
-                  this._executeToolCalls(session).catch(e => {
-                    console.error('[chat] Tool execution failed:', e)
-                    session.status = 'idle'
-                    const lastMsg = [...session.messages].reverse().find(m => m.role === 'assistant')
-                    if (lastMsg) lastMsg.status = 'error'
-                    this.saveSession(session.id)
-                  })
-                  return
-                }
-                if (interpreted.stopReason === 'end_turn') {
-                  assistantMsg.status = 'complete'
-                  session.status = 'idle'
-                  // Refresh Shoulders balance on stream completion
-                  if (provider === 'shoulders') workspace.refreshShouldersBalance()
-                }
-                break
-
-              case 'message_stop':
-                // Finalize any open Google thinking block
-                if (currentThinkingBlock && provider === 'google') {
-                  assistantMsg._thinkingBlocks.push({ ...currentThinkingBlock })
-                  currentThinkingBlock = null
-                }
-                if (assistantMsg.status === 'streaming') {
-                  assistantMsg.status = 'complete'
-                  session.status = 'idle'
-                  // Refresh Shoulders balance on stream completion
-                  if (provider === 'shoulders') workspace.refreshShouldersBalance()
-                }
-                break
-
-              case 'shoulders_balance': {
-                const ws = useWorkspaceStore()
-                if (ws.shouldersAuth && interpreted.credits !== undefined) {
-                  ws.shouldersAuth.credits = interpreted.credits
-                }
-                break
-              }
-
-              case 'google_tool_call':
-                // Google sends tool calls as complete objects with thought signatures
-                assistantMsg.toolCalls.push({
-                  id: `tool-${nanoid()}`,
-                  name: interpreted.toolName,
-                  input: interpreted.toolInput || {},
-                  output: '',
-                  status: 'pending',
-                  _googleThoughtSignature: interpreted.thoughtSignature || null,
-                })
-                break
-            }
-
-            } // end interpretedList loop
+      // File references
+      if (fileRefs?.length) {
+        for (const ref of fileRefs) {
+          if (ref.content) {
+            parts.push(`<file-ref path="${ref.path}">\n${ref.content}\n</file-ref>`)
           }
-        })
-
-        session._unlistenDone = await listen(`chat-done-${session.id}`, (event) => {
-          // Finalize usage — this is the single place where usage is stored
-          // (except tool_use which needs immediate cleanup for tool execution)
-          if (usageAccumulator.total > 0) {
-            usageAccumulator.cost = calculateCost(usageAccumulator, access.model)
-            assistantMsg.usage = { ...usageAccumulator }
-            // Record usage
-            import('./usage').then(({ useUsageStore }) => {
-              useUsageStore().record({ usage: assistantMsg.usage, feature: 'chat', provider, modelId: access.model, sessionId: session.id })
-            })
-          }
-          if (event.payload?.aborted) {
-            assistantMsg.status = 'aborted'
-            assistantMsg.content += '\n\n*[Aborted]*'
-          } else if (assistantMsg.status === 'streaming') {
-            assistantMsg.status = 'complete'
-          }
-          // Don't set session.status = 'idle' yet — check for pending tools first
-          session.updatedAt = new Date().toISOString()
-          this._cleanupListeners(session)
-
-          // Refresh Shoulders balance after proxy call
-          if (provider === 'shoulders') workspace.refreshShouldersBalance()
-
-          // If tool calls are pending, execute them (race: done event can beat message_delta)
-          // Keep session.status as 'streaming' to block sendMessage during tool execution.
-          const hasPending = assistantMsg.toolCalls?.some(tc => tc.status === 'pending')
-          if (hasPending) {
-            this._executeToolCalls(session).catch(e => {
-              console.error('[chat] Tool execution failed:', e)
-              session.status = 'idle'
-              if (assistantMsg) assistantMsg.status = 'error'
-              this.saveSession(session.id)
-            })
-          } else {
-            session.status = 'idle'
-            this.saveSession(session.id)
-            // Auto-cleanup background sessions
-            if (session._background) {
-              this._removeFromSessions(session.id)
-            }
-          }
-        })
-
-        session._unlistenError = await listen(`chat-error-${session.id}`, (event) => {
-          console.error('[chat-error]', event.payload)
-          assistantMsg.content += '\n\n' + formatChatApiError(event.payload?.error)
-          assistantMsg.status = 'error'
-          session.status = 'idle'
-          this._cleanupListeners(session)
-          // Auto-cleanup background sessions on error
-          if (session._background) {
-            this.saveSession(session.id).then(() => {
-              this._removeFromSessions(session.id)
-            })
-          }
-        })
-
-        // Fire the request
-        await invoke('chat_stream', {
-          sessionId: session.id,
-          request: {
-            url: request.url,
-            headers: request.headers,
-            body: request.body,
-          },
-        })
-      } catch (e) {
-        // assistantMsg is already a reactive ref, safe to mutate
-        assistantMsg.content = formatInvokeError(e)
-        assistantMsg.status = 'error'
-        session.status = 'idle'
-        this._cleanupListeners(session)
-      }
-    },
-
-    _cleanupListeners(session) {
-      if (session._unlistenChunk) { session._unlistenChunk(); session._unlistenChunk = null }
-      if (session._unlistenDone) { session._unlistenDone(); session._unlistenDone = null }
-      if (session._unlistenError) { session._unlistenError(); session._unlistenError = null }
-    },
-
-    async _executeToolCalls(session) {
-      const workspace = useWorkspaceStore()
-      const lastAssistant = [...session.messages].reverse().find(m => m.role === 'assistant')
-      if (!lastAssistant) return
-
-      const pendingTools = lastAssistant.toolCalls.filter(tc => tc.status === 'pending')
-
-      for (const tc of pendingTools) {
-        tc.status = 'running'
-        try {
-          const result = await executeSingleTool(tc.name, tc.input, workspace)
-          // Structured PDF result: extract path for native handling, text for display
-          if (result && typeof result === 'object' && result._pdfPath) {
-            tc._pdfPath = result._pdfPath
-            tc.output = result.text
-          } else {
-            tc.output = typeof result === 'string' ? result : String(result ?? '')
-          }
-          tc.status = 'done'
-        } catch (e) {
-          tc.output = String(e)
-          tc.status = 'error'
         }
       }
 
-      // Build tool result user message and continue
-      const toolResultBlocks = lastAssistant.toolCalls.map(tc => ({
-        type: 'tool_result',
-        tool_use_id: tc.id,
-        content: tc.output || '',
-        ...(tc._pdfPath ? { _pdfPath: tc._pdfPath } : {}),
-        ...(tc.status === 'error' ? { is_error: true } : {}),
-      }))
-
-      // Add a synthetic user message with tool results
-      const toolResultMsg = {
-        id: `msg-${nanoid()}`,
-        role: 'user',
-        content: '',
-        fileRefs: [],
-        context: null,
-        toolCalls: [],
-        thinking: null,
-        status: 'complete',
-        createdAt: new Date().toISOString(),
-        _isToolResult: true,
-        _toolResults: toolResultBlocks,
+      // Context (selection, active file)
+      if (context?.text) {
+        let ctx = `<context file="${context.file || ''}">`
+        if (context.contextBefore) ctx += `\n...${context.contextBefore}`
+        ctx += `\n<selection>\n${context.text}\n</selection>`
+        if (context.contextAfter) ctx += `\n${context.contextAfter}...`
+        ctx += '\n</context>'
+        parts.push(ctx)
       }
-      session.messages.push(toolResultMsg)
 
-      // Re-build API messages and continue streaming
-      const access = await resolveApiAccess({ modelId: session.modelId }, workspace)
-      const provider = access?.provider || 'anthropic'
-      const apiMessages = await buildApiMessagesWithToolResults(session, provider)
-      await this._streamResponse(session, apiMessages)
+      // User text
+      if (text) parts.push(text)
+
+      return parts.join('\n\n')
     },
 
-    // --- Persistence (Phase 6) ---
+    // ─── Persistence ─────────────────────────────────────────────
 
     async loadSessions() {
       const workspace = useWorkspaceStore()
       if (!workspace.shouldersDir) return
 
-      // Clean up streaming listeners and Rust sessions from previous workspace
-      for (const session of this.sessions) {
-        this._cleanupListeners(session)
-        if (session.status === 'streaming') {
-          invoke('chat_abort', { sessionId: session.id }).catch(() => {})
-        }
-        invoke('chat_cleanup', { sessionId: session.id }).catch(() => {})
+      // Cleanup existing Chat instances
+      for (const [id, chat] of chatInstances) {
+        try { chat.stop() } catch {}
       }
+      chatInstances.clear()
+      this._chatVersion++
 
-      // Clear existing sessions to prevent duplicates on re-load (e.g. HMR)
       this.sessions = []
       this.activeSessionId = null
       this.allSessionsMeta = []
 
-      // Ensure chats dir exists
       const chatsDir = `${workspace.shouldersDir}/chats`
       const exists = await invoke('path_exists', { path: chatsDir })
       if (!exists) {
         await invoke('create_dir', { path: chatsDir })
       }
 
-      // Always start fresh — no session restoration
       this.createSession()
-
-      // Build meta index for history dropdown
       await this.loadAllSessionsMeta()
     },
 
@@ -659,32 +449,26 @@ export const useChatStore = defineStore('chat', {
       const session = this.sessions.find(s => s.id === id)
       if (!session) return
 
+      // Get messages from Chat instance
+      const chat = chatInstances.get(id)
+      const messages = chat
+        ? chat.state.messagesRef.value.map(m => ({
+            ...m,
+            parts: cleanPartsForStorage(m.parts),
+          }))
+        : session.messages || []
+
       const chatsDir = `${workspace.shouldersDir}/chats`
       const exists = await invoke('path_exists', { path: chatsDir })
       if (!exists) {
         await invoke('create_dir', { path: chatsDir })
       }
 
-      // Strip runtime-only fields
       const data = {
         id: session.id,
         label: session.label,
         modelId: session.modelId,
-        messages: session.messages.map(m => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          fileRefs: m.fileRefs,
-          context: m.context,
-          toolCalls: m.toolCalls,
-          thinking: m.thinking,
-          _thinkingBlocks: m._thinkingBlocks || [],
-          usage: m.usage || null,
-          status: m.status,
-          createdAt: m.createdAt,
-          _isToolResult: m._isToolResult,
-          _toolResults: m._toolResults,
-        })),
+        messages,
         status: 'idle',
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
@@ -696,13 +480,12 @@ export const useChatStore = defineStore('chat', {
           content: JSON.stringify(data, null, 2),
         })
 
-        // Update meta index inline (avoid full disk scan)
         const existingIdx = this.allSessionsMeta.findIndex(m => m.id === id)
         const meta = {
           id: session.id,
           label: session.label,
           updatedAt: session.updatedAt || session.createdAt,
-          messageCount: session.messages.length,
+          messageCount: messages.length,
         }
         if (existingIdx >= 0) {
           this.allSessionsMeta[existingIdx] = meta
@@ -715,3 +498,70 @@ export const useChatStore = defineStore('chat', {
     },
   },
 })
+
+
+// ─── Message Migration ────────────────────────────────────────────────
+
+/**
+ * Convert an old-format message to UIMessage format (parts[]).
+ * Old format: { content, toolCalls, thinking, _thinkingBlocks }
+ * New format: { parts: [{ type: 'reasoning', text }, { type: 'text', text }, { type: 'tool-name', ... }] }
+ */
+function migrateOldMessage(msg) {
+  // Already in new format
+  if (msg.parts && Array.isArray(msg.parts)) return msg
+
+  // Skip tool result messages (they're handled by the SDK now)
+  if (msg._isToolResult) return null
+
+  const parts = []
+
+  // Thinking → reasoning parts
+  if (msg._thinkingBlocks?.length) {
+    for (const block of msg._thinkingBlocks) {
+      if (block.thinking) {
+        parts.push({ type: 'reasoning', text: block.thinking })
+      }
+    }
+  } else if (msg.thinking) {
+    parts.push({ type: 'reasoning', text: msg.thinking })
+  }
+
+  // Content → text part
+  if (msg.content) {
+    parts.push({ type: 'text', text: msg.content })
+  }
+
+  // Tool calls → tool parts
+  if (msg.toolCalls?.length) {
+    for (const tc of msg.toolCalls) {
+      parts.push({
+        type: `tool-${tc.name}`,
+        toolCallId: tc.id,
+        toolName: tc.name,
+        state: tc.status === 'done' ? 'output-available'
+          : tc.status === 'error' ? 'output-error'
+          : 'input-available',
+        input: tc.input || {},
+        output: tc.output || undefined,
+        errorText: tc.status === 'error' ? tc.output : undefined,
+      })
+    }
+  }
+
+  // File refs → keep as metadata on user messages
+  const result = {
+    id: msg.id,
+    role: msg.role,
+    parts: parts.length > 0 ? parts : [{ type: 'text', text: '' }],
+    createdAt: msg.createdAt ? new Date(msg.createdAt) : new Date(),
+  }
+
+  // Preserve file refs and context for user messages
+  if (msg.role === 'user') {
+    if (msg.fileRefs?.length) result.metadata = { ...result.metadata, fileRefs: msg.fileRefs }
+    if (msg.context) result.metadata = { ...result.metadata, context: msg.context }
+  }
+
+  return result
+}

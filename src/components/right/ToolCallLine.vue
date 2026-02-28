@@ -1,10 +1,10 @@
 <template>
   <div>
-    <div class="chat-tool-line ui-text-sm" :class="[toolStatusClass(tc.status), { 'tool-skill': isSkill }]" @click="tc._expanded = !tc._expanded">
+    <div class="chat-tool-line ui-text-sm" :class="[statusClass, { 'tool-skill': isSkill }]" @click="expanded = !expanded">
       <!-- Status indicators -->
-      <span v-if="tc.status === 'pending'" class="tool-pending-dots"><span></span><span></span><span></span></span>
-      <span v-else-if="tc.status === 'running'" class="tool-status-dot tool-status-running"></span>
-      <span v-else-if="tc.status === 'error'" class="tool-status-dot tool-status-error"></span>
+      <span v-if="status === 'pending'" class="tool-pending-dots"><span></span><span></span><span></span></span>
+      <span v-else-if="status === 'running'" class="tool-status-dot tool-status-running"></span>
+      <span v-else-if="status === 'error'" class="tool-status-dot tool-status-error"></span>
       <!-- Icon -->
       <svg class="tool-icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
         <template v-if="iconName === 'sparkle'">
@@ -39,19 +39,20 @@
           <path d="M9 1v4h4"/>
         </template>
       </svg>
-      <span class="tool-label">{{ isSkill ? 'Loaded skill' : toolLabel(tc.name) }}</span>
-      <span class="tool-context">{{ toolContext(tc.name, tc.input) }}</span>
+      <span class="tool-label">{{ isSkill ? 'Loaded skill' : toolLabel(toolName) }}</span>
+      <span class="tool-context">{{ toolContext(toolName, toolInput) }}</span>
     </div>
     <!-- Expanded detail -->
-    <div class="chat-tool-detail" :class="{ expanded: tc._expanded }">
+    <div class="chat-tool-detail" :class="{ expanded }">
       <div class="chat-tool-detail-inner">
-        <div v-if="tc._expanded">
+        <div v-if="expanded">
           <div class="chat-tool-detail-label">Input</div>
-          <pre class="chat-code-block ui-text-sm whitespace-pre-wrap mb-2">{{ formatToolInput(tc.input) }}</pre>
-          <div v-if="tc.output">
+          <pre class="chat-code-block ui-text-sm whitespace-pre-wrap mb-2">{{ formatToolInput(toolInput) }}</pre>
+          <div v-if="toolOutput">
             <div class="chat-tool-detail-label">Output</div>
-            <pre class="chat-code-block ui-text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">{{ truncateOutput(tc.output) }}</pre>
+            <pre class="chat-code-block ui-text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">{{ truncateOutput(toolOutput) }}</pre>
           </div>
+          <div v-if="errorText" class="mt-1 ui-text-sm" style="color: var(--error);">{{ errorText }}</div>
         </div>
       </div>
     </div>
@@ -59,23 +60,70 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { TOOL_LABELS, getToolContext, getToolIcon, isSkillRead } from '../../utils/chatMarkdown'
 
 const props = defineProps({
-  tc: { type: Object, required: true },
+  // UIMessage tool part (new format)
+  part: { type: Object, default: null },
+  // Legacy tool call object (old format) — used by TaskThread
+  tc: { type: Object, default: null },
 })
 
-const isSkill = computed(() => isSkillRead(props.tc.name, props.tc.input))
-const iconName = computed(() => isSkill.value ? 'sparkle' : getToolIcon(props.tc.name))
+const expanded = ref(false)
+
+// ─── Unified accessors (support both part and tc props) ──────────
+
+const toolName = computed(() => {
+  if (props.part) {
+    return props.part.type === 'dynamic-tool'
+      ? props.part.toolName
+      : props.part.type?.replace('tool-', '')
+  }
+  return props.tc?.name || ''
+})
+
+const status = computed(() => {
+  if (props.part) {
+    switch (props.part.state) {
+      case 'input-streaming':
+      case 'input-available': return 'running'
+      case 'output-available': return 'done'
+      case 'output-error': return 'error'
+      default: return 'pending'
+    }
+  }
+  return props.tc?.status || 'pending'
+})
+
+const toolInput = computed(() => {
+  if (props.part) return props.part.input || props.part.args || {}
+  return props.tc?.input || {}
+})
+
+const toolOutput = computed(() => {
+  if (props.part) return props.part.output
+  return props.tc?.output
+})
+
+const errorText = computed(() => {
+  if (props.part) return props.part.errorText
+  return props.tc?.status === 'error' ? props.tc?.output : undefined
+})
+
+const isSkill = computed(() => isSkillRead(toolName.value, toolInput.value))
+const iconName = computed(() => isSkill.value ? 'sparkle' : getToolIcon(toolName.value))
+
+const statusClass = computed(() => {
+  if (status.value === 'pending') return 'tool-pending'
+  if (status.value === 'done') return 'tool-done'
+  return ''
+})
+
+// ─── Helpers ──────────────────────────────────────────────────────
 
 function toolLabel(name) { return TOOL_LABELS[name] || name }
 function toolContext(name, input) { return getToolContext(name, input) }
-function toolStatusClass(status) {
-  if (status === 'pending') return 'tool-pending'
-  if (status === 'done') return 'tool-done'
-  return ''
-}
 function formatToolInput(input) {
   if (!input) return '{}'
   if (typeof input === 'string') return input
@@ -83,7 +131,8 @@ function formatToolInput(input) {
 }
 function truncateOutput(output) {
   if (!output) return ''
-  if (output.length > 2000) return output.slice(0, 2000) + '\n... [truncated]'
-  return output
+  const str = typeof output === 'string' ? output : JSON.stringify(output)
+  if (str.length > 2000) return str.slice(0, 2000) + '\n... [truncated]'
+  return str
 }
 </script>
