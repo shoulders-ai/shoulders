@@ -126,7 +126,7 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 
 ### Want to change the task thread system?
 - Task creation: `src/App.vue:startTask()` → routes by file type: `.ipynb` dispatches `notebook-cell-task` event, `.docx` uses SuperDoc, else uses CodeMirror selection
-- Store (streaming + persistence): `src/stores/tasks.js` — mirrors `chat.js` streaming, uses `chat.rs` directly
+- Store (streaming + persistence): `src/stores/tasks.js` — uses Chat composable (same pattern as `chat.js`), `taskChatInstances` Map outside Pinia, `createChatTransport()` with `extraTools` + `maxSteps`
 - Notebook cells: threads have `cellId`/`cellIndex`/`cellType`/`cellOutputs`/`cellLanguage` fields, cell-aware system prompt, `_applyNotebookEdit()` writes edits into .ipynb cell source, `threadsForCell()` getter
 - Editor decorations: `src/editor/tasks.js` — gutter dots, range underlines, position mapping
 - Editor bridge: `src/components/editor/TextEditor.vue` — store↔CM sync, docChanged position mapping

@@ -218,30 +218,36 @@ Seven Pinia stores. All defined using the Options API pattern (`defineStore('nam
 ### State
 | Field | Type | Default | Purpose |
 |---|---|---|---|
-| `threads` | `array` | `[]` | Task thread objects (see data model in [ai-system.md](ai-system.md)) |
-| `activeThreadId` | `string\|null` | `null` | Currently displayed thread in the right panel |
+| `threads` | `ref(array)` | `[]` | Task thread objects (composition API) |
+| `activeThreadId` | `ref(string\|null)` | `null` | Currently displayed thread in the right panel |
+| `editStatuses` | `ref(object)` | `{}` | `toolCallId → { status: 'applied'\|'error', error? }` — propose_edit application state |
+
+Chat instances live outside Pinia in `taskChatInstances` Map (same pattern as `chatInstances` in `chat.js`).
 
 ### Getters
 - `threadsForFile(filePath)` — Filter threads for a specific file (used by TextEditor.vue for CM sync)
+- `threadsForCell(filePath, cellId)` — Filter non-resolved threads for a notebook cell
 - `activeThread` — Find thread by activeThreadId
 - `streamingCount` — Count of threads with status `'streaming'`
 
 ### Key Actions
 - `createThread(fileId, range, selectedText, modelId?)` — Creates thread, sets active, returns ID
-- `sendMessage(threadId, { text, fileRefs })` — Pushes user msg, calls `_streamResponse`
-- `abortThread(threadId)` — Invokes `chat_abort` via Rust
+- `sendMessage(threadId, { text, fileRefs })` — Gets/creates Chat instance, sends via `chat.sendMessage()`
+- `abortThread(threadId)` — Calls `chat.stop()` on the Chat instance
 - `resolveThread(threadId)` — Sets status to `'resolved'`, clears active, saves. Gutter dot/underline hidden.
-- `removeThread(threadId)` — Aborts if streaming, cleans up Rust session, splices from array, saves
-- `setActiveThread(threadId)` — Sets activeThreadId (controls list vs detail mode in UI)
+- `removeThread(threadId)` — Stops Chat, removes from `taskChatInstances`, splices from array, saves
+- `setActiveThread(threadId)` — Sets activeThreadId; lazily creates Chat instance if thread has saved messages
 - `updateRange(threadId, from, to)` — Updates text range (called by CM position mapping on doc changes)
-- `applyProposedEdit(threadId, toolCallId)` — Read → replace → write → update filesStore cache → record pending edit → merge view. See [ai-system.md](ai-system.md).
-- `loadThreads()` — Reads `.shoulders/tasks.json`, restores runtime fields. Called from `App.vue:openWorkspace()`.
-- `saveThreads()` — Strips runtime `_` fields, writes `.shoulders/tasks.json`. Called after each completed turn.
+- `applyProposedEdit(threadId, toolCallId)` — Finds old/new strings from Chat messages → read → replace → write → update filesStore cache → record pending edit → update `editStatuses`. Routes to text/DOCX/notebook variant.
+- `getTaskChatInstance(threadId)` — Returns Chat instance (reactive via `_chatVersion`)
+- `getThreadMessages(threadId)` — Returns messages from Chat instance or saved messages
+- `getEditStatus(toolCallId)` — Returns edit application status for a propose_edit tool call
+- `loadThreads()` — Reads `.shoulders/tasks.json`, migrates legacy messages via `migrateTaskMessages()`. Chat instances created lazily.
+- `saveThreads()` — Gets messages from Chat instances, cleans parts via `cleanPartsForStorage()`, persists `editStatuses`.
 
-### Internal Actions (streaming orchestration, mirrors chat.js)
-- `_streamResponse(thread)` — `streamText()` via AI SDK with `createModel()` + `createTauriFetch()`, tool execution in loop
-- `_executeToolCalls(thread)` — `propose_edit` handled locally; other tools route through tool `execute` functions
-- `_buildSystemPrompt(thread)` — Async: workspace meta injection, selection context, surrounding code
+### Internal
+- `_buildTaskConfig(thread)` — Async: resolves API access, builds system prompt (base + task context + workspace meta), returns config with `extraTools: { propose_edit }` and `maxSteps: 10`
+- `getOrCreateTaskChat(thread)` — Creates Chat instance with `createChatTransport()`, watches status transitions to update `thread.status` for gutter dot reactivity
 
 ## Store: links
 

@@ -7,14 +7,14 @@
           Paper Triage
         </NuxtLink>
         <NuxtLink to="/triage"
-          class="px-3.5 py-1.5 text-xs font-medium text-white bg-stone-900 hover:bg-stone-800 rounded-sm transition-colors">
+          class="px-3.5 py-1.5 text-xs font-medium text-white bg-stone-900 hover:bg-stone-800 transition-colors">
           Upload New
         </NuxtLink>
       </div>
     </header>
 
     <!-- Main -->
-    <div class="flex-1">
+    <div class="flex-1 mt-10">
       <div class="max-w-3xl mx-auto px-6">
 
         <!-- Error state -->
@@ -22,7 +22,7 @@
           <p class="text-sm text-stone-600 mb-2">Triage not found</p>
           <p class="text-xs text-stone-400 mb-6">This assessment may have expired or the URL is incorrect.</p>
           <NuxtLink to="/triage"
-            class="px-5 py-2 text-xs font-medium text-white bg-stone-900 hover:bg-stone-800 rounded-sm transition-colors inline-block">
+            class="px-5 py-2 text-xs font-medium text-white bg-stone-900 hover:bg-stone-800 transition-colors inline-block">
             Upload a paper
           </NuxtLink>
         </div>
@@ -40,14 +40,21 @@
               <template v-else>Extracting text</template>
             </StepRow>
 
-            <StepRow :done="!!steps.referencesExtracted" :active="!!steps.extracted && !steps.referencesExtracted">
+            <StepRow :done="!!steps.metadata" :active="!!steps.extracted && !steps.metadata">
+              <template v-if="steps.metadata">
+                Metadata — {{ steps.metadata.authors }} {{ steps.metadata.authors === 1 ? 'author' : 'authors' }} identified
+              </template>
+              <template v-else>Extracting metadata</template>
+            </StepRow>
+
+            <StepRow :done="!!steps.referencesExtracted" :active="!!steps.metadata && !steps.referencesExtracted">
               <template v-if="steps.referencesExtracted">{{ steps.referencesExtracted.count }} references identified</template>
               <template v-else>Identifying references</template>
             </StepRow>
 
             <StepRow :done="!!steps.referencesChecked" :active="data?.currentStep === 'checking' && !steps.referencesChecked">
               <template v-if="steps.referencesChecked">
-                Verified — {{ steps.referencesChecked.verified }} ok{{ (steps.referencesChecked.unverified || steps.referencesChecked.notFound) ? `, ${steps.referencesChecked.unverified || steps.referencesChecked.notFound} unverified` : '' }}{{ (steps.referencesChecked.errors || steps.referencesChecked.corrected) ? `, ${steps.referencesChecked.errors || steps.referencesChecked.corrected} errors` : '' }}
+                Verified — {{ steps.referencesChecked.verified }} ok{{ steps.referencesChecked.unverified ? `, ${steps.referencesChecked.unverified} unverified` : '' }}{{ steps.referencesChecked.errors ? `, ${steps.referencesChecked.errors} errors` : '' }}
               </template>
               <template v-else>Verifying references</template>
             </StepRow>
@@ -71,229 +78,291 @@
           <p class="text-sm text-stone-600 mb-2">Assessment could not be completed</p>
           <p class="text-xs text-stone-400 mb-6">Something went wrong during processing.</p>
           <NuxtLink to="/triage"
-            class="px-5 py-2 text-xs font-medium text-white bg-stone-900 hover:bg-stone-800 rounded-sm transition-colors inline-block">
+            class="px-5 py-2 text-xs font-medium text-white bg-stone-900 hover:bg-stone-800 transition-colors inline-block">
             Upload another paper
           </NuxtLink>
         </div>
 
         <!-- ═══════════ Dashboard ═══════════ -->
-        <div v-else-if="data.status === 'complete' && data.assessment" class="bg-white border-x border-b border-stone-200 px-8 py-6 mb-8">
+        <div v-else-if="data.status === 'complete'" class="bg-white border-x border-b border-stone-200 px-8 py-6 mb-8">
 
-          <!-- File info line -->
-          <p class="text-xs text-stone-400 font-mono mb-6">
-            {{ data.filename }}
-            <template v-if="steps.extracted?.pageEstimate"> · {{ steps.extracted.pageEstimate }} pages</template>
-            <template v-if="steps.extracted?.wordCount"> · {{ fmt(steps.extracted.wordCount) }} words</template>
-            <template v-if="steps.extracted?.tableCount"> · {{ steps.extracted.tableCount }} {{ steps.extracted.tableCount === 1 ? 'table' : 'tables' }}</template>
-            <template v-if="steps.extracted?.figureCount"> · {{ steps.extracted.figureCount }} {{ steps.extracted.figureCount === 1 ? 'figure' : 'figures' }}</template>
-          </p>
-
-          <!-- Summary bullets -->
+          <!-- ─── THE PAPER ─── -->
           <div class="mb-6">
-            <!-- New format: array of bullets -->
-            <ul v-if="Array.isArray(data.assessment.summary)" class="space-y-1.5">
-              <li v-for="(bullet, i) in data.assessment.summary" :key="i"
-                class="text-sm text-stone-700 leading-snug flex gap-2">
-                <span class="text-stone-300 select-none">·</span>
-                <span>{{ bullet }}</span>
-              </li>
-            </ul>
-            <!-- Old format: paragraph -->
-            <p v-else class="text-sm text-stone-700 leading-relaxed">{{ data.assessment.summary }}</p>
-          </div>
+            <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-3">The Paper</p>
 
-          <!-- Citation forecast -->
-          <div v-if="forecast" class="border-t border-stone-200 py-5">
-            <div class="flex items-baseline justify-between gap-4 mb-1">
-              <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em]">Citation forecast</p>
-              <span class="text-[10px] text-stone-400 font-mono">{{ forecast.horizon_months || 24 }} months · 80% CI</span>
-            </div>
-            <div class="flex items-baseline gap-3 mb-2">
-              <span class="text-2xl font-mono font-semibold text-stone-900 tabular-nums">{{ forecast.point_estimate }}</span>
-              <span class="text-sm font-mono text-stone-400 tabular-nums">{{ forecast.range_low }}–{{ forecast.range_high }}</span>
-            </div>
-            <p v-if="forecast.reasoning" class="text-xs text-stone-500 leading-relaxed">{{ forecast.reasoning }}</p>
-          </div>
+            <!-- Title -->
+            <h1 class="text-lg font-semibold text-stone-900 leading-snug mb-2">
+              {{ paperTitle }}
+            </h1>
 
-          <!-- Assessment sections -->
-          <SectionRow v-for="section in assessmentSections" :key="section.key"
-            :label="section.label"
-            :headline="getSectionHeadline(section.key)"
-            :detail="getSectionDetail(section.key)"
-            :expanded="!!expanded[section.key]"
-            @toggle="toggleSection(section.key)" />
-
-          <!-- Authors -->
-          <div v-if="authors" class="border-t border-stone-200 py-4">
-            <button @click="toggleSection('authors')" class="w-full text-left flex items-start justify-between gap-4 group">
-              <div class="flex-1 min-w-0">
-                <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-1">Authors</p>
-                <p class="text-sm text-stone-700">{{ authors.names?.join(', ') || 'Not identified' }}</p>
+            <!-- Authors -->
+            <div v-if="paperAuthors.length" class="mb-3">
+              <div class="flex flex-wrap gap-x-1 gap-y-1 items-baseline">
+                <template v-for="(author, i) in paperAuthors" :key="i">
+                  <button v-if="author.profile?.status === 'found'"
+                    @click="toggleAuthor(i)"
+                    class="text-sm text-stone-600 hover:text-stone-900 transition-colors">
+                    {{ author.display }}<span v-if="i < paperAuthors.length - 1" class="text-stone-300">,</span>
+                  </button>
+                  <span v-else class="text-sm text-stone-500">
+                    {{ author.display }}<span v-if="i < paperAuthors.length - 1" class="text-stone-300">,</span>
+                  </span>
+                </template>
               </div>
-              <span v-if="authors.note" class="text-[10px] text-stone-400 group-hover:text-stone-600 transition-colors whitespace-nowrap mt-1">
-                {{ expanded.authors ? 'Hide' : 'Details' }} {{ expanded.authors ? '▾' : '▸' }}
-              </span>
-            </button>
-            <p v-if="expanded.authors && authors.note" class="text-xs text-stone-500 leading-relaxed mt-2">{{ authors.note }}</p>
-          </div>
 
-          <!-- Old-format credibility fallback -->
-          <SectionRow v-else-if="data.assessment.credibility"
-            label="Credibility"
-            :headline="getSectionHeadline('credibility')"
-            :detail="getSectionDetail('credibility')"
-            :expanded="!!expanded.credibility"
-            @toggle="toggleSection('credibility')" />
-
-          <!-- AI Content -->
-          <div class="border-t border-stone-200 py-4">
-            <button @click="toggleSection('ai_content')" class="w-full text-left flex items-start justify-between gap-4 group">
-              <div class="flex-1 min-w-0">
-                <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-1">AI Content</p>
-                <p class="text-sm text-stone-700">
-                  <template v-if="data.pangram?.available">
-                    <span class="font-mono">{{ humanPct }}%</span> human
-                    <template v-if="aiPct > 0"> · <span class="font-mono">{{ aiPct }}%</span> AI</template>
-                    <template v-if="data.pangram.prediction"> · {{ data.pangram.prediction }}</template>
+              <!-- Expanded author profile -->
+              <div v-if="expandedAuthorIdx !== null && paperAuthors[expandedAuthorIdx]?.profile?.status === 'found'"
+                class="mt-2 pl-3 border-l-2 border-stone-200 py-2">
+                <p class="text-xs text-stone-700 font-medium">{{ paperAuthors[expandedAuthorIdx].profile.openalex_name }}</p>
+                <p class="text-xs text-stone-500 font-mono mt-1">
+                  {{ paperAuthors[expandedAuthorIdx].profile.institution || 'Institution unknown' }}
+                  <template v-if="paperAuthors[expandedAuthorIdx].profile.works_count">
+                    · {{ fmt(paperAuthors[expandedAuthorIdx].profile.works_count) }} works
                   </template>
-                  <template v-else>{{ getSectionHeadline('ai_content') }}</template>
+                  <template v-if="paperAuthors[expandedAuthorIdx].profile.cited_by_count">
+                    · {{ fmt(paperAuthors[expandedAuthorIdx].profile.cited_by_count) }} citations
+                  </template>
+                </p>
+                <p v-if="paperAuthors[expandedAuthorIdx].profile.orcid" class="text-xs text-stone-400 font-mono mt-0.5">
+                  ORCID: {{ paperAuthors[expandedAuthorIdx].profile.orcid }}
                 </p>
               </div>
-              <span v-if="getSectionDetail('ai_content')" class="text-[10px] text-stone-400 group-hover:text-stone-600 transition-colors whitespace-nowrap mt-1">
-                {{ expanded.ai_content ? 'Hide' : 'Details' }} {{ expanded.ai_content ? '▾' : '▸' }}
-              </span>
-            </button>
-            <p v-if="expanded.ai_content && getSectionDetail('ai_content')"
-              class="text-xs text-stone-500 leading-relaxed mt-2">
-              {{ getSectionDetail('ai_content') }}
+            </div>
+
+            <!-- Stats line -->
+            <p class="text-xs text-stone-400 font-mono mb-4">
+              <template v-if="steps.extracted?.pageEstimate">{{ steps.extracted.pageEstimate }} pages · </template>
+              <template v-if="steps.extracted?.wordCount">{{ fmt(steps.extracted.wordCount) }} words · </template>
+              <template v-if="steps.extracted?.tableCount">{{ steps.extracted.tableCount }} {{ steps.extracted.tableCount === 1 ? 'table' : 'tables' }} · </template>
+              <template v-if="steps.extracted?.figureCount">{{ steps.extracted.figureCount }} {{ steps.extracted.figureCount === 1 ? 'figure' : 'figures' }} · </template>
+              {{ refStats.total }} references
             </p>
+
+            <!-- Abstract -->
+            <div v-if="paperAbstract">
+              <button @click="toggleSection('abstract')" class="w-full text-left group">
+                <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-1 flex items-center gap-2">
+                  Abstract
+                  <span class="text-stone-300 group-hover:text-stone-500 transition-colors">
+                    {{ expanded.abstract ? 'Hide ▾' : 'Show ▸' }}
+                  </span>
+                </p>
+              </button>
+              <p v-if="expanded.abstract" class="text-sm text-stone-600 leading-relaxed mt-1">{{ paperAbstract }}</p>
+            </div>
+
+            <!-- View Original -->
+            <a v-if="data.hasFile" :href="`/api/triage/${slug}/file`" target="_blank"
+              class="inline-block mt-3 px-3 py-1.5 text-xs font-medium text-stone-600 border border-stone-200 hover:border-stone-300 hover:text-stone-800 transition-colors">
+              View Original
+            </a>
           </div>
 
-          <!-- References -->
-          <div class="border-t border-stone-200 py-4">
-            <button @click="toggleSection('refs')" class="w-full text-left flex items-start justify-between gap-4 group">
-              <div class="flex-1 min-w-0">
-                <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-1">References</p>
-                <p class="text-sm text-stone-700">
-                  <span class="font-mono">{{ refStats.verified }}/{{ refStats.total }}</span> verified
-                  <template v-if="refStats.errors"> · <span class="font-mono text-amber-700">{{ refStats.errors }}</span> {{ refStats.errors === 1 ? 'error' : 'errors' }}</template>
-                  <template v-if="refStats.unverified"> · <span class="font-mono">{{ refStats.unverified }}</span> unverified</template>
-                </p>
-              </div>
-              <span class="text-[10px] text-stone-400 group-hover:text-stone-600 transition-colors whitespace-nowrap mt-1">
-                {{ expanded.refs ? 'Hide' : 'Details' }} {{ expanded.refs ? '▾' : '▸' }}
-              </span>
-            </button>
+          <!-- ─── VERDICT ─── -->
+          <div class="border-t border-stone-200 py-5">
+            <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-3">Verdict</p>
 
-            <div v-if="expanded.refs" class="mt-3">
-              <!-- Summary from assessment -->
-              <p v-if="referencesSummary" class="text-xs text-stone-500 leading-relaxed mb-3">{{ referencesSummary }}</p>
+            <!-- TL;DR -->
+            <p class="text-sm text-stone-700 leading-relaxed mb-4">
+              {{ assessmentVerdict }}
+            </p>
 
-              <!-- Issues -->
-              <div v-if="refIssues.length" class="space-y-2 mb-3">
-                <div v-for="issue in refIssues" :key="issue.key"
-                  class="border-l-2 pl-3 py-1"
-                  :class="issue.status === 'error' || issue.status === 'corrected' ? 'border-amber-400' : 'border-stone-200'">
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-mono text-stone-600">{{ issue.key }}</span>
-                    <span class="text-[10px] font-semibold uppercase tracking-wide"
-                      :class="issue.status === 'error' || issue.status === 'corrected' ? 'text-amber-600' : 'text-stone-400'">
-                      {{ issue.status === 'error' || issue.status === 'corrected' ? 'ERROR' : 'UNVERIFIED' }}
-                    </span>
-                  </div>
-                  <p v-if="issue.refText" class="text-xs text-stone-500 mt-0.5 leading-relaxed line-clamp-2">{{ issue.refText }}</p>
-                  <p v-if="issue.note" class="text-xs text-stone-400 mt-0.5">{{ issue.note }}</p>
+            <!-- Scope Fit -->
+            <div v-if="scopeFit" class="mb-3">
+              <button @click="toggleSection('scope')" class="w-full text-left flex items-start justify-between gap-4 group">
+                <div class="flex-1 min-w-0">
+                  <span class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em]">Scope</span>
+                  <span class="text-sm text-stone-700 ml-2">{{ scopeFit.headline }}</span>
                 </div>
-              </div>
-
-              <!-- Full list -->
-              <button @click="refsExpanded = !refsExpanded"
-                class="text-[10px] text-stone-400 hover:text-stone-600 transition-colors flex items-center gap-1">
-                {{ refsExpanded ? 'Hide' : `All ${refStats.total}` }} references {{ refsExpanded ? '▾' : '▸' }}
+                <span v-if="scopeFit.detail" class="text-[10px] text-stone-400 group-hover:text-stone-600 transition-colors whitespace-nowrap mt-0.5">
+                  {{ expanded.scope ? 'Hide ▾' : 'Details ▸' }}
+                </span>
               </button>
-              <div v-if="refsExpanded" class="mt-2 space-y-0.5">
-                <div v-for="r in sortedRefs" :key="r.key"
-                  class="flex items-start gap-2 text-xs py-0.5"
-                  :class="r.status !== 'verified' ? 'text-stone-700' : 'text-stone-400'">
-                  <span class="font-mono w-6 flex-shrink-0 text-right text-stone-400">{{ r.key }}</span>
-                  <span class="flex-1">
-                    <span v-if="r.status === 'error' || r.status === 'corrected'" class="text-amber-600 font-mono mr-1">err</span>
-                    <span v-else-if="r.status === 'unverified' || r.status === 'not_found'" class="text-stone-400 font-mono mr-1">unv</span>
-                    <span v-if="r.refText" class="text-stone-500">{{ r.refText.slice(0, 100) }}{{ r.refText.length > 100 ? '…' : '' }}</span>
-                    <span v-if="r.note" class="text-stone-400"> — {{ r.note }}</span>
+              <p v-if="expanded.scope && scopeFit.detail" class="text-xs text-stone-500 leading-relaxed mt-2 pl-0">
+                {{ scopeFit.detail }}
+              </p>
+            </div>
+
+            <!-- Impact + Citation Forecast -->
+            <div v-if="impactSection">
+              <button @click="toggleSection('impact')" class="w-full text-left flex items-start justify-between gap-4 group">
+                <div class="flex-1 min-w-0">
+                  <span class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em]">Impact</span>
+                  <span class="text-sm text-stone-700 ml-2">{{ impactSection.headline }}</span>
+                  <span v-if="forecast" class="text-sm text-stone-500 ml-1">
+                    — <span class="font-mono tabular-nums">~{{ forecast.point_estimate }}</span> cit/<span class="font-mono tabular-nums">{{ forecast.horizon_months || 24 }}</span>mo
+                    <span class="text-stone-400 font-mono tabular-nums">({{ forecast.range_low }}–{{ forecast.range_high }})</span>
                   </span>
                 </div>
+                <span class="text-[10px] text-stone-400 group-hover:text-stone-600 transition-colors whitespace-nowrap mt-0.5">
+                  {{ expanded.impact ? 'Hide ▾' : 'Details ▸' }}
+                </span>
+              </button>
+              <div v-if="expanded.impact" class="mt-2">
+                <p v-if="forecast?.reasoning" class="text-xs text-stone-500 leading-relaxed">{{ forecast.reasoning }}</p>
               </div>
             </div>
           </div>
 
-          <!-- Related Work -->
-          <div class="border-t border-stone-200 py-4">
-            <button @click="toggleSection('novelty')" class="w-full text-left flex items-start justify-between gap-4 group">
-              <div class="flex-1 min-w-0">
-                <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-1">Related Work</p>
-                <p class="text-sm text-stone-700">
-                  <span class="font-mono">{{ data.novelty?.relatedPapers?.length || 0 }}</span> papers
-                  <template v-if="featuredPapers.length"> · Most cited: <span class="font-mono">{{ fmt(featuredPapers[0].paper.citedByCount) }}</span> cit.</template>
-                </p>
-              </div>
-              <span class="text-[10px] text-stone-400 group-hover:text-stone-600 transition-colors whitespace-nowrap mt-1">
-                {{ expanded.novelty ? 'Hide' : 'Details' }} {{ expanded.novelty ? '▾' : '▸' }}
-              </span>
-            </button>
+          <!-- ─── INTEGRITY ─── -->
+          <div class="border-t border-stone-200 py-5">
+            <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-3">Integrity</p>
 
-            <div v-if="expanded.novelty" class="mt-3">
-              <p v-if="noveltySummary" class="text-xs text-stone-500 leading-relaxed mb-3">{{ noveltySummary }}</p>
+            <!-- References -->
+            <IntegrityRow
+              :status="refIntegrityStatus"
+              label="References"
+              :headline="refHeadline"
+              :has-detail="true"
+              :is-expanded="!!expanded.refs"
+              @toggle="toggleSection('refs')">
+              <template #detail>
+                <!-- Assessment summary -->
+                <p v-if="referencesSummary" class="text-xs text-stone-500 leading-relaxed mb-3">{{ referencesSummary }}</p>
 
-              <!-- Featured -->
-              <div v-if="featuredPapers.length" class="space-y-2 mb-3">
-                <div v-for="(fp, i) in featuredPapers" :key="i" class="flex items-start gap-2">
-                  <span class="text-[10px] font-semibold text-stone-400 uppercase tracking-wide w-16 flex-shrink-0 pt-0.5">{{ fp.tag }}</span>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-xs text-stone-700 leading-snug">{{ fp.paper.title }}</p>
-                    <p class="text-[10px] text-stone-400 font-mono mt-0.5">
-                      {{ fp.paper.year || '?' }}
-                      <template v-if="fp.paper.citedByCount"> · {{ fmt(fp.paper.citedByCount) }} cit.</template>
-                      <template v-if="fp.paper.journal"> · {{ fp.paper.journal }}</template>
-                    </p>
+                <!-- Issues -->
+                <div v-if="refIssues.length" class="space-y-2 mb-3">
+                  <div v-for="issue in refIssues" :key="issue.key"
+                    class="border-l-2 pl-3 py-1"
+                    :class="issue.status === 'error' || issue.status === 'corrected' ? 'border-amber-400' : 'border-stone-200'">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-mono text-stone-600">{{ issue.key }}</span>
+                      <span class="text-[10px] font-semibold uppercase tracking-wide"
+                        :class="issue.status === 'error' || issue.status === 'corrected' ? 'text-amber-600' : 'text-stone-400'">
+                        {{ issue.status === 'error' || issue.status === 'corrected' ? 'ERROR' : 'UNVERIFIED' }}
+                      </span>
+                    </div>
+                    <p v-if="issue.refText" class="text-xs text-stone-500 mt-0.5 leading-relaxed line-clamp-2">{{ issue.refText }}</p>
+                    <p v-if="issue.note" class="text-xs text-stone-400 mt-0.5">{{ issue.note }}</p>
                   </div>
                 </div>
-              </div>
 
-              <!-- Full list -->
-              <div v-if="data.novelty?.relatedPapers?.length > 2">
-                <button @click="noveltyExpanded = !noveltyExpanded"
+                <!-- Full list toggle -->
+                <button @click="refsExpanded = !refsExpanded"
                   class="text-[10px] text-stone-400 hover:text-stone-600 transition-colors flex items-center gap-1">
-                  {{ noveltyExpanded ? 'Hide' : `All ${data.novelty.relatedPapers.length}` }} papers {{ noveltyExpanded ? '▾' : '▸' }}
+                  {{ refsExpanded ? 'Hide' : `All ${refStats.total}` }} references {{ refsExpanded ? '▾' : '▸' }}
                 </button>
-                <div v-if="noveltyExpanded" class="mt-2 space-y-1">
-                  <div v-for="(p, i) in data.novelty.relatedPapers" :key="i" class="flex items-start gap-2 text-xs">
-                    <span class="font-mono text-stone-300 w-4 flex-shrink-0 text-right">{{ i + 1 }}</span>
+                <div v-if="refsExpanded" class="mt-2 space-y-0.5">
+                  <div v-for="r in sortedRefs" :key="r.key"
+                    class="flex items-start gap-2 text-xs py-0.5"
+                    :class="r.status !== 'verified' ? 'text-stone-700' : 'text-stone-400'">
+                    <span class="font-mono w-6 flex-shrink-0 text-right text-stone-400">{{ r.key }}</span>
+                    <span class="flex-1">
+                      <span v-if="r.status === 'error' || r.status === 'corrected'" class="text-amber-600 font-mono mr-1">err</span>
+                      <span v-else-if="r.status === 'unverified' || r.status === 'not_found'" class="text-stone-400 font-mono mr-1">unv</span>
+                      <span v-if="r.refText" class="text-stone-500">{{ r.refText.slice(0, 100) }}{{ r.refText.length > 100 ? '...' : '' }}</span>
+                      <span v-if="r.note" class="text-stone-400"> — {{ r.note }}</span>
+                    </span>
+                  </div>
+                </div>
+              </template>
+            </IntegrityRow>
+
+            <!-- AI Content -->
+            <IntegrityRow
+              :status="aiIntegrityStatus"
+              label="AI content"
+              :headline="aiHeadline"
+              :has-detail="!!aiDetail"
+              :is-expanded="!!expanded.ai_content"
+              @toggle="toggleSection('ai_content')">
+              <template #detail>
+                <p class="text-xs text-stone-500 leading-relaxed">{{ aiDetail }}</p>
+              </template>
+            </IntegrityRow>
+
+            <!-- Methods -->
+            <IntegrityRow
+              :status="methodsStatus"
+              label="Methods"
+              :headline="methodsHeadline"
+              :has-detail="!!methodsDetail"
+              :is-expanded="!!expanded.methods"
+              @toggle="toggleSection('methods')">
+              <template #detail>
+                <p class="text-xs text-stone-500 leading-relaxed">{{ methodsDetail }}</p>
+              </template>
+            </IntegrityRow>
+
+            <!-- Writing -->
+            <IntegrityRow
+              :status="writingStatus"
+              label="Writing"
+              :headline="writingHeadline"
+              :has-detail="!!writingDetail"
+              :is-expanded="!!expanded.writing"
+              @toggle="toggleSection('writing')">
+              <template #detail>
+                <p class="text-xs text-stone-500 leading-relaxed">{{ writingDetail }}</p>
+              </template>
+            </IntegrityRow>
+          </div>
+
+          <!-- ─── CONTEXT ─── -->
+          <div class="border-t border-stone-200 py-5">
+            <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-3">Context</p>
+
+            <!-- Contribution -->
+            <div class="mb-3">
+              <button @click="toggleSection('contribution')" class="w-full text-left flex items-start justify-between gap-4 group">
+                <div class="flex-1 min-w-0">
+                  <span class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em]">Contribution</span>
+                  <span class="text-sm text-stone-700 ml-2">{{ contributionHeadline }}</span>
+                </div>
+                <span class="text-[10px] text-stone-400 group-hover:text-stone-600 transition-colors whitespace-nowrap mt-0.5">
+                  {{ expanded.contribution ? 'Hide ▾' : 'Details ▸' }}
+                </span>
+              </button>
+
+              <div v-if="expanded.contribution" class="mt-2">
+                <p v-if="contributionDetail" class="text-xs text-stone-500 leading-relaxed mb-3">{{ contributionDetail }}</p>
+
+                <!-- Novelty summary -->
+                <p v-if="noveltySummary" class="text-xs text-stone-500 leading-relaxed mb-3">{{ noveltySummary }}</p>
+
+                <!-- Featured papers -->
+                <div v-if="featuredPapers.length" class="space-y-2 mb-3">
+                  <div v-for="(fp, i) in featuredPapers" :key="i" class="flex items-start gap-2">
+                    <span class="text-[10px] font-semibold text-stone-400 uppercase tracking-wide w-16 flex-shrink-0 pt-0.5">{{ fp.tag }}</span>
                     <div class="flex-1 min-w-0">
-                      <p class="text-stone-600 leading-snug">{{ p.title }}</p>
-                      <p class="text-[10px] text-stone-400 font-mono">
-                        {{ p.year || '?' }}
-                        <template v-if="p.citedByCount"> · {{ fmt(p.citedByCount) }} cit.</template>
-                        <template v-if="p.journal"> · {{ p.journal }}</template>
+                      <p class="text-xs text-stone-700 leading-snug">{{ fp.paper.title }}</p>
+                      <p class="text-[10px] text-stone-400 font-mono mt-0.5">
+                        {{ fp.paper.year || '?' }}
+                        <template v-if="fp.paper.citedByCount"> · {{ fmt(fp.paper.citedByCount) }} cit.</template>
+                        <template v-if="fp.paper.journal"> · {{ fp.paper.journal }}</template>
                       </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- All papers toggle -->
+                <div v-if="data.novelty?.relatedPapers?.length > 2">
+                  <button @click="noveltyExpanded = !noveltyExpanded"
+                    class="text-[10px] text-stone-400 hover:text-stone-600 transition-colors flex items-center gap-1">
+                    {{ noveltyExpanded ? 'Hide' : `All ${data.novelty.relatedPapers.length}` }} papers {{ noveltyExpanded ? '▾' : '▸' }}
+                  </button>
+                  <div v-if="noveltyExpanded" class="mt-2 space-y-1">
+                    <div v-for="(p, i) in data.novelty.relatedPapers" :key="i" class="flex items-start gap-2 text-xs">
+                      <span class="font-mono text-stone-300 w-4 flex-shrink-0 text-right">{{ i + 1 }}</span>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-stone-600 leading-snug">{{ p.title }}</p>
+                        <p class="text-[10px] text-stone-400 font-mono">
+                          {{ p.year || '?' }}
+                          <template v-if="p.citedByCount"> · {{ fmt(p.citedByCount) }} cit.</template>
+                          <template v-if="p.journal"> · {{ p.journal }}</template>
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Reviewer Suggestions -->
-          <div class="border-t border-stone-200 py-4 flex items-center justify-between">
-            <p class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em]">Reviewer Suggestions</p>
-            <span class="text-[10px] text-stone-300 font-mono">coming soon</span>
-          </div>
-
-          <!-- Cost -->
-          <div v-if="data.costCents" class="border-t border-stone-100 pt-3 pb-1">
-            <p class="text-[10px] text-stone-300 font-mono text-right">
-              ${{ (data.costCents / 100).toFixed(2) }} · {{ fmtK(data.inputTokens) }}in / {{ fmtK(data.outputTokens) }}out
-            </p>
+            <!-- Reviewer Suggestions -->
+            <div class="flex items-center justify-between mt-2">
+              <span class="text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em]">Reviewer Suggestions</span>
+              <span class="text-[10px] text-stone-300 font-mono">coming soon</span>
+            </div>
           </div>
         </div>
       </div>
@@ -331,26 +400,36 @@ const StepRow = defineComponent({
   }
 })
 
-const SectionRow = defineComponent({
-  props: { label: String, headline: String, detail: String, expanded: Boolean },
+const IntegrityRow = defineComponent({
+  props: { status: String, label: String, headline: String, hasDetail: Boolean, isExpanded: Boolean },
   emits: ['toggle'],
-  setup(props, { emit }) {
-    return () => h('div', { class: 'border-t border-stone-200 py-4' }, [
+  setup(props, { emit, slots }) {
+    const statusIcon = () => {
+      if (props.status === 'clear') return h('span', { class: 'text-emerald-600' }, '✓')
+      if (props.status === 'warning') return h('span', { class: 'text-amber-600' }, '⚠')
+      if (props.status === 'concern') return h('span', { class: 'text-red-600' }, '✗')
+      return h('span', { class: 'text-stone-400' }, '—')
+    }
+
+    return () => h('div', { class: 'mb-2' }, [
       h('button', {
-        class: 'w-full text-left flex items-start justify-between gap-4 group',
+        class: 'w-full text-left flex items-start gap-2 group',
         onClick: () => emit('toggle'),
       }, [
-        h('div', { class: 'flex-1 min-w-0' }, [
-          h('p', { class: 'text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em] mb-1' }, props.label),
-          h('p', { class: 'text-sm text-stone-700' }, props.headline),
+        h('span', { class: 'text-sm flex-shrink-0 mt-px w-4 text-center' }, [statusIcon()]),
+        h('div', { class: 'flex-1 min-w-0 flex items-start justify-between gap-4' }, [
+          h('div', { class: 'flex-1 min-w-0' }, [
+            h('span', { class: 'text-[10px] font-semibold text-stone-400 uppercase tracking-[0.12em]' }, props.label),
+            h('span', { class: 'text-sm text-stone-700 ml-2' }, props.headline),
+          ]),
+          props.hasDetail
+            ? h('span', { class: 'text-[10px] text-stone-400 group-hover:text-stone-600 transition-colors whitespace-nowrap mt-0.5' },
+                `${props.isExpanded ? 'Hide ▾' : 'Details ▸'}`)
+            : null,
         ]),
-        props.detail
-          ? h('span', { class: 'text-[10px] text-stone-400 group-hover:text-stone-600 transition-colors whitespace-nowrap mt-1' },
-              `${props.expanded ? 'Hide' : 'Details'} ${props.expanded ? '▾' : '▸'}`)
-          : null,
       ]),
-      props.expanded && props.detail
-        ? h('p', { class: 'text-xs text-stone-500 leading-relaxed mt-2' }, props.detail)
+      props.isExpanded && props.hasDetail
+        ? h('div', { class: 'mt-2 ml-6' }, slots.detail?.())
         : null,
     ])
   }
@@ -365,69 +444,86 @@ const data = ref(null)
 const fetchError = ref('')
 const refsExpanded = ref(false)
 const noveltyExpanded = ref(false)
-const expanded = reactive({})
+const expanded = reactive({ abstract: true })
+const expandedAuthorIdx = ref(null)
 let pollTimer = null
 
 useHead({ title: 'Paper Triage — Shoulders' })
 
 const steps = computed(() => data.value?.stepDetails || {})
 
-// New assessment sections (old format uses different keys — handled in getSectionHeadline)
-const assessmentSections = computed(() => {
-  const a = data.value?.assessment
-  if (!a) return []
-  // New format
-  if (a.contribution) {
-    return [
-      { key: 'scope', label: 'Scope' },
-      { key: 'contribution', label: 'Contribution' },
-      { key: 'methods', label: 'Methods' },
-      { key: 'writing', label: 'Writing' },
-    ]
-  }
-  // Old format fallback
-  return [
-    { key: 'scope', label: 'Scope' },
-    { key: 'significance', label: 'Significance' },
-    { key: 'craft', label: 'Craft' },
-    { key: 'methods', label: 'Methods' },
-    { key: 'strategic_value', label: 'Strategic Value' },
-  ]
+// ─── Paper Identity ───
+
+const paperTitle = computed(() => {
+  return data.value?.metadata?.title || data.value?.filename || 'Untitled'
 })
 
-// Backward-compatible section accessors
-function getSectionHeadline(key) {
-  const val = data.value?.assessment?.[key]
-  if (!val) return ''
-  if (typeof val === 'string') return val
-  return val.headline || ''
+const paperAuthors = computed(() => {
+  const meta = data.value?.metadata?.authors || []
+  const profiles = data.value?.authorProfiles || []
+
+  return meta.map(a => {
+    const profile = profiles.find(p =>
+      p.name?.toLowerCase() === a.name?.toLowerCase() ||
+      p.openalex_name?.toLowerCase() === a.name?.toLowerCase()
+    )
+    const affiliation = profile?.institution || a.affiliation
+    return {
+      display: affiliation ? `${a.name} (${affiliation})` : a.name,
+      profile,
+    }
+  })
+})
+
+const paperAbstract = computed(() => data.value?.metadata?.abstract || null)
+
+function toggleAuthor(idx) {
+  expandedAuthorIdx.value = expandedAuthorIdx.value === idx ? null : idx
 }
 
-function getSectionDetail(key) {
-  const val = data.value?.assessment?.[key]
-  if (!val || typeof val === 'string') return ''
-  return val.detail || ''
-}
+// ─── Verdict ───
 
-function toggleSection(key) {
-  expanded[key] = !expanded[key]
-}
+const assessmentVerdict = computed(() => {
+  const a = data.value?.assessment
+  if (!a) return ''
+  // New format: verdict string
+  if (a.verdict) return a.verdict
+  // Old format: summary array
+  if (Array.isArray(a.summary)) return a.summary.join(' ')
+  // Old format: summary string
+  if (typeof a.summary === 'string') return a.summary
+  return ''
+})
 
-// Citation forecast — check both new (nested in contribution) and old (top-level) locations
+const scopeFit = computed(() => {
+  const a = data.value?.assessment
+  if (!a) return null
+  // New format
+  if (a.scope_fit) return a.scope_fit
+  // Old format
+  if (a.scope) return typeof a.scope === 'string' ? { headline: a.scope, detail: '' } : a.scope
+  return null
+})
+
+const impactSection = computed(() => {
+  const a = data.value?.assessment
+  if (!a) return null
+  // New format
+  if (a.impact) return a.impact
+  // Old format: contribution had the headline
+  if (a.contribution?.headline) return { headline: a.contribution.headline }
+  return null
+})
+
 const forecast = computed(() => {
   const a = data.value?.assessment
   if (!a) return null
-  return a.contribution?.citation_forecast || a.citation_forecast || null
+  return a.impact?.citation_forecast || a.contribution?.citation_forecast || a.citation_forecast || null
 })
 
-// Authors (new format)
-const authors = computed(() => data.value?.assessment?.authors || null)
+// ─── Integrity ───
 
-// AI content
-const aiPct = computed(() => Math.round((data.value?.pangram?.aiScore || 0) * 100))
-const humanPct = computed(() => Math.round((data.value?.pangram?.humanScore || 0) * 100))
-
-// Reference stats — handles both old and new status names
+// References
 const refStats = computed(() => {
   const results = data.value?.refCheck?.results || []
   return {
@@ -436,6 +532,20 @@ const refStats = computed(() => {
     errors: results.filter(r => r.status === 'error' || r.status === 'corrected').length,
     unverified: results.filter(r => r.status === 'unverified' || r.status === 'not_found').length,
   }
+})
+
+const refIntegrityStatus = computed(() => {
+  if (refStats.value.errors > 0) return 'warning'
+  if (refStats.value.unverified > 3) return 'warning'
+  return 'clear'
+})
+
+const refHeadline = computed(() => {
+  const s = refStats.value
+  let text = `${s.verified}/${s.total} verified`
+  if (s.errors) text += ` · ${s.errors} ${s.errors === 1 ? 'error' : 'errors'}`
+  if (s.unverified) text += ` · ${s.unverified} unverified`
+  return text
 })
 
 const refTextMap = computed(() => {
@@ -466,6 +576,84 @@ const referencesSummary = computed(() => {
   return a?.references_summary || a?.references_interpretation || ''
 })
 
+// AI Content
+const aiPct = computed(() => Math.round((data.value?.pangram?.aiScore || 0) * 100))
+const humanPct = computed(() => Math.round((data.value?.pangram?.humanScore || 0) * 100))
+
+const aiIntegrityStatus = computed(() => {
+  if (!data.value?.pangram?.available) return 'neutral'
+  if (aiPct.value > 30) return 'concern'
+  if (aiPct.value > 10) return 'warning'
+  return 'clear'
+})
+
+const aiHeadline = computed(() => {
+  if (!data.value?.pangram?.available) return 'AI detection not available'
+  const prediction = data.value.pangram.prediction
+  if (prediction === 'human') return `${humanPct.value}% human`
+  if (prediction === 'ai') return `${aiPct.value}% AI detected`
+  return `${humanPct.value}% human · ${aiPct.value}% AI`
+})
+
+const aiDetail = computed(() => {
+  const a = data.value?.assessment
+  // New format
+  if (a?.ai_content) return typeof a.ai_content === 'string' ? a.ai_content : a.ai_content.detail || a.ai_content.headline || ''
+  return ''
+})
+
+// Methods
+const methodsStatus = computed(() => {
+  const a = data.value?.assessment
+  if (a?.methodology?.status) return a.methodology.status
+  if (a?.methods?.status) return a.methods.status
+  return 'neutral'
+})
+
+const methodsHeadline = computed(() => {
+  const a = data.value?.assessment
+  if (a?.methodology?.headline) return a.methodology.headline
+  if (a?.methods) return typeof a.methods === 'string' ? a.methods : a.methods.headline || ''
+  return ''
+})
+
+const methodsDetail = computed(() => {
+  const a = data.value?.assessment
+  if (a?.methodology?.detail) return a.methodology.detail
+  if (a?.methods?.detail) return a.methods.detail
+  return ''
+})
+
+// Writing
+const writingStatus = computed(() => {
+  const a = data.value?.assessment
+  return a?.writing?.status || 'neutral'
+})
+
+const writingHeadline = computed(() => {
+  const a = data.value?.assessment
+  if (!a?.writing) return ''
+  return typeof a.writing === 'string' ? a.writing : a.writing.headline || ''
+})
+
+const writingDetail = computed(() => {
+  const a = data.value?.assessment
+  return a?.writing?.detail || ''
+})
+
+// ─── Context ───
+
+const contributionHeadline = computed(() => {
+  const a = data.value?.assessment
+  if (!a?.contribution) return ''
+  return typeof a.contribution === 'string' ? a.contribution : a.contribution.headline || ''
+})
+
+const contributionDetail = computed(() => {
+  const a = data.value?.assessment
+  return a?.contribution?.detail || ''
+})
+
 const noveltySummary = computed(() => {
   const a = data.value?.assessment
   return a?.novelty_summary || a?.novelty_interpretation || ''
@@ -488,15 +676,15 @@ const featuredPapers = computed(() => {
   return picks
 })
 
+// ─── Helpers ───
+
+function toggleSection(key) {
+  expanded[key] = !expanded[key]
+}
+
 function fmt(n) {
   if (n == null) return '0'
   return Number(n).toLocaleString()
-}
-
-function fmtK(n) {
-  if (!n) return '0'
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
 }
 
 // ─── Data fetching ───

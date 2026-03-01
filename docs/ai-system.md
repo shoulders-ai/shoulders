@@ -59,7 +59,7 @@ zod                   — Schema validation for tool inputSchema
 | `editor/ghostSuggestion.js` | `++` trigger, state field, inline widgets |
 | `editor/docxGhost.js` | SuperDoc ghost (ProseMirror plugin) |
 | **Tasks** | |
-| `stores/tasks.js` | Task threads: `streamText()`, multi-turn, propose_edit |
+| `stores/tasks.js` | Task threads: Chat composable (mirrors chat.js), multi-turn, propose_edit |
 | `editor/tasks.js` | Gutter dots, range highlights, position mapping |
 | **Reference AI** | |
 | `services/refAi.js` | Citation parsing + PDF metadata extraction via `generateText()` |
@@ -249,9 +249,11 @@ Model selection: `resolveApiAccess({ strategy: 'ghost' })` tries Haiku → Gemin
 
 ## Task Threads
 
-Task threads use `streamText()` directly (not the Chat composable) since they have simpler lifecycle needs. Same `createModel()` + `createTauriFetch()` pattern. Full tool capabilities plus `propose_edit`.
+Task threads use the same `Chat` composable pattern as chat sessions. A `taskChatInstances` Map (outside Pinia, same as `chatInstances` in `chat.js`) holds one `Chat` instance per thread. Each Chat uses `createChatTransport()` with `extraTools: { propose_edit }` and `maxSteps: 10`. Full workspace tool capabilities plus `propose_edit`.
 
-Surrounding context (5000 chars before + 1000 chars after selection) is captured at thread creation and injected into the system prompt.
+Edit application status is tracked separately in an `editStatuses` ref (`toolCallId → { status, error? }`) — SDK-owned UIMessage parts must not be mutated.
+
+Surrounding context (5000 chars before + 1000 chars after selection) is captured at thread creation and injected into the system prompt. Legacy `tasks.json` (flat `{ content, toolCalls }` messages) is migrated to UIMessage `parts[]` format on load via `migrateTaskMessages()`.
 
 ---
 

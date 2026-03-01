@@ -1,4 +1,6 @@
 import { eq } from 'drizzle-orm'
+import { writeFile, mkdir } from 'fs/promises'
+import { join, extname } from 'path'
 import { useDb } from '../../db/index.js'
 import { triages } from '../../db/schema.js'
 import { convertDocx } from '../../utils/docx'
@@ -8,6 +10,8 @@ import { extractReferences } from './referenceExtractor'
 import { checkReferences } from './referenceChecker'
 import { detectAiContent } from './pangramDetection'
 import { findRelatedWork } from './noveltyCheck'
+import { extractMetadata } from './metadataExtractor'
+import { lookupAuthors } from './authorLookup'
 import { runAssessment } from './assessmentAgent'
 
 function updateTriage(id, data) {
@@ -37,6 +41,17 @@ export async function runTriagePipeline(id, buffer, filename, { journalScope, cu
   const stepDetails = {}
 
   try {
+    // ─── Save original file to disk ───
+    const config = useRuntimeConfig()
+    const dataDir = config.dataDir || '.data'
+    const triageFilesDir = join(dataDir, 'triage-files')
+    await mkdir(triageFilesDir, { recursive: true })
+    const ext = extname(filename).toLowerCase() || '.pdf'
+    const filePath = join(triageFilesDir, `${id}${ext}`)
+    await writeFile(filePath, buffer)
+    updateTriage(id, { filePath })
+    console.log(`[Triage ${id}] Saved file: ${filePath}`)
+
     // ─── Step 0: Extract ───
     console.log(`[Triage ${id}] Step 0: Extract`)
     updateTriage(id, { currentStep: 'extracting', stepDetails })
@@ -72,6 +87,24 @@ export async function runTriagePipeline(id, buffer, filename, { journalScope, cu
 
     updateTriage(id, { markdown, stepDetails })
 
+    // ─── Step 0a: Extract metadata (title, authors, abstract) ───
+    console.log(`[Triage ${id}] Step 0a: Extract metadata`)
+    let metadataResult = { title: null, authors: [], abstract: null, sections: [], appendix: false }
+    try {
+      const { metadata, usage: metaUsage } = await extractMetadata(markdown)
+      metadataResult = metadata
+      if (metaUsage) {
+        totalUsage.input += metaUsage.input; totalUsage.output += metaUsage.output
+        totalCostCents += calculateCostCents(metaUsage.input, metaUsage.output, 'gemini-2.5-flash-lite')
+      }
+      stepDetails.metadata = { title: !!metadata.title, authors: metadata.authors?.length || 0 }
+      console.log(`[Triage ${id}] Metadata: "${metadata.title?.slice(0, 60) || '?'}", ${metadata.authors?.length || 0} authors`)
+    } catch (e) {
+      console.error(`[Triage ${id}] Metadata extraction failed:`, e.message)
+      techNotes.stages.metadataError = e.message
+    }
+    updateTriage(id, { metadataJson: JSON.stringify(metadataResult), stepDetails })
+
     // ─── Step 0b: Extract structured references ───
     console.log(`[Triage ${id}] Step 0b: Extract references`)
     const { references, usage: refExtractUsage } = await extractReferences(markdown)
@@ -84,11 +117,11 @@ export async function runTriagePipeline(id, buffer, filename, { journalScope, cu
     console.log(`[Triage ${id}] Extracted ${references.length} references`)
     updateTriage(id, { referencesJson: JSON.stringify(references), stepDetails })
 
-    // ─── Step 1: Parallel checks ───
+    // ─── Step 1: Parallel checks (refs, pangram, novelty, author lookup) ───
     console.log(`[Triage ${id}] Step 1: Parallel checks`)
     updateTriage(id, { currentStep: 'checking', stepDetails })
 
-    const [refCheckResult, pangramResult, noveltyResult] = await Promise.all([
+    const [refCheckResult, pangramResult, noveltyResult, authorProfiles] = await Promise.all([
       checkReferences(references).catch(e => {
         console.error(`[Triage ${id}] Reference check failed:`, e.message)
         techNotes.stages.refCheckError = e.message
@@ -101,6 +134,10 @@ export async function runTriagePipeline(id, buffer, filename, { journalScope, cu
       findRelatedWork(markdown).catch(e => {
         console.error(`[Triage ${id}] Novelty check failed:`, e.message)
         return { relatedPapers: [], queries: [], usage: { input: 0, output: 0 } }
+      }),
+      lookupAuthors(metadataResult.authors || []).catch(e => {
+        console.error(`[Triage ${id}] Author lookup failed:`, e.message)
+        return []
       }),
     ])
 
@@ -123,15 +160,18 @@ export async function runTriagePipeline(id, buffer, filename, { journalScope, cu
       ? { aiScore: pangramResult.aiScore, humanScore: pangramResult.humanScore }
       : { available: false }
     stepDetails.novelty = { paperCount: noveltyResult.relatedPapers.length }
+    stepDetails.authorProfiles = { found: authorProfiles.filter(a => a.status === 'found').length, total: authorProfiles.length }
 
     console.log(`[Triage ${id}] Refs: ${verified} verified, ${errors} errors, ${unverified} unverified`)
     console.log(`[Triage ${id}] Pangram: ${pangramResult.available ? `${Math.round((pangramResult.aiScore || 0) * 100)}% AI` : 'unavailable'}`)
     console.log(`[Triage ${id}] Novelty: ${noveltyResult.relatedPapers.length} related papers`)
+    console.log(`[Triage ${id}] Authors: ${authorProfiles.filter(a => a.status === 'found').length}/${authorProfiles.length} found`)
 
     updateTriage(id, {
       refCheckJson: JSON.stringify(refCheckResult),
       pangramJson: JSON.stringify(pangramResult),
       noveltyJson: JSON.stringify(noveltyResult),
+      authorsJson: JSON.stringify(authorProfiles),
       stepDetails,
     })
 

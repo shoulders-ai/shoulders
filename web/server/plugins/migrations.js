@@ -228,6 +228,9 @@ export default defineNitroPlugin(() => {
   const triageAlters = [
     `ALTER TABLE triages ADD COLUMN journal_scope TEXT`,
     `ALTER TABLE triages ADD COLUMN custom_instructions TEXT`,
+    `ALTER TABLE triages ADD COLUMN metadata_json TEXT`,
+    `ALTER TABLE triages ADD COLUMN authors_json TEXT`,
+    `ALTER TABLE triages ADD COLUMN file_path TEXT`,
   ]
   for (const stmt of triageAlters) {
     try { sqlite.exec(stmt) } catch {}

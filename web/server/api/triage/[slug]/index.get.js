@@ -21,9 +21,10 @@ export default defineEventHandler((event) => {
     pangram: safeJson(row.pangramJson),
     novelty: safeJson(row.noveltyJson),
     assessment: safeJson(row.assessmentJson),
+    metadata: safeJson(row.metadataJson),
+    authorProfiles: safeJson(row.authorsJson),
+    hasFile: !!row.filePath,
     costCents: row.costCents || 0,
-    inputTokens: row.inputTokens || 0,
-    outputTokens: row.outputTokens || 0,
     createdAt: row.createdAt,
     completedAt: row.completedAt,
   }

@@ -7,18 +7,13 @@ You will receive the paper's full text, reference verification results, AI conte
 Return a JSON object with this exact structure:
 
 {
-  "summary": [
-    "First bullet: what the paper does (≤20 words)",
-    "Second bullet: core contribution or finding (≤20 words)",
-    "Third bullet: fit assessment — where this belongs and critical limitation (≤20 words)"
-  ],
-  "scope": {
-    "headline": "Domain + target journals in ≤12 words",
-    "detail": "2-3 sentences with specifics"
+  "verdict": "2-3 sentences: the TL;DR of the entire ASSESSMENT (not paper summary). What would a senior colleague say after reviewing this? Be direct.",
+  "scope_fit": {
+    "headline": "Target journals or domain fit in ≤12 words",
+    "detail": "2-3 sentences on fit with specifics"
   },
-  "contribution": {
-    "headline": "What's genuinely new in ≤12 words",
-    "detail": "2-3 sentences: novelty, societal/policy impact if relevant, comparison to existing work",
+  "impact": {
+    "headline": "Academic + practical impact summary in ≤12 words",
     "citation_forecast": {
       "point_estimate": 28,
       "range_low": 12,
@@ -27,43 +22,47 @@ Return a JSON object with this exact structure:
       "reasoning": "1-2 sentences citing specific comparables from related work with their citation rates"
     }
   },
-  "methods": {
+  "methodology": {
+    "status": "clear",
     "headline": "Key methodological character in ≤12 words",
     "detail": "2-3 sentences: design, sample, limitations"
   },
   "writing": {
+    "status": "clear",
     "headline": "Writing quality verdict in ≤12 words",
     "detail": "2-3 sentences citing specific sections/structures"
   },
-  "authors": {
-    "names": ["Author Name (Affiliation)"],
-    "note": "1 sentence: factual credentials from the paper (title, department, prior work cited)"
-  },
-  "ai_content": {
-    "headline": "Detection result in ≤12 words",
-    "detail": "1-2 sentences interpreting the data"
+  "contribution": {
+    "headline": "What's genuinely new in ≤12 words",
+    "detail": "2-3 sentences: novelty claim, how it compares to related work found, significance"
   },
   "references_summary": "Counts + key finding in 1 sentence (e.g. '39/45 verified, 1 error in ref 6 (missing authors), 5 unverified grey lit')",
   "novelty_summary": "Paper count + key finding in 1 sentence (e.g. '10 papers found. Closest: Franklin 2017 (24 cit). SWD-specific ethical argument is underexplored.')"
 }
 
+STATUS VALUES for methodology and writing:
+- "clear" — no concerns (renders as ✓)
+- "warning" — minor issues worth noting (renders as ⚠)
+- "concern" — significant issues (renders as ✗)
+
 CRITICAL RULES:
+- verdict: This is the ASSESSMENT verdict, not a paper summary. Think: "What does a busy editor need to know in 10 seconds?" Be direct, no hedging.
 - Headlines are STATUS REPORTS, not sentences. Max 12 words. No articles ("the", "a"), no hedging.
-- Summary bullets: exactly 3, each ≤20 words. No hedging, no filler.
-- Every claim must reference something concrete from the paper.
-- authors.names: extract ALL author names visible in the paper with their affiliations if stated. If no author info visible, say so.
-- authors.note: factual only. Mention COI disclosures, funding sources, or institutional positions visible in the paper. Do NOT invent credentials.
+- Every claim must reference something concrete from the paper or the data provided.
 - citation_forecast: Fermi estimate with concrete numbers. Use related work citation counts ÷ years to calibrate field velocity. A niche bioethics paper in a mid-tier journal: 5-20 in 24mo. A methods paper in a top journal: 50-200 in 24mo.
-- If target journal is specified, assess scope specifically against it.
+- contribution.detail MUST embed related work context — mention specific papers from the related work list and how this paper differs.
+- If target journal is specified, assess scope_fit specifically against it.
 - No scores, no ratings, no recommendation badges.
 - No hedging: "it appears" → say what IS.
-- If AI content data is unavailable, set ai_content.headline to "AI detection not available".
+- Do NOT extract title/authors/abstract — that's handled separately.
+- Do NOT produce author credibility assessment — that's handled by OpenAlex data.
+- If AI content data is unavailable, omit ai_content references from the verdict.
 
 Return ONLY the JSON object, no other text.`
 
 /**
  * Run the assessment agent — single Claude Sonnet call.
- * Receives paper + all pipeline results, outputs qualitative assessment.
+ * Receives paper + all pipeline results, outputs structured assessment.
  */
 export async function runAssessment({ markdown, refCheckResults, pangramResult, noveltyResult, journalScope, customInstructions }) {
   const parts = [`# Paper\n\n${markdown.slice(0, 120000)}`]
