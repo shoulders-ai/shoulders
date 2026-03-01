@@ -1,10 +1,24 @@
 <template>
   <div v-if="hasEverOpened" v-show="workspace.bottomPanelOpen"
-    class="flex flex-col overflow-hidden border-t shrink-0"
-    :style="{ height: workspace.bottomPanelHeight + 'px', borderColor: 'var(--border)' }">
+    class="flex flex-col overflow-hidden shrink-0"
+    :style="{ height: workspace.bottomPanelHeight + 'px' }">
 
     <!-- Terminal sub-tabs -->
     <div class="flex items-center h-7 shrink-0 border-b" style="border-color: var(--border); background: var(--bg-secondary);">
+      <!-- New Terminal button -->
+      <button
+        class="h-7 px-2 flex items-center gap-1 shrink-0 cursor-pointer hover:bg-[var(--bg-hover)]"
+        style="color: var(--fg-muted);"
+        @click="addTerminal"
+        title="New terminal"
+      >
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M8 3v10M3 8h10"/>
+        </svg>
+        <span class="text-[11px]">New Terminal</span>
+      </button>
+
+      <!-- Tab list -->
       <div ref="termTabsContainer" class="flex-1 flex items-center h-full overflow-x-auto scrollbar-hidden relative">
         <div
           v-for="(term, idx) in terminals"
@@ -54,14 +68,16 @@
         <!-- Drop indicator line -->
         <div v-if="termDropIndicatorLeft !== null" class="tab-drop-indicator" :style="{ left: termDropIndicatorLeft + 'px' }"></div>
       </div>
+
+      <!-- Close panel button -->
       <button
         class="w-7 h-7 flex items-center justify-center shrink-0 hover:bg-[var(--bg-hover)]"
         style="color: var(--fg-muted);"
-        @click="addTerminal"
-        title="New terminal"
+        @click="workspace.toggleBottomPanel()"
+        title="Close terminal panel"
       >
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M8 3v10M3 8h10"/>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M2 2l6 6M8 2l-6 6"/>
         </svg>
       </button>
     </div>
@@ -99,7 +115,7 @@ import Terminal from '../right/Terminal.vue'
 const workspace = useWorkspaceStore()
 
 // Lazy init: don't mount terminals until first open
-const hasEverOpened = ref(false)
+const hasEverOpened = ref(workspace.bottomPanelOpen)
 
 // Terminal state
 let termNextId = 1
@@ -123,12 +139,20 @@ const termGhostX = ref(0)
 const termGhostY = ref(0)
 const termGhostLabel = ref('')
 
-// Watch for first open + refit on visibility change
+// Seed first terminal if panel was already open from a previous session
+if (hasEverOpened.value && terminals.length === 0) {
+  terminals.push({ id: termNextId++, label: 'Terminal 1' })
+  activeTerminal.value = 0
+}
+
+// Watch for open + refit on visibility change
 watch(() => workspace.bottomPanelOpen, (open) => {
   if (open && !hasEverOpened.value) {
     hasEverOpened.value = true
-    terminals.push({ id: termNextId++, label: 'Terminal 1' })
-    activeTerminal.value = 0
+    if (terminals.length === 0) {
+      terminals.push({ id: termNextId++, label: 'Terminal 1' })
+      activeTerminal.value = 0
+    }
   }
   if (open) {
     nextTick(() => {

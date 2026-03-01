@@ -11,7 +11,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { terminalThemes } from '../../themes/terminal'
-import { defaultShell } from '../../platform'
+import { defaultShell, isMac } from '../../platform'
 
 const props = defineProps({
   termId: { type: Number, default: 1 },
@@ -107,6 +107,17 @@ async function spawnTerminal() {
         terminal.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
       }
     })
+    // Set a shorter prompt for default shells (not language REPLs)
+    if (!props.spawnCmd && ptyId !== null) {
+      setTimeout(async () => {
+        if (ptyId === null) return
+        // Leading space avoids adding to shell history (zsh HIST_IGNORE_SPACE)
+        const cmd = isMac
+          ? ' PROMPT="%# "; clear\n'
+          : ' PS1="\\$ "; clear\n'
+        await invoke('pty_write', { id: ptyId, data: cmd }).catch(() => {})
+      }, 200)
+    }
   } catch (e) {
     console.error('Failed to spawn terminal:', e)
     if (terminal) terminal.write(`\r\nError: ${e}\r\n`)

@@ -23,8 +23,8 @@
         <div
           v-if="workspace.leftSidebarOpen"
           data-sidebar="left"
-          class="shrink-0 overflow-hidden border-r"
-          :style="{ width: workspace.leftSidebarWidth + 'px', borderColor: 'var(--border)' }"
+          class="shrink-0 overflow-hidden"
+          :style="{ width: workspace.leftSidebarWidth + 'px' }"
         >
           <LeftSidebar
             ref="leftSidebarRef"
@@ -72,8 +72,8 @@
         <!-- Right sidebar: Chat + Tasks (v-show to preserve state) -->
         <div
           v-show="workspace.rightSidebarOpen"
-          class="shrink-0 overflow-hidden border-l"
-          :style="{ width: workspace.rightSidebarWidth + 'px', borderColor: 'var(--border)' }"
+          class="shrink-0 overflow-hidden"
+          :style="{ width: workspace.rightSidebarWidth + 'px' }"
         >
           <RightPanel ref="rightPanelRef" />
         </div>
@@ -164,19 +164,6 @@ onMounted(async () => {
   // Restore saved theme + font sizes
   workspace.restoreTheme()
   workspace.applyFontSizes()
-
-  // ── TOAST DEMO — remove after approval ──
-  setTimeout(() => {
-    toastStore.show('Created report.pdf in 245ms')
-    setTimeout(() => toastStore.show('File not found: notes.md', { type: 'error' }), 600)
-    setTimeout(() => toastStore.show('Your changes conflict with updates on GitHub.', {
-      type: 'warning', duration: 8000, action: { label: 'Resolve', onClick: () => {} },
-    }), 1200)
-    setTimeout(() => toastStore.show('Shoulders 2.1.0 available', {
-      type: 'info', duration: 0, action: { label: 'Download', onClick: () => {} },
-    }), 1800)
-  }, 1500)
-  // ── END TOAST DEMO ──
 
   // Silent update check (non-blocking, respects user preference)
   if (isAutoCheckEnabled()) {

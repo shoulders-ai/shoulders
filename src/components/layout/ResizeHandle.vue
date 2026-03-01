@@ -48,16 +48,43 @@ function startDrag(e) {
 .resize-handle {
   flex-shrink: 0;
   z-index: 10;
+  position: relative;
   transition: background 0.15s;
 }
+
+/* Vertical: 1px wide line with 7px hit area */
 .resize-handle.vertical {
-  width: 3px;
+  width: 1px;
+  cursor: col-resize;
+  background: var(--border);
+}
+.resize-handle.vertical::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  right: -3px;
   cursor: col-resize;
 }
+
+/* Horizontal: 1px tall line with 7px hit area */
 .resize-handle.horizontal {
-  height: 3px;
+  height: 1px;
+  cursor: row-resize;
+  background: var(--border);
+}
+.resize-handle.horizontal::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -3px;
+  bottom: -3px;
   cursor: row-resize;
 }
+
+/* Hover/drag: accent highlight */
 .resize-handle:hover,
 .resize-handle.dragging {
   background: var(--accent);
