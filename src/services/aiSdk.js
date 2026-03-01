@@ -95,8 +95,6 @@ export function createModel(access, customFetch) {
     if (access.url) opts.baseURL = _providerBaseUrl(provider, access.url)
   }
 
-  console.log('[aiSdk] createModel:', { provider, model: access.model, baseURL: opts.baseURL, isShoulders: access.provider === 'shoulders' })
-
   switch (provider) {
     case 'anthropic':
       return createAnthropic(opts)(access.model)

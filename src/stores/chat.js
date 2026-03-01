@@ -89,8 +89,6 @@ export const useChatStore = defineStore('chat', () => {
   function getOrCreateChat(session) {
     if (chatInstances.has(session.id)) return chatInstances.get(session.id)
 
-    console.log('[chat] Creating Chat instance for session:', session.id)
-
     const chat = new Chat({
       id: session.id,
       messages: session._savedMessages || [],
@@ -115,7 +113,6 @@ export const useChatStore = defineStore('chat', () => {
     watch(
       () => chat.state.statusRef.value,
       (newStatus, oldStatus) => {
-        console.log(`[chat] Session ${session.id} status: ${oldStatus} → ${newStatus}`)
         if (newStatus === 'ready' && (oldStatus === 'streaming' || oldStatus === 'submitted')) {
           session.updatedAt = new Date().toISOString()
           saveSession(session.id)
@@ -159,8 +156,6 @@ export const useChatStore = defineStore('chat', () => {
       const meta = await buildWorkspaceMeta(workspace.path)
       if (meta) systemPrompt += '\n\n' + meta
     } catch {}
-
-    console.log('[chat] _buildConfig:', { provider, model: access.model, isShoulders: access.provider === 'shoulders', systemLen: systemPrompt.length })
 
     return {
       access,
@@ -414,7 +409,6 @@ export const useChatStore = defineStore('chat', () => {
     // Build message text + multimodal files
     const { text: messageText, files } = _buildMessageTextAndFiles({ text, fileRefs, context })
 
-    console.log('[chat] Sending message:', { sessionId, textLen: messageText.length, fileCount: files.length, msgCount: chat.state.messagesRef.value.length })
     import('../services/telemetry').then(({ events }) => events.chatSend(session.modelId || 'unknown'))
     if (files.length > 0) {
       chat.sendMessage({ text: messageText, files })

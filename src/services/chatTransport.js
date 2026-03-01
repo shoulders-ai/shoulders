@@ -20,13 +20,7 @@ import { getAiTools } from './chatTools'
 export function createChatTransport(getConfig) {
   return {
     async sendMessages({ messages, abortSignal }) {
-      console.log('[transport] sendMessages called, message count:', messages.length)
-      if (messages.length > 0) {
-        const first = messages[0]
-        console.log('[transport] First message:', { role: first.role, partsCount: first.parts?.length, partTypes: first.parts?.map(p => p.type) })
-      }
       const config = await getConfig()
-      console.log('[transport] Config resolved:', { provider: config.provider, model: config.access?.model, hasTools: !!config.workspace, systemLen: config.systemPrompt?.length })
       const tauriFetch = createTauriFetch()
       const model = createModel(config.access, tauriFetch)
       const tools = { ...getAiTools(config.workspace), ...config.extraTools }
