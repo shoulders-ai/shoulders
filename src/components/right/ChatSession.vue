@@ -50,6 +50,22 @@
       </div>
     </div>
 
+      <!-- Error display -->
+      <div v-if="chatError" class="max-w-[100ch] mx-auto mt-3">
+        <div class="rounded-lg border px-3 py-2.5"
+          style="background: color-mix(in srgb, var(--error) 8%, var(--bg-primary));
+                 border-color: color-mix(in srgb, var(--error) 30%, var(--border));">
+          <div class="ui-text-lg chat-md" style="color: var(--fg-secondary);"
+            v-html="chatError"></div>
+          <button
+            class="mt-2 px-2.5 py-1 rounded ui-text-base border-none cursor-pointer"
+            style="background: var(--bg-tertiary); color: var(--fg-secondary);"
+            @click="dismissError">
+            Dismiss
+          </button>
+        </div>
+      </div>
+
       <!-- Bottom anchor for auto-scroll -->
       <div ref="bottomAnchor"></div>
     </div>
@@ -89,6 +105,8 @@ import { useWorkspaceStore } from '../../stores/workspace'
 import { useEditorStore } from '../../stores/editor'
 import { getContextWindow } from '../../services/chatModels'
 import { isMarkdown } from '../../utils/fileTypes'
+import { formatChatApiError } from '../../utils/errorMessages'
+import { renderMarkdown } from '../../utils/chatMarkdown'
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -127,6 +145,30 @@ const isStreaming = computed(() => {
   }
   return props.session.status === 'streaming'
 })
+
+// Error display: purely UI-driven, never manipulates Chat internals.
+// dismissedError hides the current error; it resets when the user sends again.
+const dismissedError = ref(false)
+
+const chatError = computed(() => {
+  if (!chat.value || dismissedError.value) return null
+  const status = chat.value.state.statusRef.value
+  const error = chat.value.state.errorRef.value
+  if (status === 'error' && error) {
+    const msg = error.message || String(error)
+    return renderMarkdown(formatChatApiError(msg))
+  }
+  return null
+})
+
+// Reset dismiss flag when status changes away from error (user sent a new message)
+watch(() => chat.value?.state.statusRef.value, (status) => {
+  if (status !== 'error') dismissedError.value = false
+})
+
+function dismissError() {
+  dismissedError.value = true
+}
 
 // ─── Recent sessions ──────────────────────────────────────────────
 
@@ -233,6 +275,15 @@ watch(messages, () => {
     })
   }
 }, { deep: true })
+
+// Auto-scroll to error when it appears
+watch(chatError, (err) => {
+  if (err) {
+    nextTick(() => {
+      bottomAnchor.value?.scrollIntoView({ behavior: 'smooth' })
+    })
+  }
+})
 
 function focus() {
   chatInputRef.value?.focus()
