@@ -2,105 +2,47 @@
  * SuperDoc extension: reset heading style to Normal on Enter.
  *
  * When the cursor is at the end of a Heading paragraph and the user presses
- * Enter, SuperDoc (like Word) continues the heading style on the new line.
- * This extension intercepts Enter in that situation: it lets SuperDoc split
- * the block normally, then immediately changes the NEW paragraph's styleId
- * from "HeadingN" to "Normal" in the next transaction.
+ * Enter, SuperDoc continues the heading style on the new line. This extension
+ * detects the newly created empty heading paragraph and resets it to Normal
+ * using SuperDoc's setStyleById command.
+ *
+ * Note: run-level formatting (bold, font size) from the heading may persist
+ * on the first typed character. Fully clearing SuperDoc's internal stored
+ * style mechanism is not yet solved.
  */
 import { Extensions } from 'superdoc/super-editor'
 
-const { Extension, Plugin, PluginKey } = Extensions
-
-const headingNormalizeKey = new PluginKey('docxHeadingNormalize')
+const { Extension } = Extensions
 
 export function createHeadingNormalizeExtension() {
+  let prevDocSize = 0
+
   return Extension.create({
     name: 'docxHeadingNormalize',
 
-    addPmPlugins() {
-      return [
-        new Plugin({
-          key: headingNormalizeKey,
+    onUpdate({ editor }) {
+      const curSize = editor.state.doc.content.size
+      const grew = curSize > prevDocSize
+      prevDocSize = curSize
 
-          // Track: "the last Enter was pressed at the end of a heading"
-          state: {
-            init: () => false,
-            apply(tr, prev) {
-              const meta = tr.getMeta(headingNormalizeKey)
-              if (meta === 'reset-next') return true
-              // Clear after one transaction (the split has happened)
-              if (prev) return false
-              return false
-            },
-          },
+      if (!grew) return
 
-          view() {
-            return {
-              update(view) {
-                const shouldReset = headingNormalizeKey.getState(view.state)
-                if (!shouldReset) return
+      const { from } = editor.state.selection
+      const $pos = editor.state.doc.resolve(from)
 
-                // The split has happened — the cursor is now in a new paragraph
-                // that inherited the heading style. Change it to Normal.
-                const { from } = view.state.selection
-                const $pos = view.state.doc.resolve(from)
+      for (let depth = $pos.depth; depth >= 0; depth--) {
+        const node = $pos.node(depth)
+        if (node.type.name !== 'paragraph') continue
 
-                // Walk up to find the paragraph node
-                for (let depth = $pos.depth; depth >= 0; depth--) {
-                  const node = $pos.node(depth)
-                  if (node.type.name !== 'paragraph') continue
+        const styleId = node.attrs?.paragraphProperties?.styleId || ''
+        if (!styleId.match(/^Heading\d+$/i)) return
 
-                  const styleId = node.attrs?.paragraphProperties?.styleId || ''
-                  if (!styleId.match(/^Heading\d+$/i)) break
+        // Only reset if the paragraph is empty (just created by Enter split)
+        if (node.textContent.trim() !== '') return
 
-                  // Reset this paragraph to Normal
-                  const pos = $pos.before(depth)
-                  const tr = view.state.tr.setNodeMarkup(pos, null, {
-                    ...node.attrs,
-                    paragraphProperties: {
-                      ...node.attrs.paragraphProperties,
-                      styleId: 'Normal',
-                    },
-                  })
-                  tr.setMeta('addToHistory', false)
-                  view.dispatch(tr)
-                  break
-                }
-              },
-            }
-          },
-
-          props: {
-            handleKeyDown(view, event) {
-              if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey) return false
-
-              const { from, empty } = view.state.selection
-              if (!empty) return false // only for collapsed cursor
-
-              const $pos = view.state.doc.resolve(from)
-              const para = $pos.parent
-
-              if (para.type.name !== 'paragraph') return false
-
-              const styleId = para.attrs?.paragraphProperties?.styleId || ''
-              if (!styleId.match(/^Heading\d+$/i)) return false
-
-              // Check if cursor is at the end of the paragraph's text content.
-              // $pos.parentOffset is the offset within the parent node.
-              // For "at end", it should equal the parent's content size.
-              if ($pos.parentOffset < para.content.size) return false
-
-              // Mark that the next transaction (the split) should trigger a style reset
-              const tr = view.state.tr.setMeta(headingNormalizeKey, 'reset-next')
-              tr.setMeta('addToHistory', false)
-              view.dispatch(tr)
-
-              // Don't consume the event — let SuperDoc handle the actual Enter/split
-              return false
-            },
-          },
-        }),
-      ]
+        editor.commands.setStyleById('Normal')
+        return
+      }
     },
   })
 }

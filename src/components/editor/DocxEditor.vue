@@ -10,7 +10,7 @@
 
     <!-- SuperDoc document + loading overlay wrapper -->
     <div class="flex-1 overflow-auto" :style="{ position: 'relative', zoom: workspace.docxZoomPercent / 100 }" ref="wrapperEl" @contextmenu="onContextMenu">
-      <div :id="editorId" ref="editorEl" class="absolute inset-0"></div>
+      <div :id="editorId" ref="editorEl"></div>
       <!-- Loading dots overlay — only visible during API call. -->
       <!-- Suggestion text is rendered INLINE by SuperDoc (gray textStyle mark). -->
       <div v-if="ghostState?.type === 'loading'" class="docx-ghost-overlay" :style="ghostOverlayPos">

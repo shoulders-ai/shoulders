@@ -1,4 +1,5 @@
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico']
+const MULTIMODAL_IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp']
 const CSV_EXTS = ['csv', 'tsv']
 const PDF_EXTS = ['pdf']
 const DOCX_EXTS = ['docx']
@@ -54,6 +55,16 @@ export function isLatex(path) {
 export function isImage(path) {
   const ext = getExt(path)
   return IMAGE_EXTS.includes(ext)
+}
+
+export function isMultimodalImage(path) {
+  const ext = getExt(path)
+  return MULTIMODAL_IMAGE_EXTS.includes(ext)
+}
+
+export function isPdf(path) {
+  const ext = getExt(path)
+  return ext === 'pdf'
 }
 
 export function relativePath(fromFile, toFile) {

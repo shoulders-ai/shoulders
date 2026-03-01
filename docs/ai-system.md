@@ -95,14 +95,25 @@ User sends message
 `createModel(access, customFetch)` creates an AI SDK model instance from our `resolveApiAccess()` result:
 
 ```js
-// Direct API key
+// Direct API key — standard SDK usage
 createAnthropic({ apiKey, fetch: tauriFetch })('claude-sonnet-4-6')
 
-// Shoulders proxy — uses authToken (Bearer) not apiKey (x-api-key)
-createAnthropic({ authToken, baseURL: proxyUrl, fetch: wrappedTauriFetch })('claude-sonnet-4-6')
+// Shoulders proxy — native SDK + routing headers
+createAnthropic({ authToken: jwt, baseURL: proxyUrl, headers: {
+  'x-shoulders-provider': 'anthropic',
+  'x-shoulders-model': 'claude-sonnet-4-6',
+}, fetch: wrappedTauriFetch })('claude-sonnet-4-6')
 ```
 
-For Shoulders, the fetch wrapper strips SDK-appended paths (`/messages`, `/responses`) since the proxy expects requests at the proxy URL directly.
+For Shoulders, the client creates native provider SDKs (`createAnthropic`/`createOpenAI`/`createGoogleGenerativeAI`) — the proxy is transparent and forwards native format as-is. The fetch wrapper does two things:
+
+1. **Strips SDK-appended paths** (`/messages`, `/responses`, `/models/...`) since the proxy expects requests at a single URL
+2. **Detects streaming** and adds `x-shoulders-stream: 1|0` header (checks `body.stream` for Anthropic/OpenAI, URL for Google's `streamGenerateContent`)
+
+Auth differs per provider SDK:
+- **Anthropic**: `authToken = jwt` → SDK sends `Authorization: Bearer`
+- **OpenAI**: `apiKey = jwt` → SDK sends `Authorization: Bearer`
+- **Google**: `apiKey = 'shoulders-proxy'` (dummy — SDK requires it) + explicit `Authorization: Bearer` header (server reads this for auth, ignores the dummy key in the URL)
 
 ### tauriFetch (`tauriFetch.js`)
 
@@ -275,14 +286,45 @@ Both use `resolveApiAccess({ strategy: 'cheapest' })` (Gemini Flash Lite → Hai
 
 ---
 
-## Shoulders Proxy Gotchas
+## Shoulders Proxy
 
-- **Auth**: Anthropic SDK uses `authToken` (sends `Authorization: Bearer`), not `apiKey` (sends `x-api-key`). OpenAI/Google use `apiKey` + explicit `Authorization` header.
-- **URL rewriting**: SDK appends provider paths (`/messages`, `/responses`). The fetch wrapper strips these for Shoulders since the proxy expects the URL as-is.
-- **Balance events**: Shoulders injects `{"type":"shoulders_balance",...}` into the SSE stream. Filtered out in `tauriFetch.js` before reaching the SDK (would crash the UIMessageStream validator). Balance data dispatched as a `shoulders-balance` CustomEvent.
+The Shoulders proxy (`shoulde.rs/api/v1/proxy`) is **transparent**: native provider format in, native provider format out. The client creates real provider SDKs and the server just routes, bills, and injects server-side API keys.
+
+### How it works
+
+```
+Client (native SDK format)
+  → tauriFetch → Rust chat_stream → Shoulders proxy
+    → reads x-shoulders-provider, x-shoulders-model, x-shoulders-stream headers
+    → adds server-side API key (x-api-key / Authorization / ?key=)
+    → forwards body as-is to upstream provider
+    → streams raw SSE bytes back unchanged
+    → extracts usage from SSE for billing
+    → injects shoulders_balance trailer event
+  ← tauriFetch filters shoulders_balance, returns ReadableStream
+← AI SDK parses native SSE format
+```
+
+### Client-side headers
+
+The fetch wrapper in `aiSdk.js` adds three routing headers:
+
+| Header | Purpose | Example |
+|---|---|---|
+| `x-shoulders-provider` | Which upstream to call | `anthropic`, `openai`, `google` |
+| `x-shoulders-model` | Model ID (server needs for Google URL construction) | `gemini-2.5-flash` |
+| `x-shoulders-stream` | Whether the request is streaming | `1` or `0` |
+
+### Gotchas
+
+- **Auth per provider**: Anthropic uses `authToken` (Bearer), OpenAI uses `apiKey` (Bearer), Google uses dummy `apiKey` + explicit `Authorization: Bearer` header. See [Model creation](#model-creation-aisdkjs) above.
+- **URL stripping**: SDK appends provider paths (`/messages`, `/responses`, `/models/...`). The fetch wrapper strips these since the proxy expects a single URL.
+- **Balance events**: Shoulders injects `{"type":"shoulders_balance",...}` into the SSE stream after the upstream closes. Filtered out in `tauriFetch.js` before reaching the SDK (would crash the UIMessageStream validator). Balance data dispatched as a `shoulders-balance` CustomEvent on `window`.
 - **Proxy URL**: Single source of truth in `apiClient.js:SHOULDERS_PROXY_URL`.
+- **Token refresh**: `resolveApiAccess()` is async — calls `workspace.ensureFreshToken()` before returning Shoulders access (15-min JWT).
 
 ## Vue Reactivity Gotchas
 
 - **Chat instances outside Pinia**: The `Map<sessionId, Chat>` is non-reactive. Use `_chatVersion` counter trick for computed consumers.
 - **Tool part state mutation**: AI SDK mutates `part.state` in place. Vue doesn't detect this. Use `:key="part.toolCallId + '-' + part.state"` on `ToolCallLine` to force re-render.
+- **Cross-provider model switching**: Reasoning/thinking parts are provider-specific (Anthropic signatures, Google thoughtSignature, OpenAI itemId). Switching mid-conversation crashes. Errors are surfaced in chat UI but no sanitization yet. Fix: strip reasoning from previous exchanges in `chatTransport.js` at send time, keep current exchange intact. No SDK utility exists. ([#2](https://github.com/shoulders-ai/shoulders/issues/2))

@@ -220,14 +220,16 @@ Since ProseMirror decorations are invisible, non-text UI (buttons, badges, loadi
 
 ```html
 <div style="position: relative;" class="flex-1 overflow-auto">
-  <!-- SuperDoc owns this div completely -->
-  <div :id="editorId" class="absolute inset-0"></div>
+  <!-- SuperDoc owns this div completely — NO absolute positioning! -->
+  <div :id="editorId"></div>
   <!-- Vue owns this overlay — sibling, not child -->
   <div v-if="showOverlay" class="my-overlay" :style="overlayPos">
     ...content...
   </div>
 </div>
 ```
+
+**Critical:** Do NOT use `absolute inset-0` on the SuperDoc mount div. It breaks cursor positioning, arrow key navigation, and click-to-position mapping. Use a plain flow-layout div instead.
 
 2. **Position relative to visible caret, not ProseMirror position.** The ProseMirror `coordsAtPos()` returns coordinates in the hidden host (x:-9999). Instead, find `.presentation-editor__selection-caret` and use its `getBoundingClientRect()`.
 

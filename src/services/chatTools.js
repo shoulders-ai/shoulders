@@ -7,6 +7,7 @@ import { useFilesStore } from '../stores/files'
 import { nanoid } from '../stores/utils'
 import { extractDocumentText } from './docxContext'
 import { SHOULDERS_SEARCH_URL } from './apiClient'
+import { isMultimodalImage, isPdf, getMimeType } from '../utils/fileTypes'
 
 // External tools that transmit data to third-party services
 export const EXTERNAL_TOOLS = ['web_search', 'search_papers', 'fetch_url', 'add_reference']
@@ -257,7 +258,7 @@ export function getAiTools(workspace) {
     }),
 
     read_file: tool({
-      description: 'Read the contents of a file. Supports text files, PDFs (extracts text), and DOCX (when open). Use this instead of run_command for reading files.',
+      description: 'Read the contents of a file. Supports text files, images (visual analysis via AI), PDFs (native document understanding), and DOCX (when open). Use this instead of run_command for reading files.',
       inputSchema: z.object({
         path: z.string().describe('File path relative to workspace'),
       }),
@@ -280,16 +281,65 @@ export function getAiTools(workspace) {
           return formatNotebookAsText(nb.cells, readPath)
         }
 
-        if (readPath.toLowerCase().endsWith('.pdf')) {
-          const { extractTextFromPdf } = await import('../utils/pdfMetadata')
-          const text = await extractTextFromPdf(readPath)
-          const truncated = text.length > 50000
-            ? text.slice(0, 50000) + '\n... [truncated at 50KB]'
-            : text
-          return { _pdfPath: readPath, text: truncated }
+        // PDF: read as base64 for native document understanding
+        if (isPdf(readPath)) {
+          try {
+            const base64 = await invoke('read_file_base64', { path: readPath })
+            // ~32MB base64 limit (roughly 24MB file)
+            if (base64.length > 32 * 1024 * 1024) {
+              return `[PDF file too large for native analysis (${Math.round(base64.length / 1024 / 1024)}MB). Try a smaller document.]`
+            }
+            return { _type: 'pdf', base64, filename: readPath.split('/').pop() }
+          } catch (e) {
+            return `[Error reading PDF: ${e}]`
+          }
+        }
+
+        // Images: read as base64 for visual understanding
+        if (isMultimodalImage(readPath)) {
+          try {
+            const base64 = await invoke('read_file_base64', { path: readPath })
+            // ~20MB base64 limit
+            if (base64.length > 20 * 1024 * 1024) {
+              return `[Image too large for visual analysis (${Math.round(base64.length / 1024 / 1024)}MB). Try a smaller image.]`
+            }
+            const mediaType = getMimeType(readPath)
+            return { _type: 'image', base64, filename: readPath.split('/').pop(), mediaType }
+          } catch (e) {
+            return `[Error reading image: ${e}]`
+          }
+        }
+
+        // Non-multimodal images (svg, bmp, ico): text description
+        if (/\.(svg|bmp|ico)$/i.test(readPath)) {
+          const ext = readPath.split('.').pop().toLowerCase()
+          if (ext === 'svg') {
+            // SVG is text-based, read as text
+            return await invoke('read_file', { path: readPath })
+          }
+          return `[${ext.toUpperCase()} image format is not supported for visual analysis. Supported formats: PNG, JPG, GIF, WebP.]`
         }
 
         return await invoke('read_file', { path: readPath })
+      },
+      toModelOutput({ output }) {
+        // Image with base64: send as image-data content for native vision
+        if (output?._type === 'image' && output.base64) {
+          return {
+            type: 'content',
+            value: [{ type: 'image-data', data: output.base64, mediaType: output.mediaType }],
+          }
+        }
+        // PDF with base64: text placeholder (native PDF injected via prepareStep)
+        if (output?._type === 'pdf' && output.base64) {
+          return {
+            type: 'text',
+            value: `PDF file "${output.filename}" has been read. The full document is attached for your analysis.`,
+          }
+        }
+        // Default: let AI SDK handle strings and objects normally
+        if (typeof output === 'string') return { type: 'text', value: output }
+        return { type: 'json', value: output ?? null }
       },
     }),
 
