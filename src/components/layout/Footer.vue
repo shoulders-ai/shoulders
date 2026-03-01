@@ -230,6 +230,7 @@
           <div class="flex justify-between"><span>Split horizontal</span><kbd>{{ modKey }}+Shift+\</kbd></div>
           <div class="flex justify-between"><span>Add task</span><kbd>{{ modKey }}+Shift+C</kbd></div>
           <div class="flex justify-between"><span>AI Chat</span><kbd>{{ modKey }}+Shift+L</kbd></div>
+          <div class="flex justify-between"><span>Toggle terminal</span><kbd>{{ modKey }}+`</kbd></div>
           <div class="flex justify-between"><span>Zoom in</span><kbd>{{ modKey }}+=</kbd></div>
           <div class="flex justify-between"><span>Zoom out</span><kbd>{{ modKey }}+-</kbd></div>
           <div class="flex justify-between"><span>Reset zoom</span><kbd>{{ modKey }}+0</kbd></div>

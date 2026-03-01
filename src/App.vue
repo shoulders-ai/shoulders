@@ -39,8 +39,8 @@
           @resize="onLeftResize"
         />
 
-        <!-- Center: Editor panes -->
-        <div class="flex-1 flex flex-col overflow-hidden" style="min-width: 200px;">
+        <!-- Center: Editor panes + bottom panel -->
+        <div ref="centerColumnRef" class="flex-1 flex flex-col overflow-hidden" style="min-width: 200px;">
           <!-- Pane container -->
           <div class="flex-1 overflow-hidden">
             <PaneContainer
@@ -49,6 +49,16 @@
               @editor-stats="onEditorStats"
             />
           </div>
+
+          <!-- Bottom panel resize handle -->
+          <ResizeHandle
+            v-if="workspace.bottomPanelOpen"
+            direction="horizontal"
+            @resize="onBottomResize"
+          />
+
+          <!-- Bottom panel (terminal) -->
+          <BottomPanel ref="bottomPanelRef" />
         </div>
 
         <!-- Right resize handle -->
@@ -59,7 +69,7 @@
           @dblclick="onRightResizeSnap"
         />
 
-        <!-- Right sidebar: Terminal + Tasks (v-show to preserve running terminals) -->
+        <!-- Right sidebar: Chat + Tasks (v-show to preserve state) -->
         <div
           v-show="workspace.rightSidebarOpen"
           class="shrink-0 overflow-hidden border-l"
@@ -116,6 +126,7 @@ import ResizeHandle from './components/layout/ResizeHandle.vue'
 import LeftSidebar from './components/sidebar/LeftSidebar.vue'
 import PaneContainer from './components/editor/PaneContainer.vue'
 import RightPanel from './components/right/RightPanel.vue'
+import BottomPanel from './components/layout/BottomPanel.vue'
 import Launcher from './components/Launcher.vue'
 import VersionHistory from './components/VersionHistory.vue'
 import Settings from './components/settings/Settings.vue'
@@ -139,6 +150,8 @@ const footerRef = ref(null)
 const headerRef = ref(null)
 const leftSidebarRef = ref(null)
 const rightPanelRef = ref(null)
+const bottomPanelRef = ref(null)
+const centerColumnRef = ref(null)
 const setupWizardVisible = ref(false)
 const versionHistoryVisible = ref(false)
 const versionHistoryFile = ref('')
@@ -151,6 +164,19 @@ onMounted(async () => {
   // Restore saved theme + font sizes
   workspace.restoreTheme()
   workspace.applyFontSizes()
+
+  // ── TOAST DEMO — remove after approval ──
+  setTimeout(() => {
+    toastStore.show('Created report.pdf in 245ms')
+    setTimeout(() => toastStore.show('File not found: notes.md', { type: 'error' }), 600)
+    setTimeout(() => toastStore.show('Your changes conflict with updates on GitHub.', {
+      type: 'warning', duration: 8000, action: { label: 'Resolve', onClick: () => {} },
+    }), 1200)
+    setTimeout(() => toastStore.show('Shoulders 2.1.0 available', {
+      type: 'info', duration: 0, action: { label: 'Download', onClick: () => {} },
+    }), 1800)
+  }, 1500)
+  // ── END TOAST DEMO ──
 
   // Silent update check (non-blocking, respects user preference)
   if (isAutoCheckEnabled()) {
@@ -302,6 +328,16 @@ function handleKeydown(e) {
       setTimeout(() => {
         rightPanelRef.value?.focusChat()
       }, 150)
+    }
+    return
+  }
+
+  // Cmd+`: Toggle bottom panel (terminal)
+  if (isMod(e) && e.key === '`') {
+    e.preventDefault()
+    workspace.toggleBottomPanel()
+    if (workspace.bottomPanelOpen) {
+      nextTick(() => bottomPanelRef.value?.focusTerminal())
     }
     return
   }
@@ -605,6 +641,18 @@ function onRightResizeSnap() {
     rightSidebarPreSnapWidth.value = workspace.rightSidebarWidth
     workspace.rightSidebarWidth = halfWindow
   }
+}
+
+let bottomPanelHeightSaveTimer = null
+function onBottomResize(e) {
+  if (!centerColumnRef.value) return
+  const rect = centerColumnRef.value.getBoundingClientRect()
+  const newHeight = Math.max(100, Math.min(rect.height - 100, rect.bottom - e.y))
+  workspace.bottomPanelHeight = newHeight
+  clearTimeout(bottomPanelHeightSaveTimer)
+  bottomPanelHeightSaveTimer = setTimeout(() => {
+    workspace.setBottomPanelHeight(newHeight)
+  }, 300)
 }
 
 // Footer updates

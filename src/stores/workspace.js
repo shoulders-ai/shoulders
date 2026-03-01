@@ -20,8 +20,10 @@ export const useWorkspaceStore = defineStore('workspace', {
     settingsSection: null,
     leftSidebarOpen: localStorage.getItem('leftSidebarOpen') !== 'false',
     rightSidebarOpen: localStorage.getItem('rightSidebarOpen') === 'true',
+    bottomPanelOpen: localStorage.getItem('bottomPanelOpen') === 'true',
     leftSidebarWidth: parseInt(localStorage.getItem('leftSidebarWidth')) || 240,
     rightSidebarWidth: parseInt(localStorage.getItem('rightSidebarWidth')) || 360,
+    bottomPanelHeight: parseInt(localStorage.getItem('bottomPanelHeight')) || 250,
     disabledTools: [],
     selectedModelId: localStorage.getItem('lastModelId') || '',
     ghostModelId: localStorage.getItem('ghostModelId') || '',
@@ -662,6 +664,23 @@ exit 0
     toggleRightSidebar() {
       this.rightSidebarOpen = !this.rightSidebarOpen
       localStorage.setItem('rightSidebarOpen', String(this.rightSidebarOpen))
+    },
+
+    toggleBottomPanel() {
+      this.bottomPanelOpen = !this.bottomPanelOpen
+      localStorage.setItem('bottomPanelOpen', String(this.bottomPanelOpen))
+    },
+
+    openBottomPanel() {
+      if (!this.bottomPanelOpen) {
+        this.bottomPanelOpen = true
+        localStorage.setItem('bottomPanelOpen', 'true')
+      }
+    },
+
+    setBottomPanelHeight(h) {
+      this.bottomPanelHeight = h
+      localStorage.setItem('bottomPanelHeight', String(h))
     },
 
     openSettings(section = null) {

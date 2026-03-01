@@ -137,6 +137,16 @@
       </button>
       <button
         class="w-7 h-7 flex items-center justify-center rounded-md border-none bg-transparent cursor-pointer transition-colors"
+        :style="{ color: workspace.bottomPanelOpen ? 'var(--fg-primary)' : 'var(--fg-muted)' }"
+        @click="workspace.toggleBottomPanel()"
+        :title="`Toggle terminal (${modKey}+\`)`"
+        @mouseover="$event.currentTarget.style.background='var(--bg-hover)'"
+        @mouseout="$event.currentTarget.style.background='transparent'"
+      >
+        <IconTerminal2 :size="16" :stroke-width="1.5" />
+      </button>
+      <button
+        class="w-7 h-7 flex items-center justify-center rounded-md border-none bg-transparent cursor-pointer transition-colors"
         style="color: var(--fg-muted);"
         @click="$emit('open-settings')"
         :title="`Settings (${modKey}+,)`"
@@ -156,7 +166,7 @@ import { useEditorStore } from '../../stores/editor'
 import {
   IconLayoutSidebar, IconLayoutSidebarFilled,
   IconLayoutSidebarRight, IconLayoutSidebarRightFilled,
-  IconSettings, IconSearch, IconMenu2,
+  IconSettings, IconSearch, IconMenu2, IconTerminal2,
 } from '@tabler/icons-vue'
 import { isMac, modKey } from '../../platform'
 
