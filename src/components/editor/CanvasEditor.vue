@@ -660,10 +660,8 @@ function onToggleTitle() {
 
 function onExpandHeight() {
   for (const node of selectedNodes.value) {
-    // Remove explicit height — let content determine height
-    const newStyle = { ...node.style }
-    delete newStyle.height
-    node.style = newStyle
+    // Set height to auto — lets content determine height
+    node.style = { ...node.style, height: 'auto' }
     if (node.dimensions) delete node.dimensions.height
   }
   scheduleSave()
@@ -719,6 +717,10 @@ onUnmounted(() => {
 import { provide } from 'vue'
 provide('canvasNodeUpdate', handleNodeUpdate)
 provide('canvasNodeResize', handleNodeResize)
+provide('canvasRegenerate', (nodeId) => {
+  if (canvasStore.streamingNodeId) return
+  canvasStore.regenerateNode(nodeId)
+})
 </script>
 
 <style>

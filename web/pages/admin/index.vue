@@ -293,6 +293,16 @@ const metricRows = computed(() => {
       link: '/admin/analytics',
     },
     {
+      label: 'Desktop',
+      stats: [
+        { value: s.telemetry.uniqueDevices, suffix: 'devices (30d)' },
+        { value: s.telemetry.total.toLocaleString(), suffix: 'events' },
+        ...(s.telemetry.byPlatform.length ? [{ value: s.telemetry.byPlatform.map(p => `${p.platform}: ${p.count}`).join(', '), suffix: '' }] : []),
+      ],
+      spark: s.trends.telemetry.map(d => d.count),
+      sparkColor: '#14b8a6',
+    },
+    {
       label: 'API Calls',
       stats: [
         { value: s.apiCalls.total.toLocaleString(), suffix: 'total' },

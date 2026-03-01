@@ -1,5 +1,5 @@
 import { useDb } from '../../db/index.js'
-import { users, apiCalls, contactSubmissions } from '../../db/schema.js'
+import { users, apiCalls, contactSubmissions, telemetryEvents } from '../../db/schema.js'
 import { sql, gte } from 'drizzle-orm'
 
 // Helper: daily counts for a table/condition over the last N days, zero-filled
@@ -72,6 +72,9 @@ export default defineEventHandler(() => {
     deckViews: dailyCounts(sqlite,
       'SELECT date(created_at) as date, count(*) as count FROM deck_views WHERE created_at >= ? GROUP BY date(created_at)',
       [twoWeeksAgo], 14),
+    telemetry: dailyCounts(sqlite,
+      'SELECT date(created_at) as date, count(*) as count FROM telemetry_events WHERE created_at >= ? GROUP BY date(created_at)',
+      [twoWeeksAgo], 14),
   }
 
   // === 30-day funnel ===
@@ -106,6 +109,12 @@ export default defineEventHandler(() => {
   // === Contacts ===
   const undismissedCount = sqlite.prepare('SELECT count(*) as count FROM contact_submissions WHERE dismissed = 0').get()
 
+  // === Desktop Telemetry ===
+  const telemetryTotal = sqlite.prepare('SELECT count(*) as count FROM telemetry_events').get()
+  const telemetryDevices = sqlite.prepare('SELECT COUNT(DISTINCT device_id) as count FROM telemetry_events WHERE created_at >= ?').get(monthAgo)
+  const telemetryByEvent = sqlite.prepare('SELECT event_type, count(*) as count FROM telemetry_events WHERE created_at >= ? GROUP BY event_type ORDER BY count DESC').all(monthAgo)
+  const telemetryByPlatform = sqlite.prepare('SELECT platform, count(*) as count FROM telemetry_events WHERE created_at >= ? AND platform IS NOT NULL GROUP BY platform ORDER BY count DESC').all(monthAgo)
+
   return {
     users: { total: totalUsers.count },
     credits: { total: totalCredits.sum },
@@ -137,6 +146,12 @@ export default defineEventHandler(() => {
     downloads: { byPlatform: downloadsByPlatform },
     contact: {
       undismissed: undismissedCount.count,
+    },
+    telemetry: {
+      total: telemetryTotal.count,
+      uniqueDevices: telemetryDevices.count,
+      byEvent: telemetryByEvent,
+      byPlatform: telemetryByPlatform,
     },
   }
 })

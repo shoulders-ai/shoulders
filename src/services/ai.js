@@ -83,7 +83,7 @@ Rules:
 - For empty documents, suggest a natural starting point based on the filename or context
 - Markdown formatting (headers, lists, bold) is fine when contextually appropriate
 
-Call suggest_completions with prefix_end, suffix_start, and your predictions.${systemPrompt ? '\n\n' + systemPrompt : ''}${instructions ? '\n\nUser instructions:\n' + instructions : ''}`
+Call suggest_completions with prefix_end, suffix_start, and your predictions.${systemPrompt ? '\n\n' + systemPrompt : ''}${instructions ? '\n\nUser instructions:\n<_instructions.md>\n' + instructions + '\n</_instructions.md>' : ''}`
 
   const tauriFetch = createTauriFetch()
   const model = createModel(access, tauriFetch)

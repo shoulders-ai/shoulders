@@ -17,6 +17,14 @@ function getExt(path) {
   return dot > 0 ? name.substring(dot + 1).toLowerCase() : ''
 }
 
+export function isChatTab(path) {
+  return path && path.startsWith('chat:')
+}
+
+export function getChatSessionId(path) {
+  return path?.startsWith('chat:') ? path.slice(5) : null
+}
+
 export function isReferencePath(path) {
   return path.startsWith('ref:@')
 }
@@ -32,6 +40,7 @@ export function isPreviewPath(path) {
 export function getViewerType(path) {
   if (isPreviewPath(path)) return 'markdown-preview'
   if (isReferencePath(path)) return 'reference'
+  if (isChatTab(path)) return 'chat'
   const ext = getExt(path)
   if (PDF_EXTS.includes(ext)) return 'pdf'
   if (CSV_EXTS.includes(ext)) return 'csv'
@@ -83,6 +92,7 @@ export function relativePath(fromFile, toFile) {
 
 export function isBinaryFile(path) {
   if (isReferencePath(path)) return false
+  if (isChatTab(path)) return false
   const ext = getExt(path)
   return IMAGE_EXTS.includes(ext) || PDF_EXTS.includes(ext) || DOCX_EXTS.includes(ext)
 }

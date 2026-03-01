@@ -23,8 +23,8 @@
         <div
           v-if="workspace.leftSidebarOpen"
           data-sidebar="left"
-          class="shrink-0 overflow-hidden"
-          :style="{ width: workspace.leftSidebarWidth + 'px' }"
+          class="shrink-0 overflow-hidden border-r"
+          :style="{ width: workspace.leftSidebarWidth + 'px', borderColor: 'var(--border)' }"
         >
           <LeftSidebar
             ref="leftSidebarRef"
@@ -39,8 +39,8 @@
           @resize="onLeftResize"
         />
 
-        <!-- Center: Editor panes + bottom panel -->
-        <div ref="centerColumnRef" class="flex-1 flex flex-col overflow-hidden" style="min-width: 200px;">
+        <!-- Center: Editor panes -->
+        <div class="flex-1 flex flex-col overflow-hidden" style="min-width: 200px;">
           <!-- Pane container -->
           <div class="flex-1 overflow-hidden">
             <PaneContainer
@@ -49,16 +49,6 @@
               @editor-stats="onEditorStats"
             />
           </div>
-
-          <!-- Bottom panel resize handle -->
-          <ResizeHandle
-            v-if="workspace.bottomPanelOpen"
-            direction="horizontal"
-            @resize="onBottomResize"
-          />
-
-          <!-- Bottom panel (terminal) -->
-          <BottomPanel ref="bottomPanelRef" />
         </div>
 
         <!-- Right resize handle -->
@@ -69,11 +59,11 @@
           @dblclick="onRightResizeSnap"
         />
 
-        <!-- Right sidebar: Chat + Tasks (v-show to preserve state) -->
+        <!-- Right sidebar: Terminal + Tasks (v-show to preserve running terminals) -->
         <div
           v-show="workspace.rightSidebarOpen"
-          class="shrink-0 overflow-hidden"
-          :style="{ width: workspace.rightSidebarWidth + 'px' }"
+          class="shrink-0 overflow-hidden border-l"
+          :style="{ width: workspace.rightSidebarWidth + 'px', borderColor: 'var(--border)' }"
         >
           <RightPanel ref="rightPanelRef" />
         </div>
@@ -126,7 +116,6 @@ import ResizeHandle from './components/layout/ResizeHandle.vue'
 import LeftSidebar from './components/sidebar/LeftSidebar.vue'
 import PaneContainer from './components/editor/PaneContainer.vue'
 import RightPanel from './components/right/RightPanel.vue'
-import BottomPanel from './components/layout/BottomPanel.vue'
 import Launcher from './components/Launcher.vue'
 import VersionHistory from './components/VersionHistory.vue'
 import Settings from './components/settings/Settings.vue'
@@ -150,8 +139,6 @@ const footerRef = ref(null)
 const headerRef = ref(null)
 const leftSidebarRef = ref(null)
 const rightPanelRef = ref(null)
-const bottomPanelRef = ref(null)
-const centerColumnRef = ref(null)
 const setupWizardVisible = ref(false)
 const versionHistoryVisible = ref(false)
 const versionHistoryFile = ref('')
@@ -161,6 +148,9 @@ let sidebarWidthSaveTimer = null
 
 // Startup
 onMounted(async () => {
+  // Telemetry: app launched
+  import('./services/telemetry').then(({ events }) => events.appOpen())
+
   // Restore saved theme + font sizes
   workspace.restoreTheme()
   workspace.applyFontSizes()
@@ -251,6 +241,8 @@ async function openWorkspace(path) {
     await chatStore.loadSessions()
     await tasks.loadThreads()
     await referencesStore.loadLibrary()
+    // Restore editor pane layout (must be after loadSessions + loadLibrary for tab validation)
+    await editorStore.restoreEditorState()
     await typstStore.loadSettings()
   } catch (e) {
     console.error('Failed to open workspace:', e)
@@ -266,6 +258,8 @@ async function openWorkspace(path) {
 }
 
 async function closeWorkspace() {
+  // Save editor state before cleanup resets the pane tree
+  await editorStore.saveEditorStateImmediate()
   editorStore.cleanup()
   filesStore.cleanup()
   reviews.cleanup()
@@ -307,25 +301,18 @@ function handleKeydown(e) {
     return
   }
 
-  // Cmd+J: Toggle right sidebar
-  if (isMod(e) && e.key === 'j') {
+  // Cmd+T: New tab page in current pane
+  if (isMod(e) && e.key === 't') {
     e.preventDefault()
-    workspace.toggleRightSidebar()
-    if (workspace.rightSidebarOpen) {
-      setTimeout(() => {
-        rightPanelRef.value?.focusChat()
-      }, 150)
-    }
+    const pane = editorStore.activePane
+    if (pane) pane.activeTab = null
     return
   }
 
-  // Cmd+`: Toggle bottom panel (terminal)
-  if (isMod(e) && e.key === '`') {
+  // Cmd+J: Split pane and open new chat tab
+  if (isMod(e) && e.key === 'j') {
     e.preventDefault()
-    workspace.toggleBottomPanel()
-    if (workspace.bottomPanelOpen) {
-      nextTick(() => bottomPanelRef.value?.focusTerminal())
-    }
+    editorStore.openChatBeside()
     return
   }
 
@@ -378,7 +365,8 @@ function handleKeydown(e) {
     return
   }
 
-  // Cmd+Shift+L: Focus AI Chat (with optional selection capture)
+  // Cmd+Shift+L: Open AI Chat (with optional selection capture)
+  // Chat now lives in the tab system — dispatch events for the chat-as-tab system to handle
   if (isMod(e) && e.shiftKey && (e.key === 'L' || e.key === 'l' || e.code === 'KeyL')) {
     e.preventDefault()
     // Capture selection from active editor if present
@@ -424,10 +412,7 @@ function handleKeydown(e) {
         }
       }
     }
-    if (!workspace.rightSidebarOpen) workspace.rightSidebarOpen = true
-    setTimeout(() => {
-      rightPanelRef.value?.focusChat()
-    }, 100)
+    editorStore.openChatBeside()
     return
   }
 
@@ -474,23 +459,15 @@ function handleKeydown(e) {
   }
 }
 
+// Chat now lives in the tab system — route to editor store
 function handleOpenChat() {
-  if (!workspace.rightSidebarOpen) workspace.rightSidebarOpen = true
-  setTimeout(() => {
-    rightPanelRef.value?.focusChat()
-  }, 100)
+  editorStore.openChatBeside()
 }
 
 function handleChatPrefill(e) {
   const { message } = e.detail || {}
   if (!message) return
-  // Open right sidebar and focus chat, then set the input text
-  if (!workspace.rightSidebarOpen) workspace.rightSidebarOpen = true
-  setTimeout(() => {
-    rightPanelRef.value?.focusChat()
-    // Dispatch to chat input
-    window.dispatchEvent(new CustomEvent('chat-set-input', { detail: { message } }))
-  }, 150)
+  editorStore.openChatBeside({ prefill: message })
 }
 
 // Alt+Z: capture phase so it fires before CodeMirror consumes the event
@@ -546,8 +523,8 @@ async function forceSaveAndCommit() {
     // Save all open files by triggering a flush on every editor view
     const openFiles = editorStore.allOpenFiles
     for (const filePath of openFiles) {
-      // Skip virtual paths (reference tabs)
-      if (filePath.startsWith('ref:@')) continue
+      // Skip virtual paths (reference tabs, chat tabs, preview tabs)
+      if (filePath.startsWith('ref:@') || filePath.startsWith('chat:') || filePath.startsWith('preview:')) continue
       // DOCX files: trigger binary save via custom event
       if (filePath.endsWith('.docx')) {
         window.dispatchEvent(new CustomEvent('docx-save-now', { detail: { path: filePath } }))
@@ -628,18 +605,6 @@ function onRightResizeSnap() {
     rightSidebarPreSnapWidth.value = workspace.rightSidebarWidth
     workspace.rightSidebarWidth = halfWindow
   }
-}
-
-let bottomPanelHeightSaveTimer = null
-function onBottomResize(e) {
-  if (!centerColumnRef.value) return
-  const rect = centerColumnRef.value.getBoundingClientRect()
-  const newHeight = Math.max(100, Math.min(rect.height - 100, rect.bottom - e.y))
-  workspace.bottomPanelHeight = newHeight
-  clearTimeout(bottomPanelHeightSaveTimer)
-  bottomPanelHeightSaveTimer = setTimeout(() => {
-    workspace.setBottomPanelHeight(newHeight)
-  }, 300)
 }
 
 // Footer updates

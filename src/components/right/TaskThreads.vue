@@ -37,21 +37,16 @@
           @click="tasksStore.setActiveThread(thread.id)"
         >
           <div class="flex items-center gap-2 mb-1">
-            <!-- Resolved: subtle checkmark instead of dot -->
-            <svg v-if="thread.status === 'resolved'"
-              class="shrink-0" width="8" height="8" viewBox="0 0 8 8" fill="none"
-              stroke="var(--fg-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M1.5 4.5l2 2 3-4"/>
-            </svg>
-            <!-- Active: accent dot -->
-            <span v-else
+            <span
               class="w-2 h-2 rounded-full shrink-0"
               :style="{ background: statusColor(thread.status) }"
             ></span>
-            <span class="ui-text-lg truncate"
-              :class="thread.status === 'resolved' ? '' : 'font-medium'"
-              :style="{ color: thread.status === 'resolved' ? 'var(--fg-muted)' : 'var(--fg-primary)' }">
+            <span class="ui-text-lg font-medium truncate" style="color: var(--fg-primary);">
               {{ firstMessagePreview(thread) }}
+            </span>
+            <span v-if="thread.status === 'resolved'"
+              class="ui-text-base shrink-0 ml-auto" style="color: var(--success);">
+              resolved
             </span>
           </div>
           <div class="flex items-center gap-2 ui-text-base" style="color: var(--fg-muted);">
@@ -73,10 +68,19 @@ import { useTasksStore } from '../../stores/tasks'
 import TaskThread from './TaskThread.vue'
 import { modKey } from '../../platform'
 
+const props = defineProps({
+  documentTab: { type: String, default: null },
+})
+
 const tasksStore = useTasksStore()
 const taskThreadRef = ref(null)
 
-const threads = computed(() => tasksStore.threads)
+const threads = computed(() => {
+  if (props.documentTab) {
+    return tasksStore.threadsForFile(props.documentTab)
+  }
+  return tasksStore.threads
+})
 const sortedThreads = computed(() => {
   const active = threads.value.filter(t => t.status !== 'resolved')
   const resolved = threads.value.filter(t => t.status === 'resolved')
@@ -91,7 +95,8 @@ function firstMessagePreview(thread) {
 function statusColor(status) {
   if (status === 'streaming') return 'var(--accent)'
   if (status === 'error') return 'var(--error)'
-  return 'var(--accent)'
+  if (status === 'resolved') return 'var(--success)'
+  return 'var(--fg-muted)'
 }
 
 function relativeTime(iso) {

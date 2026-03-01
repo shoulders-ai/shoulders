@@ -21,42 +21,58 @@
       @resize="onResize"
     />
 
-    <!-- Title -->
-    <input
-      v-if="data.title !== null && data.title !== undefined"
-      class="node-title-input nopan nodrag"
-      :value="data.title"
-      placeholder="Title..."
-      @input="e => emit('update', { title: e.target.value })"
-      @keydown.stop
-      @mousedown.stop
-    />
-
-    <!-- Version label for AI-generated nodes with siblings -->
-    <span v-if="data.versionLabel" class="version-label">{{ data.versionLabel }}</span>
-
-    <!-- Content -->
-    <div
-      v-if="editing"
-      class="node-content-edit"
-    >
-      <textarea
-        ref="textareaRef"
-        class="node-textarea nopan nodrag"
-        :value="data.content"
-        @input="onInput"
-        @blur="editing = false"
+    <!-- Inner container — clips content when node is resized smaller than content -->
+    <div class="node-inner">
+      <!-- Title -->
+      <input
+        v-if="data.title !== null && data.title !== undefined"
+        class="node-title-input nopan nodrag"
+        :value="data.title"
+        placeholder="Title..."
+        @input="e => emit('update', { title: e.target.value })"
         @keydown.stop
         @mousedown.stop
       />
+
+      <!-- Version label for AI-generated nodes with siblings -->
+      <span v-if="data.versionLabel" class="version-label">{{ data.versionLabel }}</span>
+
+      <!-- Content -->
+      <div
+        v-if="editing"
+        class="node-content-edit"
+      >
+        <textarea
+          ref="textareaRef"
+          class="node-textarea nopan nodrag"
+          :value="data.content"
+          @input="onInput"
+          @blur="editing = false"
+          @keydown.stop
+          @mousedown.stop
+        />
+      </div>
+      <div
+        v-else
+        class="node-content"
+        :class="{ 'has-title': !!data.title }"
+        @dblclick.stop="startEditing"
+        v-html="renderedContent"
+      />
+
+      <!-- Regenerate button for AI-generated nodes -->
+      <button
+        v-if="data.aiGenerated && data._parentPromptId && !isStreaming"
+        class="regenerate-btn nopan nodrag"
+        title="Regenerate"
+        @mousedown.stop
+        @click.stop="regenerate"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+        </svg>
+      </button>
     </div>
-    <div
-      v-else
-      class="node-content"
-      :class="{ 'has-title': !!data.title }"
-      @dblclick.stop="startEditing"
-      v-html="renderedContent"
-    />
 
     <!-- Streaming indicator -->
     <div v-if="isStreaming" class="streaming-bar" />
@@ -83,6 +99,7 @@ const props = defineProps({
 
 const canvasNodeUpdate = inject('canvasNodeUpdate', null)
 const canvasNodeResize = inject('canvasNodeResize', null)
+const canvasRegenerate = inject('canvasRegenerate', null)
 
 function emit(event, payload) {
   if (event === 'update' && canvasNodeUpdate) canvasNodeUpdate(props.id, payload)
@@ -117,6 +134,12 @@ function onInput(e) {
   emit('update', { content: e.target.value })
 }
 
+function regenerate() {
+  if (props.data._parentPromptId && canvasRegenerate) {
+    canvasRegenerate(props.id)
+  }
+}
+
 function onResize(resizeEvent) {
   const { width, height } = resizeEvent.params ?? resizeEvent
   emit('resize', { width, height })
@@ -135,6 +158,16 @@ function onResize(resizeEvent) {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.node-inner {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border-radius: 0 0 5px 5px;
 }
 
 .canvas-text-node.selected {
@@ -258,6 +291,36 @@ function onResize(resizeEvent) {
   outline: none;
 }
 
+/* Regenerate button */
+.regenerate-btn {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.1s, background 0.1s;
+}
+
+.canvas-text-node:hover .regenerate-btn {
+  opacity: 0.6;
+}
+
+.regenerate-btn:hover {
+  opacity: 1 !important;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-secondary));
+  border-color: var(--accent);
+}
+
 .streaming-bar {
   position: absolute;
   bottom: 0;
@@ -292,7 +355,7 @@ function onResize(resizeEvent) {
 /* Resize handles — wide invisible hit area for easier grabbing */
 :deep(.resize-line) {
   border-color: transparent !important;
-  border-width: 6px !important;
+  border-width: 12px !important;
 }
 
 :deep(.resize-handle) {

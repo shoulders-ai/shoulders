@@ -62,10 +62,12 @@ Native `@dragstart`/`@dragover`/`@drop` events behave inconsistently.
 
 ## Vue / Pinia Reactivity
 
-### Pinia loses reactivity after `array.push()`
-After `this.sessions.push(newSession)`, the local `newSession` variable is the raw object, not the reactive proxy.
+### Writing to a closure-captured session object bypasses Vue's Proxy
+After `sessions.value.push(session)`, the local `session` variable still points to the **raw plain object**. `sessions.value[n]` and `sessions.value.find(...)` return the **reactive Proxy**. Writing a new property to the raw object (e.g. from an async `onUsage` callback) sets the value on the underlying data but never fires Vue's Proxy `set` trap — so no computed re-runs. Reads through the proxy will eventually return the correct value after some other state change re-triggers the computed, causing silent one-step-behind bugs.
 
-**Fix:** Re-acquire via `this.sessions[this.sessions.length - 1]` to get the reactive proxy. See `chat.js:245` and `tasks.js:160`.
+**Fix:** In async callbacks that fire after `push()`, re-acquire via `sessions.value.find(s => s.id === session.id)` before writing. For synchronous access right after push, use `sessions.value[sessions.value.length - 1]`.
+
+**Example:** `chat.js:onUsage` stores `_lastInputTokens` for the context window donut. Writing to the closure's raw `session` meant the first exchange always showed 0 tokens — the computed only picked up the value when new messages caused it to re-run for an unrelated reason.
 
 ### `editorStore.openFile()` is a tab switcher, not a file loader
 It does NOT read content from disk. If you need updated content in the editor after a write, you must update `filesStore.fileContents[path]` explicitly before calling `openFile()`.

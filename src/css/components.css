@@ -104,6 +104,26 @@
   font-size: 10px;
   margin-right: 4px;
 }
+.quick-open-item .chat-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.quick-open-item .chat-msg-count {
+  font-size: 10px;
+  padding: 0 5px;
+  line-height: 16px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--fg-muted);
+}
+.quick-open-item .chat-time {
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
 
 /* Version history */
 .version-overlay {
@@ -640,68 +660,6 @@ body.tab-dragging * {
   background: var(--bg-hover);
   color: var(--fg-secondary);
 }
-/* Multimodal: image thumbnails in tool results */
-.tool-image-thumb {
-  max-width: 200px;
-  max-height: 120px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  object-fit: contain;
-}
-
-/* Multimodal: PDF badge in tool results */
-.tool-pdf-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--bg-tertiary);
-  color: var(--fg-secondary);
-  font-size: calc(var(--ui-font-size) - 1px);
-}
-
-/* Multimodal: file parts in user messages */
-.chat-file-parts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 4px;
-  justify-content: flex-end;
-}
-.chat-file-image-thumb {
-  max-width: 180px;
-  max-height: 140px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  object-fit: contain;
-}
-.chat-file-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-tertiary);
-  color: var(--fg-secondary);
-  font-size: calc(var(--ui-font-size) - 1px);
-}
-.chat-file-badge-stripped {
-  opacity: 0.6;
-  font-style: italic;
-}
-
-/* Multimodal: image thumbnail in chat input file chips */
-.chat-input-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 2px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
 .chat-context-chip svg { flex-shrink: 0; opacity: 0.6; }
 
 

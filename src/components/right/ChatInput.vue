@@ -14,13 +14,6 @@
         <span v-for="(ref, i) in fileRefs" :key="ref.path"
           class="inline-flex items-center gap-1 ui-text-lg px-1.5 py-0.5 rounded border"
           style="background: var(--bg-tertiary); border-color: var(--border); color: var(--fg-secondary);">
-          <img v-if="ref._multimodal && ref._mediaType?.startsWith('image/') && ref._dataUrl"
-            :src="ref._dataUrl" class="chat-input-thumb" alt="" />
-          <svg v-else-if="ref._multimodal && ref._mediaType === 'application/pdf'"
-            width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="var(--error)" stroke-width="1.5" class="shrink-0">
-            <path d="M9 1H4a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V5z"/>
-            <path d="M9 1v4h4"/>
-          </svg>
           {{ ref.path.split('/').pop() }}
           <button class="bg-transparent border-none cursor-pointer p-0 flex items-center"
             style="color: var(--fg-muted);"
@@ -96,7 +89,7 @@
         </button>
 
         <!-- Token donut -->
-        <div v-if="tokenPercent > 0"
+        <div v-if="props.estimatedTokens !== null"
           class="shrink-0 flex items-center token-donut-wrap">
           <svg width="16" height="16" viewBox="0 0 20 20">
             <!-- Background ring -->
@@ -206,13 +199,13 @@ import { useWorkspaceStore } from '../../stores/workspace'
 import { useEditorStore } from '../../stores/editor'
 import { useUsageStore } from '../../stores/usage'
 import { getBillingRoute } from '../../services/apiClient'
-import { getViewerType, isMultimodalImage, isPdf, getMimeType } from '../../utils/fileTypes'
+import { getViewerType } from '../../utils/fileTypes'
 import FileRefPopover from './FileRefPopover.vue'
 
 const props = defineProps({
   isStreaming: { type: Boolean, default: false },
   modelId: { type: String, default: '' },
-  estimatedTokens: { type: Number, default: 0 },
+  estimatedTokens: { type: Number, default: null },
   contextWindow: { type: Number, default: 200000 },
 })
 
@@ -280,7 +273,7 @@ onUnmounted(() => {
 
 // Token donut
 const tokenPercent = computed(() => {
-  if (!props.estimatedTokens || !props.contextWindow) return 0
+  if (props.estimatedTokens === null || !props.contextWindow) return 0
   return Math.min(100, Math.round((props.estimatedTokens / props.contextWindow) * 100))
 })
 
@@ -471,30 +464,18 @@ async function onFileSelect(file) {
   const idx = fileRefs.value.length - 1
 
   try {
-    // Multimodal images: send as native image data
-    if (isMultimodalImage(file.path)) {
-      const base64 = await invoke('read_file_base64', { path: file.path })
-      const mediaType = getMimeType(file.path)
-      fileRefs.value[idx]._multimodal = true
-      fileRefs.value[idx]._mediaType = mediaType
-      fileRefs.value[idx]._dataUrl = `data:${mediaType};base64,${base64}`
-      fileRefs.value[idx].content = `[Image: ${file.path.split('/').pop()}]`
+    let content
+    const viewerType = getViewerType(file.path)
+    if (viewerType === 'pdf') {
+      fileRefs.value[idx]._isPdf = true
+      const { extractTextFromPdf } = await import('../../utils/pdfMetadata')
+      content = await extractTextFromPdf(file.path)
+    } else {
+      content = await invoke('read_file', { path: file.path })
     }
-    // PDFs: send as native document
-    else if (isPdf(file.path)) {
-      const base64 = await invoke('read_file_base64', { path: file.path })
-      fileRefs.value[idx]._multimodal = true
-      fileRefs.value[idx]._mediaType = 'application/pdf'
-      fileRefs.value[idx]._dataUrl = `data:application/pdf;base64,${base64}`
-      fileRefs.value[idx].content = `[PDF: ${file.path.split('/').pop()}]`
-    }
-    // Text files: read as text (existing behavior)
-    else {
-      const content = await invoke('read_file', { path: file.path })
-      fileRefs.value[idx].content = content.length > 50000
-        ? content.slice(0, 50000) + '\n... [truncated at 50KB]'
-        : content
-    }
+    fileRefs.value[idx].content = content.length > 50000
+      ? content.slice(0, 50000) + '\n... [truncated at 50KB]'
+      : content
   } catch (e) {
     fileRefs.value[idx].content = `[Error reading file: ${e}]`
   }

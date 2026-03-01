@@ -244,11 +244,8 @@ function askAI() {
     detail: { file: props.filePath, text, contextBefore, contextAfter },
   }))
 
-  // Open sidebar to chat
-  if (!workspace.rightSidebarOpen) workspace.rightSidebarOpen = true
-  setTimeout(() => {
-    window.dispatchEvent(new CustomEvent('open-chat'))
-  }, 100)
+  // Open chat as a tab beside the document
+  window.dispatchEvent(new CustomEvent('open-chat'))
 
   emit('close')
 }

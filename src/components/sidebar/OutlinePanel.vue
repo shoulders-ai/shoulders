@@ -58,8 +58,9 @@ import { useFilesStore } from '../../stores/files'
 import { useLinksStore, parseHeadings } from '../../stores/links'
 import { isMarkdown, isLatex, getViewerType } from '../../utils/fileTypes'
 
-defineProps({
+const props = defineProps({
   collapsed: { type: Boolean, default: false },
+  overrideActiveFile: { type: String, default: null },
 })
 defineEmits(['toggle-collapse'])
 
@@ -68,7 +69,8 @@ const filesStore = useFilesStore()
 const linksStore = useLinksStore()
 
 // Determine if active file supports outline
-const activeFile = computed(() => editorStore.activeTab)
+// Use overrideActiveFile prop when provided (e.g., from right sidebar when chat tab is focused)
+const activeFile = computed(() => props.overrideActiveFile || editorStore.activeTab)
 
 const fileType = computed(() => {
   const path = activeFile.value

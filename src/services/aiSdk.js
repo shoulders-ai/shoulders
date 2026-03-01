@@ -253,19 +253,11 @@ export function convertSdkUsage(sdkUsage, providerMetadata, provider) {
 }
 
 /**
- * Strip providerMetadata and large binary data from parts before persisting.
- * - Removes providerMetadata (provider-specific, not needed for replay)
- * - Strips base64 data URLs from file parts (images/PDFs can be multi-MB)
+ * Strip providerMetadata from parts before persisting.
  */
 export function cleanPartsForStorage(parts) {
   if (!parts) return []
-  return parts.map(({ providerMetadata, ...rest }) => {
-    // Strip base64 data URLs from file parts to avoid huge session JSON
-    if (rest.type === 'file' && rest.url?.startsWith('data:')) {
-      return { ...rest, url: '', _stripped: true }
-    }
-    return rest
-  })
+  return parts.map(({ providerMetadata, ...rest }) => rest)
 }
 
 

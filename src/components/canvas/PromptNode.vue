@@ -183,7 +183,7 @@ function onResize(resizeEvent) {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
 }
 
 .canvas-prompt-node.selected {
@@ -313,7 +313,7 @@ function onResize(resizeEvent) {
   opacity: 1;
 }
 
-:deep(.resize-line) { border-color: transparent !important; border-width: 6px !important; }
+:deep(.resize-line) { border-color: transparent !important; border-width: 12px !important; }
 :deep(.resize-handle) {
   width: 10px !important; height: 10px !important;
   border-radius: 2px !important;

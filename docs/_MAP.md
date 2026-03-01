@@ -79,6 +79,7 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 - Extension assembly: `src/editor/setup.js` - creates all CodeMirror extensions
 - Editor component: `src/components/editor/TextEditor.vue` - mounts CodeMirror, wires extensions
 - Pane/tab logic: `src/stores/editor.js` - recursive pane tree data structure
+- Editor state persistence: `src/services/editorPersistence.js` - save/restore pane tree to `.shoulders/editor-state.json`, parallel tab validation
 - See [editor-system.md](editor-system.md)
 
 ### Want to change AI ghost suggestions?
@@ -187,6 +188,7 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 - Footer: `src/components/layout/Footer.vue` - status bar, git branch, word count, cursor pos, inline status messages (save, commit)
 - Toast notifications: `src/stores/toast.js` + `src/components/layout/ToastContainer.vue` - attention-worthy alerts (e.g. first PDF creation). Footer is for routine status; toasts are for "pay attention" moments.
 - Sidebar resize: `src/components/layout/ResizeHandle.vue`
+- **What persists across restarts**: see [ui-layout.md](ui-layout.md#what-persists-across-restarts) — full table of localStorage keys, `.shoulders/` files, and what is session-only
 - See [ui-layout.md](ui-layout.md)
 
 ### Want to change the theme or colors?
@@ -299,6 +301,7 @@ The `/web` folder contains both the web front and backend (Nuxt) of the Shoulder
 | `tokenEstimator.js` | Token estimation (~4 chars/token), conversation totals, sliding-window truncation |
 | `tokenUsage.js` | Provider-specific usage normalization, 7-model pricing table, cost calculation, formatting |
 | `openalex.js` | OpenAlex API: search works, abstract reconstruction (inverted index → text), CSL-JSON conversion |
+| `editorPersistence.js` | Editor state persistence: `saveState()`, `loadState()`, `findInvalidTabs()` — pane tree ↔ `.shoulders/editor-state.json`, parallel tab validation |
 
 #### Editor Extensions (`src/editor/`)
 | File | Purpose |

@@ -3,10 +3,9 @@ import { telemetryEvents } from '../../../db/schema.js'
 import { generateId } from '../../../utils/id.js'
 
 const ALLOWED_EVENT_TYPES = new Set([
-  'app_open', 'app_close', 'file_open', 'file_save',
-  'chat_message', 'chat_tool_use', 'ghost_accept', 'ghost_reject',
-  'export_pdf', 'export_docx', 'export_typst',
-  'theme_change', 'workspace_open', 'error',
+  'app_open', 'workspace_open', 'file_open',
+  'chat_send', 'ghost_trigger', 'ghost_accept',
+  'ref_import', 'theme_change', 'export_pdf', 'error',
 ])
 
 export default defineEventHandler(async (event) => {

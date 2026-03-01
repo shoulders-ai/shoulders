@@ -33,10 +33,15 @@ import { computed } from 'vue'
 import { useLinksStore } from '../../stores/links'
 import { useEditorStore } from '../../stores/editor'
 
+const props = defineProps({
+  overrideActiveFile: { type: String, default: null },
+})
+
 const linksStore = useLinksStore()
 const editorStore = useEditorStore()
 
-const currentFilePath = computed(() => editorStore.activeTab)
+// Use overrideActiveFile prop when provided (e.g., from right sidebar when chat tab is focused)
+const currentFilePath = computed(() => props.overrideActiveFile || editorStore.activeTab)
 
 const currentFileName = computed(() => {
   if (!currentFilePath.value) return '...'

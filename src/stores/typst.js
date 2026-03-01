@@ -77,6 +77,7 @@ export const useTypstStore = defineStore('typst', {
           settings: settings || null,
         })
         this.exporting[mdPath] = result.success ? 'done' : 'error'
+        if (result.success) import('../services/telemetry').then(({ events }) => events.exportPdf())
         return result
       } catch (e) {
         this.exporting[mdPath] = 'error'

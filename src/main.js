@@ -11,6 +11,11 @@ import App from './App.vue'
 import './style.css'
 import 'katex/dist/katex.min.css'
 
+import { initTelemetry, setAppVersion } from './services/telemetry'
+
 const app = createApp(App)
 app.use(createPinia())
 app.mount('#app')
+
+initTelemetry()
+setAppVersion(__APP_VERSION__)

@@ -167,6 +167,7 @@ async function triggerGhostSuggestion(view, pos, getWorkspace, getSystemPrompt, 
     const systemPrompt = getSystemPrompt()
     const instructions = getInstructions ? getInstructions() : ''
 
+    import('../services/telemetry').then(({ events }) => events.ghostTrigger())
     const result = await getGhostSuggestions(before, after, systemPrompt, workspace, instructions)
     const { suggestions, usage, provider, modelId, noAccess, networkError } = result
 
@@ -241,6 +242,7 @@ function acceptGhostSuggestion(view) {
     effects: clearGhost.of(null),
     annotations: ghostAcceptAnnotation.of(true),
   })
+  import('../services/telemetry').then(({ events }) => events.ghostAccept())
 }
 
 /**

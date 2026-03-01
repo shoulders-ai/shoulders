@@ -96,152 +96,26 @@
         :refKey="refKey"
         :paneId="paneId"
       />
-      <div v-else-if="!activeTab" class="empty-pane">
-        <!-- Centered content -->
-        <div class="empty-pane-center">
-          <div class="empty-pane-col">
-            <div class="empty-pane-brand">Shoulders</div>
-            <div class="empty-pane-rule"></div>
-
-            <!-- A: Returning user — recent files -->
-            <template v-if="recentFiles.length > 0">
-              <div class="empty-pane-group">
-                <div class="empty-pane-label">Recent</div>
-                <button
-                  v-for="entry in recentFiles"
-                  :key="entry.path"
-                  class="empty-pane-row empty-pane-file"
-                  @click="editorStore.openFile(entry.path)"
-                >
-                  <svg class="empty-pane-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                  </svg>
-                  <span class="truncate">{{ fileName(entry.path) }}</span>
-                </button>
-              </div>
-              <div class="empty-pane-group">
-                <button class="empty-pane-row" @click="triggerSearch">
-                  <span>Search files</span>
-                  <span class="empty-pane-shortcut">{{ modKey }}+P</span>
-                </button>
-                <button class="empty-pane-row" @click="triggerNewFile">
-                  <span>New file</span>
-                  <span class="empty-pane-shortcut">{{ modKey }}+N</span>
-                </button>
-              </div>
-            </template>
-
-            <!-- B: First time in this workspace (has files but no recents) -->
-            <template v-else-if="hasWorkspaceFiles">
-              <div class="empty-pane-group">
-                <button class="empty-pane-row" @click="triggerSearch">
-                  <span>Search files</span>
-                  <span class="empty-pane-shortcut">{{ modKey }}+P</span>
-                </button>
-                <button class="empty-pane-row" @click="triggerNewFile">
-                  <span>New file</span>
-                  <span class="empty-pane-shortcut">{{ modKey }}+N</span>
-                </button>
-              </div>
-            </template>
-
-            <!-- C: Empty workspace (no files) -->
-            <template v-else>
-              <div class="empty-pane-group">
-                <button class="empty-pane-row" @click="triggerNewFile">
-                  <span>New file</span>
-                  <span class="empty-pane-shortcut">{{ modKey }}+N</span>
-                </button>
-              </div>
-            </template>
-          </div>
-        </div>
-
-        <!-- Bottom-pinned chat input -->
-        <div class="empty-pane-chat">
-          <div class="empty-pane-chat-inner">
-            <div class="empty-pane-chat-box" :class="{ 'empty-pane-chat-focused': chatInputFocused }">
-              <input
-                ref="chatInputRef"
-                v-model="chatInput"
-                class="empty-pane-chat-input"
-                placeholder="Ask anything..."
-                autocomplete="off"
-                autocorrect="off"
-                @keydown="onChatKeydown"
-                @focus="chatInputFocused = true"
-                @blur="chatInputFocused = false"
-              />
-              <button
-                class="empty-pane-chat-send"
-                :class="{ 'empty-pane-chat-send-active': chatInput.trim() }"
-                @click="sendFromEmptyState"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M2.5 2.5l11 5.5-11 5.5V9.5L9 8l-6.5-1.5z"/>
-                </svg>
-              </button>
-            </div>
-            <!-- Model picker row -->
-            <div class="empty-pane-chat-footer">
-              <button
-                ref="emptyModelBtnRef"
-                class="empty-pane-model-btn"
-                @click.stop="showEmptyModelPicker = !showEmptyModelPicker"
-              >
-                {{ selectedModelName }}
-                <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor"><path d="M1 3l4 4 4-4z"/></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Model dropdown (teleported to escape overflow) -->
-        <Teleport to="body">
-          <template v-if="showEmptyModelPicker">
-            <div class="fixed inset-0 z-[90]" @click="showEmptyModelPicker = false"></div>
-            <div
-              class="fixed z-[100] rounded border min-w-[160px] py-1"
-              :style="emptyModelDropdownPos"
-              style="background: var(--bg-secondary); border-color: var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.3);"
-            >
-              <template v-if="emptyAvailableModels.length > 0">
-                <div v-for="m in emptyAvailableModels" :key="m.id"
-                  class="px-3 py-1.5 text-[13px] cursor-pointer flex items-center"
-                  style="color: var(--fg-secondary);"
-                  @mouseover="$event.target.style.background = 'var(--bg-hover)'"
-                  @mouseleave="$event.target.style.background = 'transparent'"
-                  @click="selectEmptyModel(m)"
-                >
-                  <span v-if="m.id === selectedModelId" class="mr-1.5" style="color: var(--accent);">&#x2713;</span>
-                  <span v-else style="width: 16px; display: inline-block;"></span>
-                  {{ m.name }}
-                </div>
-              </template>
-              <div v-else class="px-3 py-2 text-[11px]" style="color: var(--fg-muted);">
-                No models available. Add API keys in Settings.
-              </div>
-            </div>
-          </template>
-        </Teleport>
+      <div v-else-if="activeTab && viewerType === 'chat'" class="h-full" :data-chat-panel="paneId">
+        <ChatPanel
+          :key="activeTab"
+          :filePath="activeTab"
+          :paneId="paneId"
+        />
       </div>
+      <NewTab v-else :paneId="paneId" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import { computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useEditorStore } from '../../stores/editor'
 import { useFilesStore } from '../../stores/files'
 import { useChatStore } from '../../stores/chat'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useToastStore } from '../../stores/toast'
-import { modKey, isMac } from '../../platform'
-import { getViewerType, isReferencePath, referenceKeyFromPath, getLanguage, isLatex, isRmdOrQmd } from '../../utils/fileTypes'
+import { getViewerType, isReferencePath, referenceKeyFromPath, getLanguage, isLatex, isRmdOrQmd, isChatTab, getChatSessionId } from '../../utils/fileTypes'
 import { sendCode, runFile, renderDocument } from '../../services/codeRunner'
 import { useLatexStore } from '../../stores/latex'
 import TabBar from './TabBar.vue'
@@ -258,6 +132,8 @@ const NotebookReviewBar = defineAsyncComponent(() => import('./NotebookReviewBar
 const LatexPdfViewer = defineAsyncComponent(() => import('./LatexPdfViewer.vue'))
 const MarkdownPreview = defineAsyncComponent(() => import('./MarkdownPreview.vue'))
 const CanvasEditor = defineAsyncComponent(() => import('./CanvasEditor.vue'))
+const ChatPanel = defineAsyncComponent(() => import('./ChatPanel.vue'))
+const NewTab = defineAsyncComponent(() => import('./NewTab.vue'))
 
 const props = defineProps({
   paneId: { type: String, required: true },
@@ -276,107 +152,6 @@ const toastStore = useToastStore()
 
 const isActive = computed(() => editorStore.activePaneId === props.paneId)
 const viewerType = computed(() => props.activeTab ? getViewerType(props.activeTab) : null)
-const recentFiles = computed(() => editorStore.recentFilesForEmptyState)
-const hasWorkspaceFiles = computed(() => filesStore.flatFiles.length > 0)
-
-// ─── Chat input in empty state ────────────────────────────────────
-const chatInput = ref('')
-const chatInputRef = ref(null)
-const chatInputFocused = ref(false)
-const showEmptyModelPicker = ref(false)
-const emptyModelBtnRef = ref(null)
-const selectedModelId = ref(null)
-
-// Model picker for empty state
-const emptyAvailableModels = computed(() => {
-  const config = workspace.modelsConfig
-  if (!config?.models) return []
-  return config.models.filter(m => {
-    const providerConfig = config.providers?.[m.provider]
-    const keyEnv = providerConfig?.apiKeyEnv
-    const key = keyEnv ? workspace.apiKeys?.[keyEnv] : null
-    const hasDirectKey = key && !key.includes('your-')
-    const hasProxyAccess = !!workspace.shouldersAuth?.token
-    return hasDirectKey || hasProxyAccess
-  })
-})
-
-const selectedModelName = computed(() => {
-  const config = workspace.modelsConfig
-  if (!config?.models) return 'Sonnet'
-  const id = selectedModelId.value || workspace.selectedModelId || config.models.find(m => m.default)?.id || 'sonnet'
-  const model = config.models.find(m => m.id === id)
-  return model?.name || 'Sonnet'
-})
-
-const emptyModelDropdownPos = computed(() => {
-  const el = emptyModelBtnRef.value
-  if (!el) return {}
-  const rect = el.getBoundingClientRect()
-  return {
-    bottom: (window.innerHeight - rect.top + 4) + 'px',
-    left: rect.left + 'px',
-  }
-})
-
-function selectEmptyModel(m) {
-  selectedModelId.value = m.id
-  workspace.setSelectedModelId(m.id)
-  showEmptyModelPicker.value = false
-}
-
-function onChatKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    sendFromEmptyState()
-  }
-}
-
-async function sendFromEmptyState() {
-  const text = chatInput.value.trim()
-  if (!text) return
-
-  // Archive current chat and create a new session
-  const modelId = selectedModelId.value || workspace.selectedModelId
-  await chatStore.archiveAndNewChat()
-  const sessionId = chatStore.activeSessionId
-
-  // Apply the selected model to the new session
-  if (modelId) {
-    const session = chatStore.sessions.find(s => s.id === sessionId)
-    if (session) session.modelId = modelId
-  }
-
-  // Clear the input
-  chatInput.value = ''
-
-  // Open the right sidebar and focus chat
-  if (!workspace.rightSidebarOpen) {
-    workspace.rightSidebarOpen = true
-    localStorage.setItem('rightSidebarOpen', 'true')
-  }
-  window.dispatchEvent(new CustomEvent('open-chat'))
-
-  // Send the message to the new session
-  await nextTick()
-  chatStore.sendMessage(sessionId, { text })
-}
-
-function fileName(path) {
-  return path.split('/').pop() || path
-}
-
-function triggerSearch() {
-  document.dispatchEvent(new KeyboardEvent('keydown', {
-    key: 'p', code: 'KeyP', metaKey: isMac, ctrlKey: !isMac, bubbles: true, cancelable: true,
-  }))
-}
-
-function triggerNewFile() {
-  document.dispatchEvent(new KeyboardEvent('keydown', {
-    key: 'n', code: 'KeyN', metaKey: isMac, ctrlKey: !isMac, bubbles: true, cancelable: true,
-  }))
-}
 
 const refKey = computed(() => props.activeTab && isReferencePath(props.activeTab) ? referenceKeyFromPath(props.activeTab) : null)
 
@@ -395,6 +170,11 @@ function selectTab(path) {
 }
 
 function closeTab(path) {
+  // Auto-save chat sessions on tab close
+  if (isChatTab(path)) {
+    const sid = getChatSessionId(path)
+    if (sid) chatStore.saveSession(sid)
+  }
   editorStore.closeTab(props.paneId, path)
 }
 
@@ -505,8 +285,7 @@ async function handleAskAiFix(err) {
   const fileName = props.activeTab.split('/').pop()
   const lineInfo = err.line ? ` line ${err.line}` : ''
   const message = `LaTeX compilation error in ${fileName}${lineInfo}:\n\`\`\`\n${err.message}\n\`\`\`\n${context ? `Code around the error:\n\`\`\`tex\n${context}\n\`\`\`\n` : ''}Briefly explain what this means, then fix it.`
-  window.dispatchEvent(new CustomEvent('open-chat'))
-  window.dispatchEvent(new CustomEvent('chat-prefill', { detail: { message } }))
+  editorStore.openChatBeside({ prefill: message })
 }
 
 function handlePreviewMarkdown() {
@@ -614,10 +393,7 @@ async function handleExportPdf(settingsOverride) {
       }))
     } else if (result?.errors?.length) {
       const errMsg = result.errors.map(e => e.message).join('\n')
-      window.dispatchEvent(new CustomEvent('open-chat'))
-      window.dispatchEvent(new CustomEvent('chat-prefill', {
-        detail: { message: `Typst export error:\n\`\`\`\n${errMsg}\n\`\`\`\nBriefly explain and fix.` },
-      }))
+      editorStore.openChatBeside({ prefill: `Typst export error:\n\`\`\`\n${errMsg}\n\`\`\`\nBriefly explain and fix.` })
     }
   } catch (e) {
     console.error('PDF export failed:', e)
@@ -673,219 +449,3 @@ function closePane() {
 }
 </script>
 
-<style scoped>
-/* ── Layout ── */
-.empty-pane {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.empty-pane-center {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-}
-
-.empty-pane-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 280px;
-}
-
-/* ── Brand wordmark ── */
-.empty-pane-brand {
-  font-family: 'Lora', ui-serif, Georgia, serif;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 2.25rem; /* text-4xl approx, consistent with original vision */
-  color: var(--fg-primary);
-  opacity: 0.25; /* Subtlety key to "sophisticated" */
-  letter-spacing: -0.02em;
-}
-
-/* ── Editorial rule ── */
-.empty-pane-rule {
-  width: 32px;
-  height: 1px;
-  background: var(--fg-muted);
-  opacity: 0.2;
-  margin: 16px 0 24px;
-}
-
-/* ── Section groups ── */
-.empty-pane-group {
-  width: 100%;
-}
-
-.empty-pane-group + .empty-pane-group {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
-/* ── Section label ── */
-.empty-pane-label {
-  font-size: 9px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--fg-muted);
-  padding: 0 10px 6px;
-  opacity: 0.8;
-}
-
-/* ── Shared interactive row ── */
-.empty-pane-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 6px 10px;
-  border: none;
-  background: transparent;
-  color: var(--fg-secondary);
-  font-size: 13px;
-  line-height: 1.5;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s, color 0.15s;
-}
-
-.empty-pane-row:hover {
-  background: var(--bg-hover);
-  color: var(--fg-primary);
-}
-
-/* ── File entries ── */
-.empty-pane-file {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start; /* Ensure icon and text are grouped left */
-}
-
-.empty-pane-icon {
-  flex-shrink: 0;
-  margin-right: 8px;
-  color: var(--fg-muted);
-  opacity: 0.7;
-}
-
-.empty-pane-row:hover .empty-pane-icon {
-  color: var(--fg-secondary);
-  opacity: 1;
-}
-
-.truncate {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ── Shortcut hint ── */
-.empty-pane-shortcut {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--fg-secondary);
-  opacity: 1;
-  flex-shrink: 0;
-  margin-left: 16px;
-  background: var(--bg-secondary);
-  padding: 2px 4px;
-  border-radius: 3px;
-}
-
-/* ── Bottom chat input ── */
-.empty-pane-chat {
-  flex-shrink: 0;
-  display: flex;
-  justify-content: center;
-  padding: 0 24px 20px;
-}
-
-.empty-pane-chat-inner {
-  width: 100%;
-  max-width: 560px;
-}
-
-.empty-pane-chat-box {
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-secondary);
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.empty-pane-chat-focused {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.empty-pane-chat-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: var(--fg-primary);
-  font-size: 13.5px;
-  line-height: 1.5;
-  padding: 10px 14px;
-  outline: none;
-  font-family: inherit;
-}
-
-.empty-pane-chat-input::placeholder {
-  color: var(--fg-muted);
-}
-
-.empty-pane-chat-send {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  margin-right: 6px;
-  border: none;
-  border-radius: 6px;
-  background: var(--bg-tertiary);
-  color: var(--fg-muted);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
-}
-
-.empty-pane-chat-send-active {
-  background: var(--accent);
-  color: var(--bg-primary);
-}
-
-.empty-pane-chat-footer {
-  display: flex;
-  align-items: center;
-  padding: 4px 2px 0;
-}
-
-.empty-pane-model-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--fg-muted);
-  font-size: 12px;
-  cursor: pointer;
-  transition: color 0.15s;
-}
-
-.empty-pane-model-btn:hover {
-  color: var(--fg-secondary);
-}
-</style>

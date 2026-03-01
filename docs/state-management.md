@@ -119,6 +119,12 @@ Seven Pinia stores. All defined using the Options API pattern (`defineStore('nam
 - `registerEditorView/unregisterEditorView/getEditorView` - EditorView instance management
 - `setPdfViewerState(filePath, state)` - Merge zoom/currentPage into `pdfViewerStates[filePath]`
 - `getPdfViewerState(filePath)` - Read saved PDF viewer state (returns `null` if none)
+- `saveEditorState()` - Debounced (500ms) save of pane tree to `.shoulders/editor-state.json`. Called automatically by all tree-mutating actions.
+- `saveEditorStateImmediate()` - Immediate save (no debounce). Called by App.vue before workspace close.
+- `restoreEditorState()` - Optimistic restore: applies tree instantly, validates tabs in parallel background. See [editor-system.md](editor-system.md#editor-state-persistence).
+
+### Extracted Service
+- `src/services/editorPersistence.js` — `saveState()`, `loadState()`, `findInvalidTabs()`. All disk I/O and validation logic lives here; store actions are thin wrappers.
 
 ## Store: chat
 

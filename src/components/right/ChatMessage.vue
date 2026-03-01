@@ -7,27 +7,6 @@
 
     <!-- User message: bubble (right-aligned) -->
     <div v-if="message.role === 'user'" class="flex flex-col items-end">
-      <!-- File attachments (images, PDFs) above the text bubble -->
-      <div v-if="fileParts.length > 0" class="chat-file-parts">
-        <template v-for="(fp, i) in fileParts" :key="i">
-          <img v-if="fp.mediaType?.startsWith('image/') && fp.url && !fp._stripped"
-            :src="fp.url" class="chat-file-image-thumb" :alt="fp.filename || 'Image'" />
-          <div v-else-if="fp.mediaType === 'application/pdf'" class="chat-file-badge">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M9 1H4a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V5z"/>
-              <path d="M9 1v4h4"/>
-            </svg>
-            {{ fp.filename || 'PDF' }}
-          </div>
-          <div v-else-if="fp._stripped" class="chat-file-badge chat-file-badge-stripped">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M9 1H4a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V5z"/>
-              <path d="M9 1v4h4"/>
-            </svg>
-            {{ fp.filename || 'File' }}
-          </div>
-        </template>
-      </div>
       <div class="chat-msg-user">
         <div class="chat-md ui-text-lg" :class="{ 'chat-user-clamped': !userExpanded }" v-html="renderedContent"></div>
         <button v-if="isLongUserMessage && !userExpanded"
@@ -294,13 +273,6 @@ const isLongUserMessage = computed(() => {
   return text.split('\n').length > 5 || text.length > 300
 })
 
-// File parts (images, PDFs) from UIMessage parts
-const fileParts = computed(() => {
-  const msg = props.message
-  if (!msg.parts || msg.role !== 'user') return []
-  return msg.parts.filter(p => p.type === 'file')
-})
-
 // Context: from metadata (new) or message fields (legacy)
 const fileRefs = computed(() => {
   return props.message.metadata?.fileRefs || props.message.fileRefs || []
@@ -332,7 +304,12 @@ const isWaitingForContent = computed(() => {
     return props.message.status === 'streaming' && !textContent.value && !displayParts.value.some(p => isToolPart(p))
   }
   const status = chat.state.statusRef.value
-  return (status === 'submitted' || status === 'streaming') && !textContent.value && displayParts.value.length === 0
+  if (status !== 'submitted' && status !== 'streaming') return false
+  if (textContent.value) return false
+  // Hide dots when tool parts exist — they have their own pending indicator.
+  // (part.state is mutated in place by AI SDK and isn't reactive, so we can't
+  // reliably distinguish pending vs completed tools here.)
+  return !displayParts.value.some(p => isToolPart(p))
 })
 
 function isReasoningActive(partIdx) {
@@ -403,6 +380,9 @@ function copyContent() {
   padding: 2px 0;
 }
 .chat-msg-user {
+  position: relative;
+}
+.chat-msg-assistant {
   position: relative;
 }
 .chat-msg-copy {

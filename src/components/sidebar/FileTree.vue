@@ -887,15 +887,6 @@ async function createTypedFile(dir, ext) {
 
   const path = await files.createFile(dir, name)
   if (path) {
-    // Write initial content for canvas files
-    if (ext === '.canvas') {
-      const content = JSON.stringify({
-        version: 1, viewport: { x: 0, y: 0, zoom: 1 },
-        nodes: [], edges: [], aiState: { messages: {} },
-      }, null, 2) + '\n'
-      await invoke('write_file', { path, content })
-      files.fileContents[path] = content
-    }
     editor.openFile(path)
     // Wait for Vue to render the new FileTreeItem before starting rename
     await nextTick()
@@ -916,6 +907,10 @@ function handleNewMenuCreate({ ext, isDir }) {
   } else if (!ext) {
     // "Other..." — generic inline create
     startInlineCreate(dir, false)
+  } else if (ext === '.canvas') {
+    // Canvas: name first, then create (avoids CanvasEditor save-on-unmount recreating old file)
+    startInlineCreate(dir, false)
+    renaming.autoExtension = '.canvas'
   } else {
     createTypedFile(dir, ext)
   }
@@ -930,6 +925,9 @@ function handleContextCreate({ ext, isDir }) {
     startInlineCreate(dir, true)
   } else if (!ext) {
     startInlineCreate(dir, false)
+  } else if (ext === '.canvas') {
+    startInlineCreate(dir, false)
+    renaming.autoExtension = '.canvas'
   } else {
     createTypedFile(dir, ext)
   }

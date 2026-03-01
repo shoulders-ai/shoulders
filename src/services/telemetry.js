@@ -110,9 +110,13 @@ function stopFlushing() {
 // Convenience event helpers
 export const events = {
   appOpen: () => trackEvent('app_open'),
+  workspaceOpen: () => trackEvent('workspace_open'),
   fileOpen: (ext) => trackEvent('file_open', { ext }),
   chatSend: (provider) => trackEvent('chat_send', { provider }),
   ghostTrigger: () => trackEvent('ghost_trigger'),
+  ghostAccept: () => trackEvent('ghost_accept'),
   refImport: (method) => trackEvent('ref_import', { method }),
   themeChange: (theme) => trackEvent('theme_change', { theme }),
+  exportPdf: () => trackEvent('export_pdf'),
+  appError: (message) => trackEvent('error', { message }),
 }

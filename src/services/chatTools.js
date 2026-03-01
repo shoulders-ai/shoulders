@@ -736,6 +736,7 @@ export function getAiTools(workspace) {
         if (urls.length === 0) throw new Error('No URLs provided.')
         if (urls.length > 10) throw new Error('Maximum 10 URLs per request.')
 
+        // Try Exa first (fast, rich results)
         const hasAccess = await _resolveSearchAccess(workspace)
         if (hasAccess) {
           try {
@@ -744,7 +745,7 @@ export function getAiTools(workspace) {
               text: { maxCharacters: 10000 },
               livecrawl: 'fallback',
             }, workspace)
-            if (data.results && data.results.length > 0) {
+            if (data?.results?.length > 0) {
               return data.results.map(r => {
                 const parts = [`## ${r.title || 'Untitled'}`, `URL: ${r.url}`]
                 if (r.author) parts.push(`Author: ${r.author}`)
@@ -756,13 +757,20 @@ export function getAiTools(workspace) {
           } catch (e) { console.warn('[fetch_url] Exa failed, falling back to direct fetch:', e) }
         }
 
+        // Fallback: direct fetch with timeout
+        const fetchWithTimeout = (url) => Promise.race([
+          invoke('fetch_url_content', { url }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Fetch timed out after 15s')), 15000)),
+        ])
+
         if (urls.length === 1) {
-          return await invoke('fetch_url_content', { url: urls[0] })
+          try { return await fetchWithTimeout(urls[0]) }
+          catch (e) { return `Error fetching ${urls[0]}: ${e.message || e}` }
         }
         const results = []
         for (const url of urls) {
           try {
-            const text = await invoke('fetch_url_content', { url })
+            const text = await fetchWithTimeout(url)
             results.push(`## ${url}\n${text}`)
           } catch (e) {
             results.push(`## ${url}\nError: ${e}`)

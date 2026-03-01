@@ -20,10 +20,17 @@
         @mouseenter="onMouseEnter(idx)"
         @mousedown.middle.prevent="$emit('close-tab', tab)"
       >
+        <!-- Chat tab sparkle icon -->
+        <svg v-if="isChatTab(tab)" class="shrink-0 mr-1" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+          <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275z"/>
+        </svg>
         <span class="truncate max-w-[120px]">{{ fileName(tab) }}</span>
 
-        <!-- Unsaved indicator -->
-        <span v-if="dirtyFiles.has(tab)" class="ml-1.5 w-2 h-2 rounded-full shrink-0" style="background: var(--fg-muted);"></span>
+        <!-- Chat streaming indicator -->
+        <span v-if="isChatTab(tab) && isChatStreaming(tab)" class="ml-1.5 w-2 h-2 rounded-full shrink-0 chat-streaming-dot"></span>
+
+        <!-- Unsaved indicator (not for chat tabs) -->
+        <span v-else-if="!isChatTab(tab) && dirtyFiles.has(tab)" class="ml-1.5 w-2 h-2 rounded-full shrink-0" style="background: var(--fg-muted);"></span>
 
         <!-- Close button -->
         <button
@@ -276,7 +283,8 @@ import { useReferencesStore } from '../../stores/references'
 import { useLatexStore } from '../../stores/latex'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useTypstStore } from '../../stores/typst'
-import { isReferencePath, referenceKeyFromPath, isRunnable, isRmdOrQmd, isLatex, isMarkdown, isPreviewPath } from '../../utils/fileTypes'
+import { isReferencePath, referenceKeyFromPath, isRunnable, isRmdOrQmd, isLatex, isMarkdown, isPreviewPath, isChatTab, getChatSessionId } from '../../utils/fileTypes'
+import { useChatStore } from '../../stores/chat'
 import PdfSettingsPopover from './PdfSettingsPopover.vue'
 
 const props = defineProps({
@@ -289,6 +297,7 @@ const emit = defineEmits(['select-tab', 'close-tab', 'split-vertical', 'split-ho
 
 const workspace = useWorkspaceStore()
 const typstStore = useTypstStore()
+const chatStore = useChatStore()
 
 // PDF settings popover
 const pdfSettingsOpen = ref(false)
@@ -315,6 +324,15 @@ function onPdfSettingsExport(settings) {
   }
   pdfSettingsOpen.value = false
   emit('export-pdf', settings)
+}
+
+function isChatStreaming(path) {
+  if (!isChatTab(path)) return false
+  const sid = getChatSessionId(path)
+  const chat = chatStore.getChatInstance(sid)
+  if (!chat) return false
+  const status = chat.state.statusRef.value
+  return status === 'submitted' || status === 'streaming'
 }
 
 const showRunButtons = computed(() => props.activeTab && isRunnable(props.activeTab))
@@ -413,6 +431,20 @@ const ghostY = ref(0)
 const ghostLabel = ref('')
 
 function fileName(path) {
+  if (isChatTab(path)) {
+    const sid = getChatSessionId(path)
+    const session = chatStore.sessions.find(s => s.id === sid)
+    if (session?.label) {
+      const label = session.label
+      return label.length > 28 ? label.slice(0, 26) + '...' : label
+    }
+    const meta = chatStore.allSessionsMeta.find(m => m.id === sid)
+    if (meta?.label) {
+      const label = meta.label
+      return label.length > 28 ? label.slice(0, 26) + '...' : label
+    }
+    return 'New chat'
+  }
   if (isReferencePath(path)) {
     const key = referenceKeyFromPath(path)
     const r = referencesStore.getByKey(key)
@@ -526,6 +558,14 @@ function updateDropIndicator(mouseX) {
 </script>
 
 <style scoped>
+.chat-streaming-dot {
+  background: var(--accent);
+  animation: chat-pulse 1.5s ease-in-out infinite;
+}
+@keyframes chat-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
 .tex-spinner {
   display: inline-block;
   width: 10px;

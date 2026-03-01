@@ -142,8 +142,6 @@ async function askAiToFix(err) {
   const lineInfo = err.line ? ` line ${err.line}` : ''
   const message = `LaTeX compilation error in ${fileName}${lineInfo}:\n\`\`\`\n${err.message}\n\`\`\`\n${context ? `Code around the error:\n\`\`\`tex\n${context}\n\`\`\`\n` : ''}Briefly explain what this means, then fix it.`
 
-  window.dispatchEvent(new CustomEvent('open-chat'))
-  if (!chatStore.activeSession) chatStore.createSession()
   window.dispatchEvent(new CustomEvent('chat-prefill', {
     detail: { message },
   }))

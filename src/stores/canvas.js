@@ -1,9 +1,8 @@
 import { defineStore } from 'pinia'
-import { streamText, stepCountIs } from 'ai'
+import { streamText } from 'ai'
 import { nanoid } from './utils'
 import { useWorkspaceStore } from './workspace'
 import { resolveApiAccess } from '../services/apiClient'
-import { getAiTools } from '../services/chatTools'
 import { getThinkingConfig } from '../services/chatModels'
 import { buildBaseSystemPrompt } from '../services/systemPrompt'
 import { calculateCost } from '../services/tokenUsage'
@@ -189,13 +188,13 @@ export const useCanvasStore = defineStore('canvas', {
       promptNode.data.runCount = (promptNode.data.runCount || 0) + 1
       const versionLabel = promptNode.data.runCount > 1 ? `v${promptNode.data.runCount}` : null
 
-      // Create response text node
+      // Create response text node — space siblings by node width + gap
       const childY = promptNode.position.y + 160
-      const childX = promptNode.position.x + (promptNode.data.runCount > 1 ? (promptNode.data.runCount - 1) * 60 : 0)
+      const childX = promptNode.position.x + (promptNode.data.runCount > 1 ? (promptNode.data.runCount - 1) * 340 : 0)
 
       const childId = this._editor.addTextNode(
         { x: childX, y: childY },
-        { content: '', aiGenerated: true, versionLabel, _streaming: true, width: 320 }
+        { content: '', aiGenerated: true, versionLabel, _streaming: true, _parentPromptId: promptNodeId, width: 320 }
       )
 
       edges.push({
@@ -218,14 +217,13 @@ export const useCanvasStore = defineStore('canvas', {
       if (graphSummary) system += '\n\n# Canvas Context\n' + graphSummary
       system += '\n\n# Canvas Output Format\nWhen responding on the canvas, wrap your visible response in <node-content> tags. Think and plan outside the tags — only content inside <node-content>...</node-content> appears in the node. Optionally start with <node-title>Your Title</node-title> inside the content block to set the node title.'
 
-      // Build model + tools
+      // Build model (no tools — canvas agent only produces text nodes)
       const tauriFetch = createTauriFetch()
       const model = createModel(access, tauriFetch)
       const provider = access.providerHint || access.provider
       const modelEntry = workspace.modelsConfig?.models?.find(m => m.id === modelId)
       const thinkingConfig = getThinkingConfig(access.model, provider, modelEntry?.thinking)
       const providerOptions = buildProviderOptions(thinkingConfig, provider)
-      const tools = getAiTools(workspace)
 
       const abortController = new AbortController()
       this._abortController = abortController
@@ -238,8 +236,6 @@ export const useCanvasStore = defineStore('canvas', {
           model,
           system,
           messages: apiMessages,
-          tools,
-          stopWhen: stepCountIs(5),
           providerOptions,
           abortSignal: abortController.signal,
           onStepFinish({ usage, providerMetadata }) {
@@ -288,6 +284,116 @@ export const useCanvasStore = defineStore('canvas', {
           this._editor.updateNodeData(childId, { _streaming: false })
         } else {
           this._editor.updateNodeData(childId, {
+            content: contentFilter.getDisplay() + '\n\n' + formatChatApiError(e.message || String(e)),
+            _streaming: false,
+          })
+        }
+        this.streamingNodeId = null
+        this._editor.scheduleSave()
+      } finally {
+        this._abortController = null
+      }
+    },
+
+    async regenerateNode(nodeId) {
+      if (!this._editor || this.streamingNodeId) return
+
+      const nodes = this._editor.getNodes()
+      const edges = this._editor.getEdges()
+      const node = nodes.find(n => n.id === nodeId)
+      if (!node || !node.data._parentPromptId) return
+
+      const promptNode = nodes.find(n => n.id === node.data._parentPromptId)
+      if (!promptNode || promptNode.type !== 'prompt') return
+
+      const workspace = useWorkspaceStore()
+      const modelId = promptNode.data.modelId || workspace.selectedModelId || 'sonnet'
+      const access = await resolveApiAccess({ modelId }, workspace)
+      if (!access) return
+
+      // Collect DAG path from the parent prompt
+      const { collectDagPath, buildApiMessagesFromDag, buildGraphSummary } = await import('../services/canvasMessages')
+      const path = collectDagPath(node.data._parentPromptId, nodes, edges)
+
+      // Clear existing content and start streaming into this node
+      this._editor.updateNodeData(nodeId, { content: '', title: null, _streaming: true })
+      this.streamingNodeId = nodeId
+
+      // Remove old aiState for this node
+      delete this.aiState.messages[nodeId]
+
+      const apiMessages = buildApiMessagesFromDag(path, nodes, this.aiState)
+
+      let system = buildBaseSystemPrompt(workspace)
+      if (workspace.systemPrompt) system += '\n\n' + workspace.systemPrompt
+      if (workspace.instructions) system += '\n\n' + workspace.instructions
+      const graphSummary = buildGraphSummary(nodes, edges)
+      if (graphSummary) system += '\n\n# Canvas Context\n' + graphSummary
+      system += '\n\n# Canvas Output Format\nWhen responding on the canvas, wrap your visible response in <node-content> tags. Think and plan outside the tags — only content inside <node-content>...</node-content> appears in the node. Optionally start with <node-title>Your Title</node-title> inside the content block to set the node title.'
+
+      const tauriFetch = createTauriFetch()
+      const model = createModel(access, tauriFetch)
+      const provider = access.providerHint || access.provider
+      const modelEntry = workspace.modelsConfig?.models?.find(m => m.id === modelId)
+      const thinkingConfig = getThinkingConfig(access.model, provider, modelEntry?.thinking)
+      const providerOptions = buildProviderOptions(thinkingConfig, provider)
+
+      const abortController = new AbortController()
+      this._abortController = abortController
+
+      const contentFilter = createContentFilter()
+      let fullContent = ''
+
+      try {
+        const result = streamText({
+          model,
+          system,
+          messages: apiMessages,
+          providerOptions,
+          abortSignal: abortController.signal,
+          onStepFinish({ usage, providerMetadata }) {
+            if (usage) {
+              const normalized = convertSdkUsage(usage, providerMetadata, provider)
+              normalized.cost = calculateCost(normalized, access.model)
+              import('./usage').then(({ useUsageStore }) => {
+                useUsageStore().record({
+                  usage: normalized, feature: 'canvas',
+                  provider, modelId: access.model,
+                })
+              }).catch(() => {})
+              if (access.provider === 'shoulders') workspace.refreshShouldersBalance()
+            }
+          },
+        })
+
+        for await (const part of result.fullStream) {
+          switch (part.type) {
+            case 'text-delta':
+              fullContent += part.text
+              contentFilter.push(part.text)
+              const updateData = { content: contentFilter.getDisplay() }
+              const autoTitle = contentFilter.getTitle()
+              if (autoTitle) updateData.title = autoTitle
+              this._editor.updateNodeData(nodeId, updateData)
+              break
+            case 'error':
+              this._editor.updateNodeData(nodeId, {
+                content: contentFilter.getDisplay() + '\n\n' + formatChatApiError(part.error?.message || String(part.error)),
+                _streaming: false,
+              })
+              break
+          }
+        }
+
+        this._editor.updateNodeData(nodeId, { _streaming: false })
+        this.aiState.messages[nodeId] = { role: 'assistant', content: fullContent }
+        this.streamingNodeId = null
+        this._editor.scheduleSave()
+      } catch (e) {
+        if (e.name === 'AbortError' || abortController.signal.aborted) {
+          this._editor.updateNodeData(nodeId, { _streaming: false })
+        } else {
+          this._editor.updateNodeData(nodeId, {
             content: contentFilter.getDisplay() + '\n\n' + formatChatApiError(e.message || String(e)),
             _streaming: false,
           })

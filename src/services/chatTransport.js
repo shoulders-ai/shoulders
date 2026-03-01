@@ -39,25 +39,22 @@ export function createChatTransport(getConfig) {
         stopWhen: stepCountIs(config.maxSteps || 15),
         providerOptions,
         prepareStep({ steps, messages }) {
-          // Inject native PDF data as user messages for providers that
-          // support PDFs in user messages (all 3: Anthropic, OpenAI, Google).
-          // Tool results with _type:'pdf' contain base64 data that toModelOutput
-          // converted to a text placeholder. Here we inject the actual binary.
+          // Inject native PDF data as user messages.
+          // Only inject PDFs from the LAST step to avoid re-sending on every loop iteration.
+          const lastStep = steps[steps.length - 1]
+          if (!lastStep) return undefined
           const pdfParts = []
-          for (const step of steps) {
-            for (const result of step.toolResults) {
-              if (result.output?._type === 'pdf' && result.output.base64) {
-                pdfParts.push({
-                  type: 'file',
-                  data: result.output.base64,
-                  mediaType: 'application/pdf',
-                  filename: result.output.filename,
-                })
-              }
+          for (const result of lastStep.toolResults) {
+            if (result.output?._type === 'pdf' && result.output.base64) {
+              pdfParts.push({
+                type: 'file',
+                data: result.output.base64,
+                mediaType: 'application/pdf',
+                filename: result.output.filename,
+              })
             }
           }
           if (pdfParts.length === 0) return undefined
-          // Append a user message with the PDF file parts
           return {
             messages: [
               ...messages,

@@ -88,7 +88,7 @@
       ref="chatInputRef"
       :isStreaming="isStreaming"
       :modelId="session.modelId"
-      :estimatedTokens="0"
+      :estimatedTokens="estimatedTokens"
       :contextWindow="getContextWindow(session.modelId, workspace)"
       @send="onSend"
       @abort="onAbort"
@@ -119,11 +119,7 @@ const chatStore = useChatStore()
 
 // ─── Chat instance reactive state ─────────────────────────────────
 
-const chat = computed(() => {
-  const instance = chatStore.getChatInstance(props.session.id)
-  console.log('[ChatSession] getChatInstance:', props.session.id, '→', instance ? 'found' : 'null')
-  return instance
-})
+const chat = computed(() => chatStore.getChatInstance(props.session.id))
 
 /**
  * Messages: prefer Chat instance messages (reactive), fall back to session.messages.
@@ -131,10 +127,7 @@ const chat = computed(() => {
  */
 const messages = computed(() => {
   if (chat.value) {
-    const raw = chat.value.state.messagesRef.value
-    const filtered = raw.filter(m => !m._isToolResult)
-    console.log('[ChatSession] messages computed:', filtered.length, 'messages (raw:', raw.length, ')')
-    return filtered
+    return chat.value.state.messagesRef.value.filter(m => !m._isToolResult)
   }
   return (props.session.messages || []).filter(m => !m._isToolResult)
 })
@@ -145,6 +138,14 @@ const isStreaming = computed(() => {
     return status === 'submitted' || status === 'streaming'
   }
   return props.session.status === 'streaming'
+})
+
+// Real token count from the provider's last response.
+// null = no messages yet (hide donut). 0+ = show donut even if context barely used.
+const estimatedTokens = computed(() => {
+  const msgs = chat.value ? chat.value.state.messagesRef.value : (props.session.messages || [])
+  if (msgs.length === 0) return null
+  return props.session._lastInputTokens ?? 0
 })
 
 // Error display: purely UI-driven, never manipulates Chat internals.

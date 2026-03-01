@@ -103,6 +103,7 @@
         :query="query"
         @select-file="onSelectFile"
         @select-citation="onSelectCitation"
+        @select-chat="onSelectChat"
         @mousedown.prevent
       />
     </div>
@@ -302,6 +303,12 @@ function onSelectCitation(key) {
       view.focus()
     }
   }
+  query.value = ''
+  searchInputRef.value?.blur()
+}
+
+function onSelectChat(sessionId) {
+  editorStore.openChat({ sessionId })
   query.value = ''
   searchInputRef.value?.blur()
 }

@@ -69,6 +69,68 @@ When a pane with no tabs is collapsed (`editorStore.collapsePane(id)`):
 ### Important: `findPane()` and `findParent()`
 These are recursive tree traversal methods on the editor store. They search the pane tree for a node by ID. Used extensively throughout the editor components.
 
+## Editor State Persistence
+
+The pane tree, open tabs, active tabs, split ratios, and active pane are persisted to `.shoulders/editor-state.json` so the layout survives restarts and refreshes.
+
+### Relevant Files
+
+| File | Role |
+|---|---|
+| `src/services/editorPersistence.js` | Serialization, disk I/O, parallel tab validation |
+| `src/stores/editor.js` | Thin wrappers: `saveEditorState()`, `restoreEditorState()` |
+| `src/App.vue` | Calls restore after workspace loads, save before workspace closes |
+
+### How It Works
+
+**Saving** — Every action that mutates the pane tree or active pane (`openFile`, `closeTab`, `splitPane`, `collapsePane`, `setActivePane`, `setSplitRatio`, `reorderTabs`, `updateFilePath`, `openChat`) calls `saveEditorState()`, which is debounced at 500ms. Before workspace close, `saveEditorStateImmediate()` flushes synchronously.
+
+**Restoring (optimistic)** — On workspace open, after chat sessions and references are loaded (needed for tab validation):
+1. `loadState()` reads the JSON file from disk
+2. The raw pane tree is assigned to `this.paneTree` **immediately** — UI renders instantly
+3. `findInvalidTabs()` fires all `path_exists` checks in **parallel** via `Promise.all`
+4. Any invalid tabs are pruned after the fact via `closeFileFromAllPanes()`
+
+This means the user sees their full layout the moment the workspace opens. If a file was deleted since last session, its tab quietly disappears a moment later.
+
+### Tab Validation
+
+Each tab type is validated differently (`isTabValid()` in `editorPersistence.js`):
+
+| Tab type | Example | Validation |
+|---|---|---|
+| Regular file | `/path/to/file.md` | `invoke('path_exists')` |
+| Chat session | `chat:abc123` | Check `.shoulders/chats/abc123.json` exists |
+| Reference | `ref:@authorYear` | `referencesStore.getByKey()` returns non-null |
+| Preview | `preview:/path/to/file.md` | Underlying file `path_exists` |
+
+### Edge Cases
+
+- **State file missing** (first run) → empty editor, no error
+- **State file corrupt** (invalid JSON) → empty editor, logged to console
+- **All tabs in a pane gone** → pane shows empty state (NewTab screen)
+- **Split with both children empty** → tabs close normally, panes show empty state
+- **`activePaneId` references invalid pane** → falls back to `findFirstLeaf()`
+- **Rapid mutations** → 500ms debounce coalesces writes
+
+### Data Format
+
+```json
+{
+  "version": 1,
+  "paneTree": {
+    "type": "split",
+    "direction": "vertical",
+    "ratio": 0.5,
+    "children": [
+      { "type": "leaf", "id": "pane-root", "tabs": ["/path/file.md"], "activeTab": "/path/file.md" },
+      { "type": "leaf", "id": "pane-xK2mN4pQ", "tabs": ["chat:abc123"], "activeTab": "chat:abc123" }
+    ]
+  },
+  "activePaneId": "pane-root"
+}
+```
+
 ## Editor View Registry
 
 `editorStore.editorViews` is a plain object mapping `"paneId:filePath"` → `EditorView` instance. This allows any code to access a specific editor's CodeMirror view:

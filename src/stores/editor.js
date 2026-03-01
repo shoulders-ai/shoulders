@@ -1,11 +1,18 @@
 import { defineStore } from 'pinia'
+import { nextTick } from 'vue'
 import { nanoid } from './utils'
 import { useFilesStore } from './files'
 import { useWorkspaceStore } from './workspace'
+import { useChatStore } from './chat'
+import { isChatTab, getChatSessionId } from '../utils/fileTypes'
+import { saveState, loadState, findInvalidTabs } from '../services/editorPersistence'
 
 // Pane tree: either a leaf (has tabs) or a split (has children)
 // { type: 'leaf', id, tabs: [path, ...], activeTab: path }
 // { type: 'split', direction: 'horizontal'|'vertical', ratio: 0.5, children: [pane, pane] }
+
+// Debounce timer for editor state persistence
+let _saveStateTimer = null
 
 export const useEditorStore = defineStore('editor', {
   state: () => ({
@@ -95,6 +102,40 @@ export const useEditorStore = defineStore('editor', {
       return null
     },
 
+    /**
+     * Walk the pane tree and return the first leaf containing tabPath.
+     */
+    findPaneWithTab(tabPath) {
+      const walk = (node) => {
+        if (node.type === 'leaf' && node.tabs.includes(tabPath)) return node
+        if (node.type === 'split' && node.children) {
+          for (const child of node.children) {
+            const found = walk(child)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      return walk(this.paneTree)
+    },
+
+    /**
+     * Walk the pane tree and return the first leaf with any chat tab.
+     */
+    findPaneWithChatTab() {
+      const walk = (node) => {
+        if (node.type === 'leaf' && node.tabs.some(t => isChatTab(t))) return node
+        if (node.type === 'split' && node.children) {
+          for (const child of node.children) {
+            const found = walk(child)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      return walk(this.paneTree)
+    },
+
     openFile(path) {
       const pane = this.findPane(this.paneTree, this.activePaneId)
       if (!pane) return
@@ -102,14 +143,91 @@ export const useEditorStore = defineStore('editor', {
       // If already open in this pane, switch to it
       if (pane.tabs.includes(path)) {
         pane.activeTab = path
-        this.recordFileOpen(path)
+        if (!isChatTab(path)) this.recordFileOpen(path)
+        this.saveEditorState()
         return
       }
 
       // Add new tab
       pane.tabs.push(path)
       pane.activeTab = path
-      this.recordFileOpen(path)
+      if (!isChatTab(path)) this.recordFileOpen(path)
+      this.saveEditorState()
+    },
+
+    /**
+     * Open a chat session as a tab.
+     * @param {Object} options - { sessionId?, prefill?, paneId? }
+     */
+    openChat(options = {}) {
+      const chatStore = useChatStore()
+      const sessionId = options.sessionId || chatStore.createSession()
+      const tabPath = `chat:${sessionId}`
+
+      // Check if this chat tab is already open in any pane
+      const existingPane = this.findPaneWithTab(tabPath)
+      if (existingPane) {
+        this.activePaneId = existingPane.id
+        existingPane.activeTab = tabPath
+        if (options.prefill) {
+          nextTick(() => window.dispatchEvent(new CustomEvent('chat-set-input', { detail: { message: options.prefill } })))
+        }
+        return
+      }
+
+      // Open in specified pane or active pane
+      const targetPane = options.paneId
+        ? this.findPane(this.paneTree, options.paneId)
+        : this.findPane(this.paneTree, this.activePaneId)
+      if (targetPane) {
+        if (!targetPane.tabs.includes(tabPath)) {
+          targetPane.tabs.push(tabPath)
+        }
+        targetPane.activeTab = tabPath
+        this.activePaneId = targetPane.id
+      }
+
+      // Update activeSessionId
+      chatStore.activeSessionId = sessionId
+      this.saveEditorState()
+
+      if (options.prefill) {
+        nextTick(() => window.dispatchEvent(new CustomEvent('chat-set-input', { detail: { message: options.prefill } })))
+      }
+    },
+
+    /**
+     * Open chat in a side pane (for "Ask AI" flows).
+     * Reuses existing chat pane if one is visible; otherwise splits.
+     * @param {Object} options - { sessionId?, prefill? }
+     */
+    openChatBeside(options = {}) {
+      const chatStore = useChatStore()
+
+      // Check if any visible pane already has a chat tab
+      const chatPane = this.findPaneWithChatTab()
+      if (chatPane) {
+        // Focus the existing chat pane's active chat tab
+        this.activePaneId = chatPane.id
+        const chatTab = chatPane.tabs.find(t => isChatTab(t))
+        if (chatTab) chatPane.activeTab = chatTab
+        if (options.prefill) {
+          nextTick(() => window.dispatchEvent(new CustomEvent('chat-set-input', { detail: { message: options.prefill } })))
+        }
+        return
+      }
+
+      // Split the active pane vertically and open chat in the new pane
+      const sid = options.sessionId || chatStore.createSession()
+      const tabPath = `chat:${sid}`
+      this.splitPaneWith(this.activePaneId, 'vertical', tabPath)
+      // splitPaneWith keeps focus on original pane — that's what we want
+
+      chatStore.activeSessionId = sid
+
+      if (options.prefill) {
+        nextTick(() => window.dispatchEvent(new CustomEvent('chat-set-input', { detail: { message: options.prefill } })))
+      }
     },
 
     closeTab(paneId, path) {
@@ -118,6 +236,14 @@ export const useEditorStore = defineStore('editor', {
 
       const idx = pane.tabs.indexOf(path)
       if (idx === -1) return
+
+      // Auto-save chat sessions on tab close
+      if (isChatTab(path)) {
+        const sid = getChatSessionId(path)
+        if (sid) {
+          try { useChatStore().saveSession(sid) } catch {}
+        }
+      }
 
       pane.tabs.splice(idx, 1)
 
@@ -130,10 +256,8 @@ export const useEditorStore = defineStore('editor', {
         }
       }
 
-      // If pane is empty and it's not the root, collapse it
-      if (pane.tabs.length === 0 && pane.id !== 'pane-root') {
-        this.collapsePane(paneId)
-      }
+      // Pane stays open with NewTab screen — collapsePane only called via close-pane button
+      this.saveEditorState()
     },
 
     collapsePane(paneId) {
@@ -162,6 +286,7 @@ export const useEditorStore = defineStore('editor', {
           if (firstLeaf) this.activePaneId = firstLeaf.id
         }
       }
+      this.saveEditorState()
     },
 
     findFirstLeaf(node) {
@@ -192,8 +317,8 @@ export const useEditorStore = defineStore('editor', {
       const newPane = {
         type: 'leaf',
         id: newPaneId,
-        tabs: pane.activeTab ? [pane.activeTab] : [],
-        activeTab: pane.activeTab,
+        tabs: [],
+        activeTab: null,
       }
 
       // Transform current pane into a split
@@ -207,6 +332,7 @@ export const useEditorStore = defineStore('editor', {
 
       // Focus the new pane
       this.activePaneId = newPaneId
+      this.saveEditorState()
     },
 
     /**
@@ -244,15 +370,24 @@ export const useEditorStore = defineStore('editor', {
 
       // Keep focus on the original pane
       this.activePaneId = paneId
+      this.saveEditorState()
       return newPaneId
     },
 
     setActivePane(paneId) {
       this.activePaneId = paneId
+      // Update chatStore.activeSessionId when switching to a pane with a chat tab
+      const pane = this.findPane(this.paneTree, paneId)
+      if (pane?.activeTab && isChatTab(pane.activeTab)) {
+        const sid = getChatSessionId(pane.activeTab)
+        if (sid) useChatStore().activeSessionId = sid
+      }
+      this.saveEditorState()
     },
 
     setSplitRatio(splitNode, ratio) {
       splitNode.ratio = Math.max(0.15, Math.min(0.85, ratio))
+      this.saveEditorState()
     },
 
     updateFilePath(oldPath, newPath) {
@@ -275,6 +410,7 @@ export const useEditorStore = defineStore('editor', {
         entry.path = newPath
         this._persistRecentFiles()
       }
+      this.saveEditorState()
     },
 
     closeFileFromAllPanes(path) {
@@ -305,6 +441,7 @@ export const useEditorStore = defineStore('editor', {
       if (!pane || fromIdx === toIdx) return
       const [moved] = pane.tabs.splice(fromIdx, 1)
       pane.tabs.splice(toIdx, 0, moved)
+      this.saveEditorState()
     },
 
     registerEditorView(paneId, path, view) {
@@ -359,7 +496,8 @@ export const useEditorStore = defineStore('editor', {
     },
 
     recordFileOpen(path) {
-      if (path.startsWith('ref:@') || path.startsWith('preview:')) return
+      if (path.startsWith('ref:@') || path.startsWith('preview:') || isChatTab(path)) return
+      import('../services/telemetry').then(({ events }) => events.fileOpen(path.split('.').pop()))
       this.recentFiles = this.recentFiles.filter(e => e.path !== path)
       this.recentFiles.unshift({ path, openedAt: Date.now() })
       if (this.recentFiles.length > 20) this.recentFiles.length = 20
@@ -379,6 +517,58 @@ export const useEditorStore = defineStore('editor', {
       const workspace = useWorkspaceStore()
       if (!workspace.path) return
       localStorage.setItem(`recentFiles:${workspace.path}`, JSON.stringify(this.recentFiles))
+    },
+
+    // ====== Editor state persistence ======
+
+    /** Debounced save — called by actions that mutate pane tree or active pane. */
+    saveEditorState() {
+      clearTimeout(_saveStateTimer)
+      _saveStateTimer = setTimeout(() => {
+        saveState(useWorkspaceStore().shouldersDir, this.paneTree, this.activePaneId)
+      }, 500)
+    },
+
+    /** Immediate save (no debounce). Call before workspace close. */
+    async saveEditorStateImmediate() {
+      clearTimeout(_saveStateTimer)
+      await saveState(useWorkspaceStore().shouldersDir, this.paneTree, this.activePaneId)
+    },
+
+    /**
+     * Optimistic restore: set the pane tree immediately so the UI renders instantly,
+     * then validate all tabs in parallel and prune any that no longer exist.
+     */
+    async restoreEditorState() {
+      const workspace = useWorkspaceStore()
+      const state = await loadState(workspace.shouldersDir)
+      if (!state) return false
+
+      // Optimistic: apply immediately — UI renders now
+      this.paneTree = state.paneTree
+      if (state.activePaneId && this.findPane(this.paneTree, state.activePaneId)) {
+        this.activePaneId = state.activePaneId
+      } else {
+        const firstLeaf = this.findFirstLeaf(this.paneTree)
+        this.activePaneId = firstLeaf?.id || 'pane-root'
+      }
+
+      // Background: validate all tabs in parallel, close any that are gone
+      findInvalidTabs(workspace.shouldersDir, this.paneTree).then(invalidTabs => {
+        if (invalidTabs.size === 0) return
+        for (const tab of invalidTabs) {
+          this.closeFileFromAllPanes(tab)
+        }
+        // If active pane was emptied, fall back
+        if (!this.findPane(this.paneTree, this.activePaneId)) {
+          const firstLeaf = this.findFirstLeaf(this.paneTree)
+          this.activePaneId = firstLeaf?.id || 'pane-root'
+        }
+      }).catch(e => {
+        console.error('[editor] Background tab validation failed:', e)
+      })
+
+      return true
     },
 
     cleanup() {

@@ -7,21 +7,22 @@ Two states based on whether a workspace is open:
 ### Workspace Open
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Header (38px, ≡ menu + search + sidebar toggles)        │
+│ Header (38px, ≡ menu + search + toggles + settings)     │
 ├──────┬──┬───────────────────────────┬──┬────────────────┤
-│      │  │    ReviewBar (if edits)    │  │                │
-│      │  ├───────────────────────────┤  │                │
-│ Left │R │                           │R │   Right        │
-│ Side │e │    PaneContainer          │e │   Panel        │
-│ bar  │s │    (recursive editor      │s │   (Chat, Terms │
-│      │i │     panes with tabs)      │i │    Tasks)      │
-│Explr │z │                           │z │                │
-│Outln │e │                           │e │                │
-│ Refs │  │                           │  │                │
+│      │  │                           │  │                │
+│ Left │R │    PaneContainer          │R │   Right        │
+│ Side │e │    (recursive editor      │e │   Panel        │
+│ bar  │s │     panes with tabs,      │s │   (Outline,    │
+│      │i │     incl. chat tabs)      │i │    Tasks,      │
+│Explr │z │                           │z │    Terminal,   │
+│ Refs │e │    [ReviewBar per pane]   │e │    Backlinks)  │
+│      │  │                           │  │                │
 ├──────┴──┴───────────────────────────┴──┴────────────────┤
-│ Footer (24px, status bar)                                │
+│ Footer (30px, status bar)                                │
 └─────────────────────────────────────────────────────────┘
 ```
+
+Note: ReviewBar appears **per pane** (above the editor, below the tab bar) when that file has pending edits, not as a global horizontal bar. Chat sessions are opened as `chat:*` tabs in the editor pane system, not in the right panel.
 
 ### No Workspace (Launcher)
 ```
@@ -47,33 +48,95 @@ No sidebars, no footer. Header is always visible (hamburger menu works in both s
 
 | File | Role |
 |---|---|
+| **Root layout** | |
 | `src/App.vue` | Root layout, keyboard shortcuts, workspace init, launcher/editor toggle |
 | `src/components/Launcher.vue` | Empty state: logo, Open Folder, Clone Repository, recent workspaces |
-| `src/components/layout/Header.vue` | Titlebar: hamburger menu + inline search bar + sidebar toggles |
-| `src/components/SearchResults.vue` | Search dropdown (file/content/reference results) |
-| `src/components/layout/Footer.vue` | Status bar |
+| `src/components/layout/Header.vue` | Titlebar: hamburger menu + inline search bar + sidebar toggles + settings |
+| `src/components/SearchResults.vue` | Search dropdown (file/content/reference/chat results) |
+| `src/components/layout/Footer.vue` | Status bar: git, review mode, zoom, billing, editor stats |
 | `src/components/layout/ResizeHandle.vue` | Sidebar resize dividers |
-| `src/components/sidebar/LeftSidebar.vue` | Three collapsible panels: Explorer, References, Outline |
+| `src/components/layout/SnapshotDialog.vue` | Named snapshot input dialog (Cmd+S → "Name this version") |
+| `src/components/layout/SyncPopover.vue` | GitHub sync status popover (from Footer) |
+| `src/components/layout/ToastContainer.vue` | Fixed bottom-right toast stack |
+| **Left sidebar** | |
+| `src/components/sidebar/LeftSidebar.vue` | Two collapsible panels: Explorer and References |
 | `src/components/sidebar/FileTree.vue` | Explorer panel content |
-| `src/components/sidebar/OutlinePanel.vue` | Document outline (headings for .md/.tex/.docx/.ipynb) |
 | `src/components/sidebar/FileTreeItem.vue` | Tree nodes |
 | `src/components/sidebar/ContextMenu.vue` | Right-click menu |
+| **Editor panes** | |
 | `src/components/editor/PaneContainer.vue` | Recursive pane layout |
-| `src/components/editor/EditorPane.vue` | Individual pane |
-| `src/components/editor/TabBar.vue` | Pane tab bar |
-| `src/components/editor/MarkdownEditor.vue` | CodeMirror instance |
+| `src/components/editor/EditorPane.vue` | Individual pane: TabBar + ReviewBar + viewer component routing |
+| `src/components/editor/TabBar.vue` | Pane tab bar with drag reorder |
 | `src/components/editor/SplitHandle.vue` | Split pane divider |
-| `src/components/editor/ReviewBar.vue` | Pending edits banner |
-| `src/components/right/RightPanel.vue` | Right sidebar: Chat/Terminals/Tasks tabs (+ Backlinks when active file has backlinks) + sub-tab management + history |
-| `src/components/right/ChatSession.vue` | Per-session message list with auto-scroll, turn spacing, empty state (prompt starters + recent sessions) |
-| `src/components/right/ChatMessage.vue` | Message renderer: user bubbles (right-aligned, clamped), assistant (full-width, marked+DOMPurify markdown), compact tool calls, context cards |
+| `src/components/editor/TextEditor.vue` | CodeMirror instance (all text files) |
+| `src/components/editor/ChatPanel.vue` | Chat session rendered as an editor tab (`chat:*` paths) |
+| `src/components/editor/NewTab.vue` | Empty pane state: recent files, quick actions |
+| `src/components/editor/ReviewBar.vue` | Pending edits banner (text files) |
+| `src/components/editor/DocxReviewBar.vue` | Pending edits banner (DOCX files) |
+| `src/components/editor/NotebookReviewBar.vue` | Pending edits banner (notebooks) |
+| `src/components/editor/EditorContextMenu.vue` | Right-click: Ask AI, Add Task, clipboard, spell suggestions |
+| `src/components/editor/DocxContextMenu.vue` | Right-click context menu for DOCX editor |
+| **Right panel** | |
+| `src/components/right/RightPanel.vue` | Right sidebar: Outline / Tasks / Terminal / Backlinks tabs + terminal management |
+| `src/components/sidebar/OutlinePanel.vue` | Document outline (headings for .md/.tex/.docx/.ipynb), rendered in RightPanel |
+| `src/components/right/ChatMessage.vue` | Message renderer (shared by ChatPanel and TaskThread) |
 | `src/utils/chatMarkdown.js` | Shared markdown pipeline: `renderMarkdown()`, `TOOL_LABELS`, `getToolContext()`, `getToolIcon()` |
-| `src/components/right/ChatInput.vue` | Input container: file chips, textarea, bottom action row (@ button, model picker, send/stop). Popovers Teleported to `<body>`. |
-| `src/components/right/FileRefPopover.vue` | @mention file search list. No own positioning — parent handles via Teleport wrapper. Exposes `selectNext/selectPrev/confirmSelection` for keyboard nav. |
-| `src/components/right/Terminal.vue` | Terminal instance |
-| `src/components/right/TaskThreads.vue` | Task list |
-| `src/components/right/TaskThread.vue` | Individual thread |
+| `src/components/right/ChatInput.vue` | Chat input with @file refs, model picker, context chips (used by ChatPanel) |
+| `src/components/right/FileRefPopover.vue` | @mention file search list |
+| `src/components/right/Terminal.vue` | Terminal instance (xterm.js) |
+| `src/components/right/TaskThreads.vue` | Task list / active thread detail |
+| `src/components/right/TaskThread.vue` | Individual task thread conversation |
+| `src/components/right/Backlinks.vue` | Files linking to active file |
+| **Modals** | |
 | `src/components/VersionHistory.vue` | Git history modal |
+| `src/components/settings/Settings.vue` | Settings modal shell (7 section components) |
+| `src/components/SetupWizard.vue` | First-run wizard (AI provider setup + theme picker) |
+
+## What Persists Across Restarts
+
+Two storage mechanisms: **localStorage** for global UI preferences, **`.shoulders/` files** for per-workspace state.
+
+### Persisted (survives restart)
+
+| State | Storage | Key / Path |
+|---|---|---|
+| Pane tree (splits, tabs, active tab per pane) | `.shoulders/editor-state.json` | See [editor-system.md](editor-system.md#editor-state-persistence) |
+| Active pane ID | `.shoulders/editor-state.json` | — |
+| Left sidebar open/closed | localStorage | `leftSidebarOpen` |
+| Right sidebar open/closed | localStorage | `rightSidebarOpen` |
+| Left sidebar width | localStorage | `leftSidebarWidth` |
+| Right sidebar width | localStorage | `rightSidebarWidth` |
+| Right panel active tab (outline/tasks/terminal/backlinks) | localStorage | `rightPanelTab` |
+| Explorer/Refs collapse states | localStorage | `explorerCollapsed`, `refsCollapsed` |
+| Theme | localStorage | `theme` |
+| Font sizes (editor + UI) | localStorage | `editorFontSize`, `uiFontSize` |
+| Soft wrap, spell check, wrap column | localStorage | `softWrap`, `spellcheck`, `wrapColumn` |
+| Ghost/live preview enabled | localStorage | `ghostEnabled`, `livePreviewEnabled` |
+| Last model selections | localStorage | `lastModelId`, `ghostModelId` |
+| Recent files (per workspace) | localStorage | `recentFiles:{workspacePath}` |
+| Chat sessions | `.shoulders/chats/{id}.json` | Full message history |
+| Task threads | `.shoulders/tasks.json` | All threads + messages |
+| Last workspace | localStorage | `lastWorkspace` |
+
+### Not Persisted (session-only)
+
+| State | Reason |
+|---|---|
+| Terminal processes | Cannot survive process exit |
+| Editor view instances (CodeMirror, SuperDoc) | Recreated when components mount |
+| Cursor positions | Marginal value for the complexity |
+| Dirty files set | Transient; auto-save handles it |
+| PDF viewer zoom/page | Session-only convenience state |
+
+### Coordination: Where Layout State Lives
+
+The layout is coordinated across multiple stores and components:
+
+- **`workspace` store** — sidebar open/closed, sidebar widths, bottom panel state. Reads from localStorage on init.
+- **`editor` store** — pane tree, active pane, recent files. Reads from `.shoulders/editor-state.json` on workspace open.
+- **`RightPanel.vue`** — right panel active tab (outline/tasks/terminal/backlinks). Reads from localStorage on mount, writes on tab switch.
+- **`LeftSidebar.vue`** — explorer/refs collapse states, panel heights. Reads from localStorage on mount.
+- **`App.vue`** — orchestrates startup: opens workspace → loads stores → restores editor state. Orchestrates shutdown: saves editor state → cleans up stores.
 
 ## Header (`Header.vue`)
 
@@ -83,7 +146,7 @@ No sidebars, no footer. Header is always visible (hamburger menu works in both s
 - `data-tauri-drag-region` on the header and right icon zone (enables window dragging)
 - **Left cell**: Hamburger menu button (`IconMenu2`, Teleported dropdown)
 - **Center cell**: Inline search input (`<input>`, not a button). Styled as inset field (`bg-primary` against `bg-secondary` header). Shows `Cmd+P` kbd badge when idle. Placeholder: "Go to file..."
-- **Right cell**: Three icon buttons — left sidebar toggle, right sidebar toggle, settings cog
+- **Right cell**: Four icon buttons — left sidebar toggle, right sidebar toggle, bottom panel/terminal toggle (`IconTerminal2`), settings cog
 
 ### Hamburger Menu
 Teleported to `<body>`, positioned below the ≡ button via `getBoundingClientRect()`. Click-outside closes via document `mousedown` listener (excludes the button and dropdown refs).
@@ -115,21 +178,30 @@ Plus the capability `"core:window:allow-start-dragging"` in `capabilities/defaul
 
 ## Footer (`Footer.vue`)
 
-- Height: 24px
-- **Left section**:
+- Height: 30px
+- Layout: CSS grid `1fr auto 1fr` (same pattern as Header — centers the middle section)
+- **Left section** (source control + review):
   - Git branch name (with branch icon, polled every 10s)
+  - GitHub sync status icon (cloud variants: synced/syncing/error/idle, clickable → `SyncPopover`)
+  - Review mode toggle: "Mode: DIRECT" (yellow) / "Mode: REVIEW" (muted)
   - Pending changes count (yellow, clickable)
-  - Direct/Review mode toggle (click to switch)
-- **Right section**:
-  - Soft wrap toggle button (blue when active)
-  - Save feedback message (green, auto-fading after 2s)
-  - Word count
+- **Center section** (crossfade between three layers):
+  - **Default**: Zoom controls (−, percentage, +). Percentage is accent-colored when ≠ 100%. Click percentage → zoom popover.
+  - **Save confirmation**: "Saved ✓" + "Name this version?" link (8s window after Cmd+S, opens `SnapshotDialog`)
+  - **Transient message**: e.g., "All saved (no changes)" (auto-fading)
+- **Right section** (tools + editor info):
+  - Keyboard shortcuts button (popover with full shortcut reference)
+  - Soft wrap toggle button (accent when active)
+  - Billing context display (Shoulders balance or estimated monthly cost, when enabled)
+  - Editor stats: word count, char count, selection counts (accent-colored when selection active)
   - Cursor position (Ln X, Col Y)
 
 ### Exposed Methods (called by App.vue)
-- `setWordCount(count)` - Updates word count display
-- `setCursorPos({line, col})` - Updates cursor position display
-- `showSaveMessage(msg)` - Shows a message that fades after 2 seconds
+- `setCursorPos({line, col})` — Updates cursor position display
+- `setEditorStats(stats)` — Updates word/char/selection counts
+- `showSaveMessage(msg)` — Shows a transient right-side message (fades after 2s)
+- `showCenterMessage(msg)` — Shows a transient center message (fades after 2s)
+- `beginSaveConfirmation()` — Shows "Saved" + "Name this version?" for 8s, returns the name (or null)
 
 ## Sidebar Resizing
 
@@ -139,16 +211,21 @@ Plus the capability `"core:window:allow-start-dragging"` in `capabilities/defaul
 - `ResizeHandle` emits `resize` events with `{x}` position
 - `onLeftResize`: clamps `e.x` to [160, 500]
 - `data-sidebar="left"` attribute for Cmd+F focus detection
-- **Three collapsible panels** (`LeftSidebar.vue`): Explorer (flex-1, always fills remaining space), References (fixed height), Outline (fixed height, collapsed by default). Collapse states + heights persisted in localStorage.
-- **Resize handles** appear between adjacent expanded panels. When refs is collapsed, a handle shows between explorer and outline (preserving two-panel behavior).
+- **Two collapsible panels** (`LeftSidebar.vue`): Explorer (flex-1, always fills remaining space) and References (fixed height). Outline moved to the right panel. Collapse states + heights persisted in localStorage.
+- **Resize handle** appears between explorer and references when both are expanded.
 - **File tree filter**: Cmd+F (when tree focused) or search icon opens inline filter. See [file-system.md](file-system.md#file-tree-filter)
-- **Outline panel**: Shows headings for the active file (.md/.tex/.docx/.ipynb). Click to navigate. Current heading highlighted for CM6 files. Uses `linksStore.structuredHeadingsForFile` for markdown, regex for LaTeX, ProseMirror doc traversal for DOCX. DOCX outline reactively updates while typing — reads `filesStore.fileContents[path]` as a dependency (written by `DocxEditor.updateTextCache()`).
 
-### Right Sidebar
+### Right Panel (`RightPanel.vue`)
 - `v-show` controlled (kept in DOM to preserve running terminals)
 - Width: `workspace.rightSidebarWidth` (default 360px, min 200px, max 80% of window)
 - Double-click resize handle: snaps to 50% window width (or back to previous width)
 - `rightSidebarPreSnapWidth` remembers the width before snap for toggling back
+- **Four tabs**: Outline, Tasks, Terminal, Backlinks (Backlinks only shown when active file has backlinks)
+- Active tab persisted in localStorage (`rightPanelTab`)
+- **Outline**: Document headings (`.md`/`.tex`/`.docx`/`.ipynb`), click to navigate. Tracks a `documentTab` computed that falls back to last non-chat tab when a chat is focused. Uses `OutlinePanel` from `src/components/sidebar/`.
+- **Tasks**: Task thread list + active thread detail. See [ai-system.md](ai-system.md).
+- **Terminal**: Multi-tab xterm.js terminals with drag-reorder, rename, language REPL support (R/Python/Julia). Terminal processes preserved via `v-show`.
+- **Backlinks**: Files linking to the active document via `[[wiki links]]`.
 
 ## ResizeHandle Component
 
@@ -215,6 +292,15 @@ Centered vertically and horizontally. Fixed width 360px.
 - **Switch**: Opening a folder while one is already open closes the current workspace first.
 - **Recent tracking**: `workspace.addRecent(path)` called on every open. Max 10 entries, most recent first. Persisted in localStorage.
 
+## Chat System (Editor Tabs)
+
+Chat sessions live in the **editor pane system** as `chat:{sessionId}` tabs — not in the right panel. `ChatPanel.vue` renders the session (message list + input) and is mounted by `EditorPane.vue` when `viewerType === 'chat'`. Each chat tab is a full session with history, streaming, and tool calls.
+
+- **Open chat**: `Cmd+J` opens a chat tab beside the current editor (`editorStore.openChatBeside()`)
+- **`Cmd+Shift+L`**: Same, but captures the current selection as context
+- **Session management**: Sessions persist to `.shoulders/chats/{id}.json`. Open sessions show in the tab bar like files.
+- **Components**: `ChatPanel.vue` (tab container) → `ChatSession.vue` (message list) + `ChatInput.vue` (input)
+
 ## Chat Input (`ChatInput.vue`)
 
 ### Layout
@@ -262,7 +348,7 @@ Teleported to `<body>`. Shown on right-click in TextEditor. Viewport-clamped (sa
 **With selection:** Ask AI (`Cmd+Shift+L`), Add Task (`Cmd+Shift+C`), separator, Cut, Copy, Paste.
 **Without selection:** Paste, Select All.
 
-"Ask AI" dispatches `chat-with-selection` window event (captured text + ~200 chars before/after) and opens the right sidebar chat.
+"Ask AI" dispatches `chat-with-selection` window event (captured text + ~200 chars before/after) and opens a chat tab beside the editor pane via `editorStore.openChatBeside()`.
 
 ## File Tree Header
 

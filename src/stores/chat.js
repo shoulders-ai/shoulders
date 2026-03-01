@@ -6,6 +6,8 @@ import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import { nanoid } from './utils'
 import { useWorkspaceStore } from './workspace'
 import { resolveApiAccess } from '../services/apiClient'
+import { createModel } from '../services/aiSdk'
+import { generateText } from 'ai'
 import { getContextWindow, getThinkingConfig } from '../services/chatModels'
 import { buildBaseSystemPrompt } from '../services/systemPrompt'
 import { calculateCost } from '../services/tokenUsage'
@@ -17,6 +19,46 @@ import { noApiKeyMessage, formatChatApiError } from '../utils/errorMessages'
 // Chat instances live OUTSIDE Pinia (non-reactive container).
 // Each Chat's internal messages/status use Vue ref() — reactive when accessed.
 const chatInstances = new Map() // sessionId → Chat
+
+// ─── Title Helpers ──────────────────────────────────────────────────
+
+/**
+ * Extract plain text from UIMessage parts, stripping file-ref and context XML.
+ */
+function extractTextFromParts(parts) {
+  return parts
+    .filter(p => p.type === 'text')
+    .map(p => p.text)
+    .join(' ')
+    .replace(/<file-ref[^>]*>[\s\S]*?<\/file-ref>/g, '')
+    .replace(/<context[^>]*>[\s\S]*?<\/context>/g, '')
+    .replace(/\n/g, ' ')
+    .trim()
+}
+
+/**
+ * Build a smart truncated label from the first user message.
+ * - Strips file-ref / context XML tags
+ * - Truncates at word boundary (max 40 chars)
+ * - Adds "..." only if truncated
+ */
+function smartLabel(text) {
+  const clean = text
+    .replace(/<file-ref[^>]*>[\s\S]*?<\/file-ref>/g, '')
+    .replace(/<context[^>]*>[\s\S]*?<\/context>/g, '')
+    .replace(/\n/g, ' ')
+    .trim()
+
+  if (!clean) return 'New chat'
+  if (clean.length <= 40) return clean
+
+  const slice = clean.slice(0, 40)
+  const lastSpace = slice.lastIndexOf(' ')
+  if (lastSpace > 10) {
+    return slice.slice(0, lastSpace) + '...'
+  }
+  return slice + '...'
+}
 
 export const useChatStore = defineStore('chat', () => {
   // ─── State ────────────────────────────────────────────────────────
@@ -78,6 +120,9 @@ export const useChatStore = defineStore('chat', () => {
           session.updatedAt = new Date().toISOString()
           saveSession(session.id)
 
+          // Generate AI title after first exchange completes
+          _maybeGenerateTitle(session)
+
           // Auto-cleanup background sessions
           if (session._background) {
             _removeFromSessions(session.id)
@@ -125,6 +170,16 @@ export const useChatStore = defineStore('chat', () => {
       provider,
       onUsage: (normalized, modelId) => {
         normalized.cost = calculateCost(normalized, modelId)
+        // Store real provider-reported input tokens for the context window donut.
+        // input_total covers system prompt + all messages + tool definitions.
+        // Must write via sessions.value.find() (reactive proxy), NOT the closure's raw session
+        // object — direct writes bypass Vue's Proxy and don't trigger computed re-runs.
+        if (normalized.input_total > 0) {
+          const liveSession = sessions.value.find(s => s.id === session.id)
+          if (liveSession && normalized.input_total > (liveSession._lastInputTokens || 0)) {
+            liveSession._lastInputTokens = normalized.input_total
+          }
+        }
         import('./usage').then(({ useUsageStore }) => {
           useUsageStore().record({
             usage: normalized,
@@ -193,7 +248,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function reopenSession(id) {
+  async function reopenSession(id, opts = {}) {
     const existing = sessions.value.find(s => s.id === id)
     if (existing) {
       if (existing._background) existing._background = false
@@ -201,7 +256,10 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
-    await _archiveCurrent()
+    // Archive current chat first (unless skipArchive — for tab coexistence)
+    if (!opts.skipArchive) {
+      await _archiveCurrent()
+    }
 
     const workspace = useWorkspaceStore()
     if (!workspace.shouldersDir) return
@@ -255,6 +313,8 @@ export const useChatStore = defineStore('chat', () => {
             label: data.label || 'Untitled',
             updatedAt: data.updatedAt || data.createdAt,
             messageCount: data.messages?.length || 0,
+            _aiTitle: data._aiTitle || false,
+            _keywords: data._keywords || [],
           })
         } catch {}
       }
@@ -348,13 +408,14 @@ export const useChatStore = defineStore('chat', () => {
     // Auto-label on first message
     const isFirst = chat.state.messagesRef.value.length === 0
     if (isFirst && text) {
-      session.label = text.slice(0, 40).replace(/\n/g, ' ').trim()
+      session.label = smartLabel(text)
     }
 
     // Build message text + multimodal files
     const { text: messageText, files } = _buildMessageTextAndFiles({ text, fileRefs, context })
 
     console.log('[chat] Sending message:', { sessionId, textLen: messageText.length, fileCount: files.length, msgCount: chat.state.messagesRef.value.length })
+    import('../services/telemetry').then(({ events }) => events.chatSend(session.modelId || 'unknown'))
     if (files.length > 0) {
       chat.sendMessage({ text: messageText, files })
     } else {
@@ -458,6 +519,8 @@ export const useChatStore = defineStore('chat', () => {
     const data = {
       id: session.id,
       label: session.label,
+      _aiTitle: session._aiTitle || false,
+      _keywords: session._keywords || [],
       modelId: session.modelId,
       messages,
       status: 'idle',
@@ -477,6 +540,8 @@ export const useChatStore = defineStore('chat', () => {
         label: session.label,
         updatedAt: session.updatedAt || session.createdAt,
         messageCount: messages.length,
+        _aiTitle: session._aiTitle || false,
+        _keywords: session._keywords || [],
       }
       if (existingIdx >= 0) {
         allSessionsMeta.value[existingIdx] = meta
@@ -485,6 +550,82 @@ export const useChatStore = defineStore('chat', () => {
       }
     } catch (e) {
       console.warn('Failed to save chat session:', e)
+    }
+  }
+
+  // ─── Title Generation ──────────────────────────────────────────
+
+  function _maybeGenerateTitle(session) {
+    if (session._aiTitle) return
+
+    const chat = chatInstances.get(session.id)
+    if (!chat) return
+
+    const messages = chat.state.messagesRef.value
+    const userMsgs = messages.filter(m => m.role === 'user')
+    const assistantMsgs = messages.filter(m => m.role === 'assistant')
+    if (userMsgs.length < 1 || assistantMsgs.length < 1) return
+    // Only generate on the first exchange
+    if (userMsgs.length > 1) return
+
+    _generateTitle(session).catch(e => {
+      console.warn('[chat] Title generation failed:', e)
+    })
+  }
+
+  async function _generateTitle(session) {
+    const workspace = useWorkspaceStore()
+    const access = await resolveApiAccess({ strategy: 'ghost' }, workspace)
+    if (!access) return
+
+    const chat = chatInstances.get(session.id)
+    if (!chat) return
+
+    const messages = chat.state.messagesRef.value
+    const firstUser = messages.find(m => m.role === 'user')
+    const firstAssistant = messages.find(m => m.role === 'assistant')
+    if (!firstUser || !firstAssistant) return
+
+    const userText = extractTextFromParts(firstUser.parts || []).slice(0, 300)
+    const assistantText = extractTextFromParts(firstAssistant.parts || []).slice(0, 300)
+    if (!userText) return
+
+    try {
+      const tauriFetch = (await import('../services/tauriFetch')).tauriFetch
+      const model = createModel(access, tauriFetch)
+
+      const result = await generateText({
+        model,
+        system: 'Generate a concise title (3-8 words) and 3-5 search keywords for this conversation. Return as JSON: {"title": "...", "keywords": ["...", "..."]}. No quotes or punctuation at the end of the title.',
+        prompt: `User: ${userText}\n\nAssistant: ${assistantText}`,
+        maxTokens: 256,
+      })
+
+      if (!result.text) return
+
+      let title = null
+      let keywords = []
+      try {
+        const parsed = JSON.parse(result.text.trim())
+        title = parsed.title?.trim()
+        keywords = Array.isArray(parsed.keywords) ? parsed.keywords : []
+      } catch {
+        title = result.text.trim()
+      }
+
+      if (!title) return
+      title = title.slice(0, 60)
+
+      // Verify session still exists
+      const current = sessions.value.find(s => s.id === session.id)
+      if (!current) return
+
+      current.label = title
+      current._aiTitle = true
+      current._keywords = keywords
+      saveSession(current.id)
+    } catch (e) {
+      console.warn('[chat] Title generation failed:', e)
     }
   }
 
