@@ -47,6 +47,8 @@
       @close="contextMenu.show = false"
       @add-text-node="addTextNodeAtMenu"
       @add-prompt-node="addPromptNodeAtMenu"
+      @add-label-node="addLabelNodeAtMenu"
+      @add-group-node="addGroupNodeAtMenu"
       @delete-selected="deleteFromContextMenu"
       @duplicate-selected="duplicateFromContextMenu"
       @select-all="selectAllFromContextMenu"
@@ -79,6 +81,8 @@ import { nanoid } from '../../stores/utils'
 import TextNodeVue from '../canvas/TextNode.vue'
 import PromptNodeVue from '../canvas/PromptNode.vue'
 import FileNodeVue from '../canvas/FileNode.vue'
+import LabelNodeVue from '../canvas/LabelNode.vue'
+import GroupNodeVue from '../canvas/GroupNode.vue'
 import CanvasContextMenu from '../canvas/CanvasContextMenu.vue'
 import FloatingStyleBar from '../canvas/FloatingStyleBar.vue'
 
@@ -109,6 +113,8 @@ const nodeTypes = {
   text: markRaw(TextNodeVue),
   prompt: markRaw(PromptNodeVue),
   file: markRaw(FileNodeVue),
+  label: markRaw(LabelNodeVue),
+  group: markRaw(GroupNodeVue),
 }
 
 const defaultEdgeOptions = {
@@ -140,16 +146,22 @@ async function loadCanvas() {
     viewport = data.viewport
 
     // Convert to Vue Flow node format
-    nodes.value = data.nodes.map(n => ({
-      id: n.id,
-      type: n.type,
-      position: { ...n.position },
-      data: { ...n.data },
-      style: {
-        width: n.dimensions?.width ? `${n.dimensions.width}px` : (n.type === 'file' ? '200px' : '280px'),
-        ...(n.dimensions?.height ? { height: `${n.dimensions.height}px` } : {}),
-      },
-    }))
+    const defaultWidths = { file: 200, label: 200, group: 600, prompt: 300, text: 280 }
+    nodes.value = data.nodes.map(n => {
+      const defaultW = defaultWidths[n.type] || 280
+      const node = {
+        id: n.id,
+        type: n.type,
+        position: { ...n.position },
+        data: { ...n.data },
+        style: {
+          width: n.dimensions?.width ? `${n.dimensions.width}px` : `${defaultW}px`,
+          ...(n.dimensions?.height ? { height: `${n.dimensions.height}px` } : (n.type === 'group' ? { height: '400px' } : {})),
+        },
+      }
+      if (n.type === 'group') node.zIndex = -1
+      return node
+    })
 
     edges.value = data.edges.map(e => ({
       id: e.id,
@@ -271,6 +283,47 @@ function addFileNode(position, data) {
       ...data,
     },
     style: { width: '200px' },
+  }
+  canvasStore.pushSnapshot(nodes.value, edges.value)
+  nodes.value.push(node)
+  scheduleSave()
+  return id
+}
+
+function addLabelNode(position, data = {}) {
+  const id = `n_${nanoid(8)}`
+  const node = {
+    id,
+    type: 'label',
+    position: { ...position },
+    data: {
+      content: data.content || '',
+      fontSize: 'large',
+      color: null,
+      textAlign: 'left',
+      ...data,
+    },
+    style: { width: `${data.width || 200}px` },
+  }
+  canvasStore.pushSnapshot(nodes.value, edges.value)
+  nodes.value.push(node)
+  scheduleSave()
+  return id
+}
+
+function addGroupNode(position, data = {}) {
+  const id = `n_${nanoid(8)}`
+  const node = {
+    id,
+    type: 'group',
+    position: { ...position },
+    data: {
+      title: 'Group',
+      color: null,
+      ...data,
+    },
+    style: { width: `${data.width || 600}px`, height: `${data.height || 400}px` },
+    zIndex: -1,
   }
   canvasStore.pushSnapshot(nodes.value, edges.value)
   nodes.value.push(node)
@@ -445,6 +498,18 @@ function addTextNodeAtMenu() {
 function addPromptNodeAtMenu() {
   const pos = contextMenu._flowPosition || { x: 100, y: 100 }
   addPromptNode(pos)
+  contextMenu.show = false
+}
+
+function addLabelNodeAtMenu() {
+  const pos = contextMenu._flowPosition || { x: 100, y: 100 }
+  addLabelNode(pos)
+  contextMenu.show = false
+}
+
+function addGroupNodeAtMenu() {
+  const pos = contextMenu._flowPosition || { x: 100, y: 100 }
+  addGroupNode(pos)
   contextMenu.show = false
 }
 
@@ -681,6 +746,8 @@ canvasStore.setEditorMethods({
   addTextNode,
   addPromptNode,
   addFileNode,
+  addLabelNode,
+  addGroupNode,
   getNodes: () => nodes.value,
   getEdges: () => edges.value,
   updateNodeData: handleNodeUpdate,

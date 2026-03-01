@@ -15,6 +15,12 @@
           <button class="ctx-item" @click="$emit('add-prompt-node')">
             <span class="ctx-label">Add prompt node</span>
           </button>
+          <button class="ctx-item" @click="$emit('add-label-node')">
+            <span class="ctx-label">Add label</span>
+          </button>
+          <button class="ctx-item" @click="$emit('add-group-node')">
+            <span class="ctx-label">Add group / frame</span>
+          </button>
           <div class="ctx-sep" />
           <button class="ctx-item" @click="$emit('select-all')">
             <span class="ctx-label">Select all</span>
@@ -57,7 +63,7 @@ defineProps({
   edgeId: { type: String, default: null },
 })
 
-defineEmits(['close', 'add-text-node', 'add-prompt-node', 'delete-selected', 'duplicate-selected', 'select-all'])
+defineEmits(['close', 'add-text-node', 'add-prompt-node', 'add-label-node', 'add-group-node', 'delete-selected', 'duplicate-selected', 'select-all'])
 </script>
 
 <style scoped>

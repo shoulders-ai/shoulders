@@ -120,6 +120,24 @@ export const useEditorStore = defineStore('editor', {
     },
 
     /**
+     * Walk the pane tree and return the first leaf whose activeTab is NOT a chat tab.
+     * Used by smart routing to find a suitable pane for files opened from a chat context.
+     */
+    _findNonChatPane() {
+      const walk = (node) => {
+        if (node.type === 'leaf' && (!node.activeTab || !isChatTab(node.activeTab))) return node
+        if (node.type === 'split' && node.children) {
+          for (const child of node.children) {
+            const found = walk(child)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      return walk(this.paneTree)
+    },
+
+    /**
      * Walk the pane tree and return the first leaf with any chat tab.
      */
     findPaneWithChatTab() {
@@ -148,6 +166,46 @@ export const useEditorStore = defineStore('editor', {
         return
       }
 
+      // Smart routing: if the active pane is showing a chat, route file to a
+      // different pane so the conversation isn't buried. Focus stays on chat.
+      if (pane.activeTab && isChatTab(pane.activeTab) && !isChatTab(path)) {
+        // File already open in another pane — switch to it there
+        const existingPane = this.findPaneWithTab(path)
+        if (existingPane) {
+          existingPane.activeTab = path
+          this.activePaneId = existingPane.id
+          if (!isChatTab(path)) this.recordFileOpen(path)
+          this.saveEditorState()
+          return
+        }
+
+        // Find a non-chat pane to host the file
+        const altPane = this._findNonChatPane()
+        if (altPane && altPane.id !== pane.id) {
+          const newtabIdx = altPane.activeTab && isNewTab(altPane.activeTab)
+            ? altPane.tabs.indexOf(altPane.activeTab)
+            : -1
+          if (newtabIdx !== -1) {
+            altPane.tabs.splice(newtabIdx, 1, path)
+          } else {
+            altPane.tabs.push(path)
+          }
+          altPane.activeTab = path
+          this.activePaneId = altPane.id
+          if (!isChatTab(path)) this.recordFileOpen(path)
+          this.saveEditorState()
+          return
+        }
+
+        // Only one pane (the chat pane) — split and open file beside it.
+        const newPaneId = this.splitPaneWith(this.activePaneId, 'vertical', path)
+        // Move focus to the new file pane
+        if (newPaneId) this.activePaneId = newPaneId
+        if (!isChatTab(path)) this.recordFileOpen(path)
+        return
+      }
+
+      // Normal flow: open in active pane
       // Replace newtab if it's the active tab (like Chrome replacing blank tab)
       const newtabIdx = pane.activeTab && isNewTab(pane.activeTab)
         ? pane.tabs.indexOf(pane.activeTab)

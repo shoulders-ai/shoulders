@@ -347,12 +347,17 @@ function handleKeydown(e) {
     return
   }
 
-  // Cmd+W: Close tab
+  // Cmd+W: Close tab, or close empty pane
   if (isMod(e) && e.key === 'w') {
     e.preventDefault()
     const pane = editorStore.activePane
-    if (pane && pane.activeTab) {
+    if (!pane) return
+    if (pane.activeTab) {
       editorStore.closeTab(pane.id, pane.activeTab)
+    } else {
+      // No tabs — collapse pane if it's not the root
+      const parent = editorStore.findParent(editorStore.paneTree, pane.id)
+      if (parent) editorStore.collapsePane(pane.id)
     }
     return
   }

@@ -33,6 +33,18 @@ const DEFAULT_FILE_DATA = {
   preview: '',
 }
 
+const DEFAULT_LABEL_DATA = {
+  content: '',
+  fontSize: 'large',
+  color: null,
+  textAlign: 'left',
+}
+
+const DEFAULT_GROUP_DATA = {
+  title: 'Group',
+  color: null,
+}
+
 /**
  * Parse a .canvas JSON string into a validated object with defaults applied.
  */
@@ -91,6 +103,10 @@ export function parseCanvas(jsonString) {
         normalized.data = { ...DEFAULT_PROMPT_DATA, ...node.data }
       } else if (node.type === 'file') {
         normalized.data = { ...DEFAULT_FILE_DATA, ...node.data }
+      } else if (node.type === 'label') {
+        normalized.data = { ...DEFAULT_LABEL_DATA, ...node.data }
+      } else if (node.type === 'group') {
+        normalized.data = { ...DEFAULT_GROUP_DATA, ...node.data }
       } else {
         normalized.data = node.data || {}
       }

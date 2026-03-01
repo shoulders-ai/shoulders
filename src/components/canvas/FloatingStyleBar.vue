@@ -22,8 +22,8 @@
 
       <div v-if="canToggleType" class="bar-sep" />
 
-      <!-- Color picker -->
-      <div class="picker-wrap">
+      <!-- Color picker (text, label, group) -->
+      <div v-if="canShowColor" class="picker-wrap">
         <button
           class="bar-btn"
           title="Color"
@@ -44,8 +44,8 @@
         </div>
       </div>
 
-      <!-- Border picker -->
-      <div class="picker-wrap">
+      <!-- Border picker (text only) -->
+      <div v-if="canShowBorder" class="picker-wrap">
         <button
           class="bar-btn"
           title="Border"
@@ -67,8 +67,8 @@
         </div>
       </div>
 
-      <!-- Font size picker -->
-      <div class="picker-wrap">
+      <!-- Font size picker (text, label) -->
+      <div v-if="canShowFont" class="picker-wrap">
         <button
           class="bar-btn text-btn"
           title="Font size"
@@ -78,7 +78,7 @@
         </button>
         <div v-if="activePopover === 'font'" class="popover" @click.stop>
           <button
-            v-for="fs in fontSizes"
+            v-for="fs in activeFontSizes"
             :key="fs.value"
             class="popover-btn"
             :class="{ active: currentFont === fs.value }"
@@ -89,8 +89,8 @@
         </div>
       </div>
 
-      <!-- Alignment picker -->
-      <div class="picker-wrap">
+      <!-- Alignment picker (text, label) -->
+      <div v-if="canShowAlign" class="picker-wrap">
         <button
           class="bar-btn"
           title="Text alignment"
@@ -116,10 +116,11 @@
         </div>
       </div>
 
-      <div class="bar-sep" />
+      <div v-if="canShowTextControls" class="bar-sep" />
 
-      <!-- Title toggle -->
+      <!-- Title toggle (text only) -->
       <button
+        v-if="canShowTextControls"
         class="bar-btn"
         :class="{ active: hasTitle }"
         title="Toggle title"
@@ -130,8 +131,9 @@
         </svg>
       </button>
 
-      <!-- Expand / Collapse height -->
+      <!-- Expand / Collapse height (text only) -->
       <button
+        v-if="canShowTextControls"
         class="bar-btn"
         title="Expand to full content"
         @click="$emit('expand-height')"
@@ -141,6 +143,7 @@
         </svg>
       </button>
       <button
+        v-if="canShowTextControls"
         class="bar-btn"
         title="Collapse to compact"
         @click="$emit('collapse-height')"
@@ -194,17 +197,47 @@ const borderWidths = [
   { value: 'thick', label: 'Thick', px: '3px' },
 ]
 
-const fontSizes = [
+const fontSizesBase = [
   { value: 'small', label: 'Small', display: 'S', previewSize: '10px' },
   { value: 'medium', label: 'Medium', display: 'M', previewSize: '12px' },
   { value: 'large', label: 'Large', display: 'L', previewSize: '14px' },
 ]
 
+const fontSizesExtended = [
+  ...fontSizesBase,
+  { value: 'x-large', label: 'X-Large', display: 'XL', previewSize: '18px' },
+  { value: 'xx-large', label: 'XX-Large', display: '2XL', previewSize: '22px' },
+]
+
 const firstNode = computed(() => props.nodes[0])
-const isPrompt = computed(() => firstNode.value?.type === 'prompt')
+const nodeType = computed(() => firstNode.value?.type)
+const isPrompt = computed(() => nodeType.value === 'prompt')
+const isLabel = computed(() => nodeType.value === 'label')
+const isGroup = computed(() => nodeType.value === 'group')
+
 const canToggleType = computed(() => {
-  const t = firstNode.value?.type
+  const t = nodeType.value
   return t === 'text' || t === 'prompt'
+})
+
+// Type-aware control visibility
+const canShowColor = computed(() => {
+  const t = nodeType.value
+  return t === 'text' || t === 'label' || t === 'group'
+})
+const canShowBorder = computed(() => nodeType.value === 'text')
+const canShowFont = computed(() => {
+  const t = nodeType.value
+  return t === 'text' || t === 'label'
+})
+const canShowAlign = computed(() => {
+  const t = nodeType.value
+  return t === 'text' || t === 'label'
+})
+const canShowTextControls = computed(() => nodeType.value === 'text')
+
+const activeFontSizes = computed(() => {
+  return isLabel.value ? fontSizesExtended : fontSizesBase
 })
 const hasTitle = computed(() => {
   const title = firstNode.value?.data?.title
@@ -224,7 +257,7 @@ const currentBorderPx = computed(() => {
 const currentFont = computed(() => firstNode.value?.data?.fontSize || 'medium')
 const currentAlign = computed(() => firstNode.value?.data?.textAlign || 'left')
 const currentFontDisplay = computed(() => {
-  const map = { small: 'S', medium: 'M', large: 'L' }
+  const map = { small: 'S', medium: 'M', large: 'L', 'x-large': 'XL', 'xx-large': '2XL' }
   return map[currentFont.value] || 'M'
 })
 
