@@ -5,20 +5,7 @@
 
     <!-- Terminal sub-tabs -->
     <div class="flex items-center h-7 shrink-0 border-b" style="border-color: var(--border); background: var(--bg-secondary);">
-      <!-- New Terminal button -->
-      <button
-        class="h-7 px-2 flex items-center gap-1 shrink-0 cursor-pointer hover:bg-[var(--bg-hover)]"
-        style="color: var(--fg-muted);"
-        @click="addTerminal"
-        title="New terminal"
-      >
-        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M8 3v10M3 8h10"/>
-        </svg>
-        <span class="text-[11px]">New Terminal</span>
-      </button>
-
-      <!-- Tab list -->
+      <!-- Tab list + New Terminal button -->
       <div ref="termTabsContainer" class="flex-1 flex items-center h-full overflow-x-auto scrollbar-hidden relative">
         <div
           v-for="(term, idx) in terminals"
@@ -54,7 +41,6 @@
             <span class="flex-1 truncate">{{ term.label }}</span>
           </template>
           <button
-            v-if="terminals.length > 1 && termRenamingIdx !== idx"
             class="ml-auto pl-1.5 w-3.5 h-3.5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 shrink-0"
             style="color: var(--fg-muted);"
             @click.stop="closeTerminal(idx)"
@@ -64,6 +50,19 @@
             </svg>
           </button>
         </div>
+
+        <!-- New Terminal (after last tab) -->
+        <button
+          class="h-7 px-2 flex items-center gap-1 shrink-0 cursor-pointer hover:bg-[var(--bg-hover)]"
+          style="color: var(--fg-muted);"
+          @click="addTerminal"
+          title="New terminal"
+        >
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M8 3v10M3 8h10"/>
+          </svg>
+          <span class="text-[11px]">New Terminal</span>
+        </button>
 
         <!-- Drop indicator line -->
         <div v-if="termDropIndicatorLeft !== null" class="tab-drop-indicator" :style="{ left: termDropIndicatorLeft + 'px' }"></div>
@@ -147,8 +146,8 @@ if (hasEverOpened.value && terminals.length === 0) {
 
 // Watch for open + refit on visibility change
 watch(() => workspace.bottomPanelOpen, (open) => {
-  if (open && !hasEverOpened.value) {
-    hasEverOpened.value = true
+  if (open) {
+    if (!hasEverOpened.value) hasEverOpened.value = true
     if (terminals.length === 0) {
       terminals.push({ id: termNextId++, label: 'Terminal 1' })
       activeTerminal.value = 0
@@ -176,6 +175,11 @@ function addTerminal() {
 
 function closeTerminal(idx) {
   terminals.splice(idx, 1)
+  if (terminals.length === 0) {
+    // Last tab closed — hide the panel
+    workspace.toggleBottomPanel()
+    return
+  }
   if (activeTerminal.value >= terminals.length) {
     activeTerminal.value = terminals.length - 1
   }
