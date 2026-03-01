@@ -49,7 +49,7 @@ zod                   — Schema validation for tool inputSchema
 | **Chat** | |
 | `stores/chat.js` | Chat sessions, `Chat` composable instances, persistence |
 | `services/chatTransport.js` | `ToolLoopAgent` + `DirectChatTransport` factory |
-| `services/chatTools.js` | 28 tools defined with AI SDK `tool()` + zod schemas |
+| `services/chatTools.js` | 27 tools defined with AI SDK `tool()` + zod schemas |
 | `components/right/ChatSession.vue` | Per-session message list |
 | `components/right/ChatMessage.vue` | Message renderer (parts-based: text, reasoning, tool calls) |
 | `components/right/ToolCallLine.vue` | Compact tool call display with status indicators |
@@ -192,7 +192,7 @@ Tool part states: `input-streaming` → `input-available` → `output-available`
 
 ### Tool definitions (`chatTools.js`)
 
-28 tools defined with AI SDK `tool()` and zod schemas:
+27 tools defined with AI SDK `tool()` and zod schemas:
 
 ```js
 import { tool } from 'ai'

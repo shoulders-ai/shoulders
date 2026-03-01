@@ -65,9 +65,11 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import { TOOL_LABELS, getToolContext, getToolIcon, isSkillRead, getToolFilePath } from '../../utils/chatMarkdown'
 import { useEditorStore } from '../../stores/editor'
 import { useWorkspaceStore } from '../../stores/workspace'
+import { useToastStore } from '../../stores/toast'
 
 const props = defineProps({
   // UIMessage tool part (new format)
@@ -122,17 +124,23 @@ const iconName = computed(() => isSkill.value ? 'sparkle' : getToolIcon(toolName
 
 const editorStore = useEditorStore()
 const workspace = useWorkspaceStore()
+const toastStore = useToastStore()
 
 const filePath = computed(() => {
   if (isSkill.value) return null
   return getToolFilePath(toolName.value, toolInput.value)
 })
 
-function openFile() {
+async function openFile() {
   if (!filePath.value || !workspace.path) return
   const p = filePath.value
   const absolute = p.startsWith('/') ? p : workspace.path + '/' + p
-  editorStore.openFile(absolute)
+  const exists = await invoke('path_exists', { path: absolute })
+  if (exists) {
+    editorStore.openFile(absolute)
+  } else {
+    toastStore.show(`File not found: ${absolute.split('/').pop()}`, { type: 'error', duration: 3000 })
+  }
 }
 
 const statusClass = computed(() => {

@@ -58,8 +58,8 @@ Desktop shell is Tauri v2 (Rust + webview). All file operations and API calls go
 Multi-provider streaming chat in the right sidebar with parallel sessions.
 
 - **Providers**: Anthropic, OpenAI, Google (configured in `~/.shoulders/models.json` + `~/.shoulders/keys.env`)
-- **28 tools** across 5 categories:
-  - **Workspace** (11): `read_file`, `list_files`, `search_content`, `write_file`, `edit_file`, `create_file`, `rename_file`, `move_file`, `duplicate_file`, `delete_file`, `run_command`
+- **27 tools** across 5 categories:
+  - **Workspace** (10): `read_file`, `list_files`, `search_content`, `write_file`, `edit_file`, `rename_file`, `move_file`, `duplicate_file`, `delete_file`, `run_command`
   - **References** (5): `search_references`, `get_reference`, `add_reference`, `cite_reference`, `edit_reference`
   - **Feedback** (3): `add_task`, `read_tasks`, `create_proposal`
   - **Notebooks** (6): `read_notebook`, `edit_cell`, `run_cell`, `run_all_cells`, `add_cell`, `delete_cell`

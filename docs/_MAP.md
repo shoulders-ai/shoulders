@@ -94,7 +94,7 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 - Store: `src/stores/chat.js` — Chat composable instances (`@ai-sdk/vue`), sessions, persistence
 - Transport: `src/services/chatTransport.js` — `ToolLoopAgent` + `DirectChatTransport` factory (creates fresh agent per request)
 - Model factory: `src/services/aiSdk.js` — `createModel()`, `buildProviderOptions()`, `convertSdkUsage()`
-- Tool definitions: `src/services/chatTools.js` — 28 tools via AI SDK `tool()` + zod schemas
+- Tool definitions: `src/services/chatTools.js` — 27 tools via AI SDK `tool()` + zod schemas
 - Academic paper search: `src/services/openalex.js` — OpenAlex API client (primary), fallback chain in `chatTools.js` (OpenAlex → Exa → CrossRef)
 - API routing + auth: `src/services/apiClient.js` — `resolveApiAccess()`, Shoulders proxy URL
 - Context windows: `src/services/chatModels.js` — context window sizes, thinking config

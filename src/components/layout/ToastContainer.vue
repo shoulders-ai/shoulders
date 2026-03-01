@@ -9,6 +9,7 @@
           :class="`toast-${toast.type}`"
           @click="!toast.action && toastStore.dismiss(toast.id)"
         >
+          <component :is="typeIcon(toast.type)" :size="16" :stroke-width="2" class="toast-type-icon" />
           <span class="toast-message">{{ toast.message }}</span>
           <button
             v-if="toast.action"
@@ -22,7 +23,7 @@
             class="toast-dismiss-btn"
             @click.stop="toastStore.dismiss(toast.id)"
           >
-            &times;
+            <IconX :size="14" :stroke-width="2" />
           </button>
         </div>
       </TransitionGroup>
@@ -32,13 +33,25 @@
 
 <script setup>
 import { useToastStore } from '../../stores/toast'
+import { IconCircleCheck, IconCircleX, IconAlertTriangle, IconInfoCircle, IconX } from '@tabler/icons-vue'
+
 const toastStore = useToastStore()
+
+function typeIcon(type) {
+  switch (type) {
+    case 'success': return IconCircleCheck
+    case 'error': return IconCircleX
+    case 'warning': return IconAlertTriangle
+    case 'info': return IconInfoCircle
+    default: return IconInfoCircle
+  }
+}
 </script>
 
 <style scoped>
 .toast-container {
   position: fixed;
-  bottom: 36px;
+  bottom: 24px;
   right: 16px;
   z-index: 9999;
   display: flex;
@@ -50,19 +63,20 @@ const toastStore = useToastStore()
 .toast-item {
   pointer-events: auto;
   padding: 8px 14px;
-  border-radius: 6px;
-  font-size: 12.5px;
+  border-radius: 2px;
+  font-size: calc(var(--ui-font-size, 13px) - 2px);
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
+  border: 1px solid color-mix(in srgb, var(--fg-muted) 30%, var(--border));
   color: var(--fg-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  max-width: 360px;
-  line-height: 1.4;
+  max-width: 380px;
+  line-height: 1.45;
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.toast-type-icon {
+  flex-shrink: 0;
 }
 
 .toast-message {
@@ -70,12 +84,12 @@ const toastStore = useToastStore()
 }
 
 .toast-action-btn {
-  padding: 2px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--accent);
-  background: rgba(122, 162, 247, 0.1);
+  padding: 3px 10px;
+  border-radius: 2px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--accent);
-  font-size: 11px;
+  font-size: calc(var(--ui-font-size, 13px) - 3px);
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -83,55 +97,70 @@ const toastStore = useToastStore()
 }
 
 .toast-action-btn:hover {
-  background: rgba(122, 162, 247, 0.25);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .toast-dismiss-btn {
+  display: flex;
+  align-items: center;
   background: none;
   border: none;
   color: var(--fg-muted);
   cursor: pointer;
-  font-size: 14px;
-  padding: 0 2px;
+  padding: 0;
   line-height: 1;
+  transition: color 0.15s;
 }
 
 .toast-dismiss-btn:hover {
   color: var(--fg-primary);
 }
 
+/* Type styling: background tint + icon color */
 .toast-success {
-  border-left: 3px solid var(--success);
+  background: color-mix(in srgb, var(--success) 8%, var(--bg-secondary));
+}
+.toast-success .toast-type-icon {
+  color: var(--success);
 }
 
 .toast-error {
-  border-left: 3px solid var(--error, #f44);
+  background: color-mix(in srgb, var(--error, #f44) 8%, var(--bg-secondary));
+}
+.toast-error .toast-type-icon {
+  color: var(--error, #f44);
 }
 
 .toast-warning {
-  border-left: 3px solid var(--warning, #e0af68);
+  background: color-mix(in srgb, var(--warning, #e0af68) 8%, var(--bg-secondary));
+}
+.toast-warning .toast-type-icon {
+  color: var(--warning, #e0af68);
 }
 
 .toast-info {
-  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-secondary));
+}
+.toast-info .toast-type-icon {
+  color: var(--accent);
 }
 
 /* Transitions */
 .toast-enter-active {
-  transition: all 0.25s ease-out;
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
 }
 .toast-leave-active {
-  transition: all 0.2s ease-in;
+  transition: opacity 0.08s ease-out, transform 0.08s ease-out;
 }
 .toast-enter-from {
   opacity: 0;
-  transform: translateX(20px);
+  transform: translateY(8px);
 }
 .toast-leave-to {
   opacity: 0;
-  transform: translateX(20px);
+  transform: translateX(12px);
 }
 .toast-move {
-  transition: transform 0.25s ease;
+  transition: transform 0.15s ease;
 }
 </style>

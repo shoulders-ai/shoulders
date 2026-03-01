@@ -8,7 +8,7 @@ export const useToastStore = defineStore('toast', {
   }),
 
   actions: {
-    show(message, { type = 'success', duration = 3000, action = null } = {}) {
+    show(message, { type = 'success', duration = 5000, action = null } = {}) {
       const id = nanoid()
       this.toasts.push({ id, message, type, action })
       if (duration > 0) {
