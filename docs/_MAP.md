@@ -37,6 +37,7 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 | Gotchas & lessons | [gotchas.md](gotchas.md) | Full details, file paths, and additional edge cases beyond the summary above |
 | **Web backend** | [web-backend.md](web-backend.md) | Nuxt server: auth, AI proxy, credits, contact form, telemetry, admin dashboard, email (Resend), deployment |
 | **Peer review** | [web-peer-review.md](web-peer-review.md) | Free promo tool: .docx/.pdf upload → multi-agent AI review (gatekeeper + technical/editorial/reference-checker reviewers + report writer), inline comments with Google Docs-style positioning, Typst PDF export, guidance document system. PDF intake via Z OCR API (GLM-OCR). |
+| **Paper triage** | [web-triage.md](web-triage.md) | **WIP.** Desk triage for journal editors: PDF/DOCX upload → metadata extraction, reference verification, AI detection, novelty search, author lookup (OpenAlex), structured assessment. ~$0.40/paper, ~3 minutes. |
 | **Auth system** | [auth-system.md](auth-system.md) | Refresh token rotation, desktop login (polling + deep link), OS keychain, production checklist, debugging |
 | **Admin system** | [admin-system.md](admin-system.md) | Admin dashboard (JWT cookie auth, CSRF), 7 pages (dashboard, users, calls, reviews, decks, analytics), anonymous page view tracking, all admin API endpoints |
 | **Auto-updates** | [building.md](building.md#auto-updates) | tauri-plugin-updater, signing keypair, version bump, server endpoint, platform notes |
@@ -229,7 +230,10 @@ The `/web` folder contains both the web front and backend (Nuxt) of the Shoulder
 - LLM discoverability: `web/public/llms.txt` — served at `shoulde.rs/llms.txt`, structured index of product and docs for AI agents
 
 #### Want to change the peer review system?
-- See [peer-review.md](peer-review.md)
+- See [web-peer-review.md](web-peer-review.md)
+
+#### Want to change the paper triage system?
+- See [web-triage.md](web-triage.md)
 
 #### Want to change the web backend (auth, proxy, admin)?
 - **All server code**: `web/server/` — Nuxt/Nitro API routes, middleware, utils
