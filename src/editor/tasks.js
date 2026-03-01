@@ -20,8 +20,8 @@ class TaskGutterMarker extends GutterMarker {
       : this.task.status === 'error' ? 'error'
       : 'idle'
     dot.className = `task-dot task-${cssStatus}`
-    const firstMsg = this.task.messages?.[0]?.content || ''
-    dot.title = firstMsg.length > 60 ? firstMsg.slice(0, 60) + '...' : firstMsg
+    const preview = this.task.firstMessagePreview || ''
+    dot.title = preview.length > 60 ? preview.slice(0, 60) + '...' : preview
     dot.dataset.taskId = this.task.id
     return dot
   }

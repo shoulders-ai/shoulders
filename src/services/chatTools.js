@@ -777,23 +777,25 @@ export function getAiTools(workspace) {
         const threads = tasksStore.threadsForFile(path)
         if (threads.length === 0) return `No tasks on ${path.split('/').pop()}.`
         return threads.map(t => {
-          const msgs = t.messages
-            .filter(m => !m._isToolResult && !m._synthetic)
+          // Get messages from Chat instance or saved messages
+          const messages = tasksStore.getThreadMessages(t.id)
+          const msgs = messages
             .map(m => {
-              const text = m.content || m.parts?.find(p => p.type === 'text')?.text || ''
+              const text = m.parts?.find(p => p.type === 'text')?.text || m.content || ''
               return `  [${m.role}]: ${text.slice(0, 200)}`
             })
             .join('\n')
-          const edits = t.messages
-            .flatMap(m => {
-              // Support both old format (toolCalls) and new format (parts)
-              const tcs = m.toolCalls || []
-              const partTcs = (m.parts || [])
-                .filter(p => p.toolName === 'propose_edit')
-                .map(p => ({ name: 'propose_edit', input: p.input || p.args, status: p.state }))
-              return [...tcs, ...partTcs]
-            })
-            .filter(tc => tc.name === 'propose_edit')
+          const edits = messages
+            .flatMap(m => (m.parts || [])
+              .filter(p => p.toolName === 'propose_edit')
+              .map(p => {
+                const editStatus = tasksStore.getEditStatus(p.toolCallId)
+                return {
+                  input: p.input || {},
+                  status: editStatus?.status || p.state,
+                }
+              })
+            )
             .map(tc => `  [proposed edit]: "${tc.input?.old_string?.slice(0, 50)}" -> "${tc.input?.new_string?.slice(0, 50)}" (${tc.status})`)
             .join('\n')
           return `Thread ${t.id} (${t.status}):\n  Selection: "${t.selectedText?.slice(0, 80)}"\n${msgs}${edits ? '\n' + edits : ''}`

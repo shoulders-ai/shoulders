@@ -12,14 +12,41 @@ export class DocxTaskBridge {
     this.filePath = filePath
   }
 
-  async applyProposedEdit(threadId, toolCallId, thread) {
+  /**
+   * Apply a proposed edit given old/new strings directly.
+   * Called by tasks store which extracts inputs from Chat instance messages.
+   */
+  async applyProposedEditFromInput(toolCallId, old_string, new_string) {
     const filesStore = useFilesStore()
     const editorStore = useEditorStore()
     const reviews = useReviewsStore()
 
-    // Find the tool call
+    const ai = editorStore.getAnyAiActions(this.filePath)
+    if (!ai) {
+      throw new Error('AIActions not available.')
+    }
+
+    const result = await ai.action.literalReplace(old_string, new_string, {
+      caseSensitive: true,
+      trackChanges: !reviews.directMode,
+    })
+
+    if (!result.success) {
+      throw new Error('old_string not found in document. The text may have changed.')
+    }
+
+    // Update text cache
+    const editor = this.superdoc?.activeEditor
+    if (editor) {
+      filesStore.fileContents[this.filePath] = editor.state.doc.textContent
+    }
+  }
+
+  // Legacy method — kept for backward compatibility with any existing callers
+  async applyProposedEdit(threadId, toolCallId, thread) {
+    // Find the tool call in legacy format
     let tc = null
-    for (const msg of thread.messages) {
+    for (const msg of (thread.messages || [])) {
       if (msg.toolCalls) {
         tc = msg.toolCalls.find(t => t.id === toolCallId)
         if (tc) break
@@ -30,33 +57,8 @@ export class DocxTaskBridge {
     const { old_string, new_string } = tc.input
     if (!old_string || !new_string) return
 
-    // Use AIActions.literalReplace — the official SuperDoc API for atomic
-    // find-and-replace. Creates a single undo step and proper tracked changes.
-    const ai = editorStore.getAnyAiActions(this.filePath)
-    if (!ai) {
-      tc.output = 'Error: AIActions not available.'
-      tc.status = 'error'
-      return
-    }
-
     try {
-      const result = await ai.action.literalReplace(old_string, new_string, {
-        caseSensitive: true,
-        trackChanges: !reviews.directMode,
-      })
-
-      if (!result.success) {
-        tc.output = 'Error: old_string not found in document. The text may have changed.'
-        tc.status = 'error'
-        return
-      }
-
-      // Update text cache
-      const editor = this.superdoc?.activeEditor
-      if (editor) {
-        filesStore.fileContents[this.filePath] = editor.state.doc.textContent
-      }
-
+      await this.applyProposedEditFromInput(toolCallId, old_string, new_string)
       tc.status = 'applied'
     } catch (e) {
       tc.output = `Error applying edit: ${e}`

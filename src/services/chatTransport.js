@@ -29,14 +29,14 @@ export function createChatTransport(getConfig) {
       console.log('[transport] Config resolved:', { provider: config.provider, model: config.access?.model, hasTools: !!config.workspace, systemLen: config.systemPrompt?.length })
       const tauriFetch = createTauriFetch()
       const model = createModel(config.access, tauriFetch)
-      const tools = getAiTools(config.workspace)
+      const tools = { ...getAiTools(config.workspace), ...config.extraTools }
       const providerOptions = buildProviderOptions(config.thinkingConfig, config.provider)
 
       const agent = new ToolLoopAgent({
         model,
         tools,
         instructions: config.systemPrompt,
-        stopWhen: stepCountIs(15),
+        stopWhen: stepCountIs(config.maxSteps || 15),
         providerOptions,
         onStepFinish(event) {
           if (config.onUsage && event.usage) {

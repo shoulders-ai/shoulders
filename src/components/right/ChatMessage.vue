@@ -76,6 +76,39 @@
             :options="getProposalData(part).options"
             @select="(title) => $emit('proposal-select', title)"
           />
+          <!-- propose_edit: diff card with apply button -->
+          <div v-else-if="getToolName(part) === 'propose_edit' && part.input"
+            class="rounded border ui-text-lg"
+            style="border-color: var(--border); background: var(--bg-primary);">
+            <div class="px-2.5 py-2">
+              <div class="ui-text-sm uppercase tracking-wider mb-1.5" style="color: var(--fg-muted);">
+                Proposed Edit
+              </div>
+              <div class="rounded px-2 py-1 mb-1" style="background: rgba(247, 118, 142, 0.08);">
+                <div class="line-through ui-text-lg" style="color: var(--error);">{{ part.input.old_string }}</div>
+              </div>
+              <div class="rounded px-2 py-1 mb-2" style="background: rgba(158, 206, 106, 0.08);">
+                <div class="ui-text-lg" style="color: var(--success);">{{ part.input.new_string }}</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="proposeEditStatus(part.toolCallId) !== 'applied'"
+                  class="review-bar-btn review-bar-accept ui-text-base"
+                  @click="tasksStore.applyProposedEdit(props.threadId, part.toolCallId)"
+                >
+                  Apply
+                </button>
+                <span v-if="proposeEditStatus(part.toolCallId) === 'applied'"
+                  class="ui-text-base font-medium" style="color: var(--success);">
+                  Applied
+                </span>
+                <span v-if="proposeEditStatus(part.toolCallId) === 'error'"
+                  class="ui-text-base" style="color: var(--error);">
+                  {{ proposeEditError(part.toolCallId) }}
+                </span>
+              </div>
+            </div>
+          </div>
           <ToolCallLine v-else :part="part" :key="part.toolCallId + '-' + part.state" />
         </template>
       </template>
@@ -110,13 +143,16 @@ import ToolCallLine from './ToolCallLine.vue'
 import { renderMarkdown } from '../../utils/chatMarkdown'
 import { useEditorStore } from '../../stores/editor'
 import { useChatStore } from '../../stores/chat'
+import { useTasksStore } from '../../stores/tasks'
 
 const editorStore = useEditorStore()
 const chatStore = useChatStore()
+const tasksStore = useTasksStore()
 
 const props = defineProps({
   message: { type: Object, required: true },
   prevRole: { type: String, default: null },
+  threadId: { type: String, default: null },
 })
 
 defineEmits(['proposal-select'])
@@ -232,10 +268,14 @@ const hasError = computed(() => {
   return msg.status === 'error'
 })
 
+function _getChatInstance() {
+  return chatStore.getChatInstance(props.message._sessionId)
+    || (props.threadId ? tasksStore.getTaskChatInstance(props.threadId) : null)
+}
+
 const isWaitingForContent = computed(() => {
-  const chat = chatStore.getChatInstance(props.message._sessionId)
+  const chat = _getChatInstance()
   if (!chat) {
-    // Legacy: use status field
     return props.message.status === 'streaming' && !textContent.value && !displayParts.value.some(p => isToolPart(p))
   }
   const status = chat.state.statusRef.value
@@ -243,17 +283,24 @@ const isWaitingForContent = computed(() => {
 })
 
 function isReasoningActive(partIdx) {
-  // Reasoning is "active" if it's the last part and we're still streaming
   const parts = displayParts.value
   const partsAfter = parts.slice(partIdx + 1)
   if (partsAfter.length > 0) return false
 
-  const chat = chatStore.getChatInstance(props.message._sessionId)
+  const chat = _getChatInstance()
   if (chat) {
     const status = chat.state.statusRef.value
     return status === 'submitted' || status === 'streaming'
   }
   return props.message.status === 'streaming'
+}
+
+function proposeEditStatus(toolCallId) {
+  return tasksStore.getEditStatus(toolCallId)?.status || null
+}
+
+function proposeEditError(toolCallId) {
+  return tasksStore.getEditStatus(toolCallId)?.error || ''
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────

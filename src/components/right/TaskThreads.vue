@@ -80,10 +80,7 @@ const sortedThreads = computed(() => {
 const activeThread = computed(() => tasksStore.activeThread)
 
 function firstMessagePreview(thread) {
-  const first = thread.messages[0]
-  if (!first) return 'Empty thread'
-  const text = first.content || ''
-  return text.length > 50 ? text.slice(0, 50) + '...' : text
+  return thread.firstMessagePreview || 'Empty thread'
 }
 
 function statusColor(status) {
