@@ -68,11 +68,12 @@
     </div>
 
     <!-- Input — constrained to match message column width -->
-    <div class="max-w-[100ch] mx-auto w-full">
+    <div class="max-w-[80ch] mx-auto w-full">
       <ChatInput
         ref="chatInputRef"
         :isStreaming="isStreaming"
         :modelId="session.modelId"
+        :sessionId="session.id"
         :estimatedTokens="estimatedTokens"
         :contextWindow="getContextWindow(session.modelId, workspace)"
         @send="onSend"

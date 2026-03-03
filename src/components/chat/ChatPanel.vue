@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full" style="background: var(--bg-secondary);">
+  <div class="flex flex-col h-full" style="background: var(--bg-primary);">
     <ChatSession
       v-if="session"
       ref="chatSessionRef"

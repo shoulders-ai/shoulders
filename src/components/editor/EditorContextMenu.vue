@@ -185,6 +185,9 @@ function selectAll() {
 <style scoped>
 .spell-suggestion {
   font-weight: 600;
-  color: var(--accent) !important;
+  color: var(--accent);
+}
+.spell-suggestion:hover {
+  color: var(--fg-primary);
 }
 </style>

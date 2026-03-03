@@ -64,6 +64,7 @@ export const shouldersTheme = EditorView.theme(
     },
     '.cm-button': {
       backgroundColor: 'var(--bg-tertiary)',
+      backgroundImage: 'none',
       color: 'var(--fg-primary)',
       border: '1px solid var(--border)',
       borderRadius: '4px',

@@ -75,6 +75,12 @@ function onContextMenu(e) {
   ctxMenu.x = e.clientX
   ctxMenu.y = e.clientY
   ctxMenu.hasSelection = view ? view.state.selection.main.from !== view.state.selection.main.to : false
+  // Temporarily remove the native spellcheck attribute to prevent macOS from
+  // showing its native spell correction widget on top of our custom context menu.
+  // The attribute is restored when the menu closes (see watch below).
+  if (view && isMd && workspace.spellcheck) {
+    view.dispatch({ effects: spellCheckCompartment.reconfigure([]) })
+  }
   ctxMenu.show = true
 }
 
@@ -921,6 +927,20 @@ if (isMd) {
       view.dispatch({
         effects: spellCheckCompartment.reconfigure(enabled ? EditorView.contentAttributes.of({ spellcheck: 'true' }) : []),
       })
+    }
+  )
+
+  // Restore native spellcheck attribute when the context menu closes.
+  // It was removed in onContextMenu to prevent macOS from showing its native
+  // spell correction widget on top of our custom menu.
+  watch(
+    () => ctxMenu.show,
+    (show) => {
+      if (!show && view && workspace.spellcheck) {
+        view.dispatch({
+          effects: spellCheckCompartment.reconfigure(EditorView.contentAttributes.of({ spellcheck: 'true' })),
+        })
+      }
     }
   )
 }
