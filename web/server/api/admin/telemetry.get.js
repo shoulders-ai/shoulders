@@ -77,14 +77,40 @@ export default defineEventHandler((event) => {
     GROUP BY platform ORDER BY count DESC
   `).all(...params)
 
-  // Daily counts for bar chart (last 30 days, scoped to filter)
-  const dailyQuery = `
+  // Daily event counts (last 30 days, scoped to filter)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const dailyEventsQuery = `
     SELECT date(created_at) as date, count(*) as count
     FROM telemetry_events ${whereClause ? whereClause + ' AND' : 'WHERE'} created_at >= ?
     GROUP BY date(created_at)
   `
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const daily = dailyCounts(sqlite, dailyQuery, [...params, thirtyDaysAgo], 30)
+  const daily = dailyCounts(sqlite, dailyEventsQuery, [...params, thirtyDaysAgo], 30)
+
+  // DAU: unique devices per day (last 30 days, scoped to filter)
+  const dauQuery = `
+    SELECT date(created_at) as date, COUNT(DISTINCT device_id) as count
+    FROM telemetry_events ${whereClause ? whereClause + ' AND' : 'WHERE'} created_at >= ?
+    GROUP BY date(created_at)
+  `
+  const dau = dailyCounts(sqlite, dauQuery, [...params, thirtyDaysAgo], 30)
+
+  // Average session duration: time between first and last event per device per day
+  // Only counts days with 2+ events (need at least two timestamps to measure a span)
+  const sessionRow = sqlite.prepare(`
+    SELECT
+      AVG(duration_sec) as avg_sec,
+      MAX(duration_sec) as max_sec
+    FROM (
+      SELECT
+        device_id,
+        date(created_at) as day,
+        (julianday(max(created_at)) - julianday(min(created_at))) * 86400 as duration_sec
+      FROM telemetry_events
+      ${whereClause ? whereClause + ' AND' : 'WHERE'} created_at >= ?
+      GROUP BY device_id, date(created_at)
+      HAVING count(*) > 1
+    )
+  `).get(...params, thirtyDaysAgo)
 
   const rows = sqlite.prepare(`
     SELECT id, device_id, event_type, event_data, app_version, platform, created_at
@@ -110,5 +136,10 @@ export default defineEventHandler((event) => {
     byEvent,
     byPlatform,
     dailyCounts: daily,
+    dauDaily: dau,
+    sessionDuration: {
+      avgMinutes: sessionRow.avg_sec ? Math.round(sessionRow.avg_sec / 60) : 0,
+      maxMinutes: sessionRow.max_sec ? Math.round(sessionRow.max_sec / 60) : 0,
+    },
   }
 })

@@ -52,31 +52,51 @@
         <span class="text-stone-500"><span class="font-mono font-medium text-stone-900">{{ data.stats.today.toLocaleString() }}</span> today</span>
       </div>
       <span class="w-px h-3 bg-stone-200"></span>
-      <div v-if="data.byEvent.length" class="text-stone-400">
-        Top: <span class="font-mono text-stone-600">{{ data.byEvent[0].event_type }}</span>
-        (<span class="font-mono">{{ data.byEvent[0].count.toLocaleString() }}</span>)
+      <div v-if="data.sessionDuration.avgMinutes" class="text-stone-400">
+        avg session <span class="font-mono text-stone-600">{{ data.sessionDuration.avgMinutes }}m</span>
+      </div>
+      <div v-if="data.sessionDuration.maxMinutes" class="text-stone-400">
+        longest <span class="font-mono text-stone-600">{{ data.sessionDuration.maxMinutes }}m</span>
       </div>
     </div>
 
     <template v-if="data">
-      <!-- Chart + breakdowns -->
+      <!-- DAU chart + breakdowns -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <!-- Daily events bar chart -->
-        <div class="bg-white border border-stone-200 rounded-lg p-4">
-          <div class="text-xs font-medium text-stone-900 mb-3">Daily Events (30d)</div>
-          <div v-if="data.dailyCounts.length" class="flex items-end gap-px" style="height: 120px;">
-            <div v-for="d in data.dailyCounts" :key="d.date"
-              class="flex-1 bg-teal-400 hover:bg-teal-500 rounded-t transition-colors cursor-default relative group"
-              :style="{ height: barHeight(d.count) + '%', minHeight: d.count ? '2px' : '0' }">
-              <div class="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-stone-800 text-white text-[10px] rounded whitespace-nowrap z-10">
-                {{ d.date }}: {{ d.count }}
+        <!-- Left column: charts stacked -->
+        <div class="space-y-4">
+          <!-- DAU bar chart (primary) -->
+          <div class="bg-white border border-stone-200 rounded-lg p-4">
+            <div class="text-xs font-medium text-stone-900 mb-3">Daily Active Devices (30d)</div>
+            <div v-if="data.dauDaily.length" class="flex items-end gap-px" style="height: 120px;">
+              <div v-for="d in data.dauDaily" :key="d.date"
+                class="flex-1 bg-teal-400 hover:bg-teal-500 rounded-t transition-colors cursor-default relative group"
+                :style="{ height: dauBarHeight(d.count) + '%', minHeight: d.count ? '2px' : '0' }">
+                <div class="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-stone-800 text-white text-[10px] rounded whitespace-nowrap z-10">
+                  {{ d.date }}: {{ d.count }} {{ d.count === 1 ? 'device' : 'devices' }}
+                </div>
               </div>
             </div>
+            <div v-else class="text-xs text-stone-400">No data yet.</div>
           </div>
-          <div v-else class="text-xs text-stone-400">No events in this period.</div>
+
+          <!-- Daily events chart (secondary, smaller) -->
+          <div class="bg-white border border-stone-200 rounded-lg p-4">
+            <div class="text-xs font-medium text-stone-900 mb-3">Daily Events (30d)</div>
+            <div v-if="data.dailyCounts.length" class="flex items-end gap-px" style="height: 80px;">
+              <div v-for="d in data.dailyCounts" :key="d.date"
+                class="flex-1 bg-blue-300 hover:bg-blue-400 rounded-t transition-colors cursor-default relative group"
+                :style="{ height: eventsBarHeight(d.count) + '%', minHeight: d.count ? '2px' : '0' }">
+                <div class="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-stone-800 text-white text-[10px] rounded whitespace-nowrap z-10">
+                  {{ d.date }}: {{ d.count }} events
+                </div>
+              </div>
+            </div>
+            <div v-else class="text-xs text-stone-400">No events yet.</div>
+          </div>
         </div>
 
-        <!-- Breakdowns -->
+        <!-- Right column: breakdowns -->
         <div class="space-y-4">
           <!-- Events breakdown -->
           <div class="bg-white border border-stone-200 rounded-lg overflow-hidden">
@@ -195,13 +215,22 @@ function truncateData(jsonStr) {
   }
 }
 
-const maxDaily = computed(() => {
+const maxDau = computed(() => {
+  if (!data.value?.dauDaily?.length) return 1
+  return Math.max(...data.value.dauDaily.map(d => d.count), 1)
+})
+
+const maxEvents = computed(() => {
   if (!data.value?.dailyCounts?.length) return 1
   return Math.max(...data.value.dailyCounts.map(d => d.count), 1)
 })
 
-function barHeight(count) {
-  return Math.round((count / maxDaily.value) * 100)
+function dauBarHeight(count) {
+  return Math.round((count / maxDau.value) * 100)
+}
+
+function eventsBarHeight(count) {
+  return Math.round((count / maxEvents.value) * 100)
 }
 
 function debouncedFetch() {
