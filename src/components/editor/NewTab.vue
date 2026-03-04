@@ -2,94 +2,69 @@
   <div class="flex flex-col h-full" style="background: var(--bg-primary);">
 
     <!-- Close pane button (split panes only) -->
-    <div v-if="paneId !== 'pane-root'" class="flex items-center justify-end h-7 shrink-0 border-b px-1" style="border-color: var(--border);">
+    <div v-if="paneId !== 'pane-root'"
+      class="flex items-center justify-end h-7 shrink-0 border-b px-1"
+      style="border-color: var(--border);">
       <button
         class="p-1 rounded cursor-pointer"
         style="color: var(--fg-muted);"
         title="Close pane"
         @click="editorStore.collapsePane(paneId)"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
       </button>
     </div>
 
-    <!-- Scrollable content -->
-    <div class="flex-1 overflow-auto min-h-0">
-      <div class="newtab-scroll-area">
-        <div class="newtab-content">
+    <!-- Content — anchored at a fixed viewport-relative top position.
+         The top of the block never moves when switching tabs (content grows down).
+         No jiggle. No magic pixels. -->
+    <div class="flex-1 overflow-y-auto min-h-0" ref="itemListRef">
+      <div class="w-full mx-auto pb-10" style="max-width: min(80ch, 90%); padding-top: max(3rem, 25vh);">
 
-          <!-- RECENT -->
-          <div v-if="allRecentFiles.length > 0" class="newtab-section">
-            <div class="newtab-label">Recent</div>
-            <button
-              v-for="entry in allRecentFiles.slice(0, filesVisible)"
-              :key="entry.path"
-              class="newtab-item"
-              @click="openFile(entry.path)"
-            >
-              <span class="newtab-filename">{{ fileName(entry.path) }}</span>
-              <span class="newtab-time">{{ relativeTime(entry.openedAt) }}</span>
-            </button>
-            <button
-              v-if="allRecentFiles.length > filesVisible"
-              class="newtab-see-more"
-              @click="filesVisible = allRecentFiles.length"
-            >See {{ allRecentFiles.length - filesVisible }} more</button>
-          </div>
-
-          <!-- NEW DOCUMENT -->
-          <div class="newtab-section">
-            <div class="newtab-label">New document</div>
-            <button
-              v-for="ft in fileTypes"
-              :key="ft.ext"
-              class="newtab-create-item"
-              @click="createNewFile(ft.ext)"
-            >{{ ft.label }}</button>
-          </div>
-
-          <!-- AI zone: only render separator + below if there's something to show -->
-          <template v-if="allChats.length > 0 || quickActions.length > 0">
-            <hr class="newtab-zone-sep" />
-
-            <!-- CONVERSATIONS -->
-            <div v-if="allChats.length > 0" class="newtab-section">
-              <div class="newtab-label">Conversations</div>
-              <button
-                v-for="sess in allChats.slice(0, chatsVisible)"
-                :key="sess.id"
-                class="newtab-item"
-                @click="openChat(sess.id)"
-              >
-                <span class="newtab-filename">{{ sess.label }}</span>
-                <span class="newtab-time">{{ relativeTime(sess.updatedAt) }}</span>
-              </button>
-              <button
-                v-if="allChats.length > chatsVisible"
-                class="newtab-see-more"
-                @click="loadMoreChats"
-              >See more</button>
-            </div>
-
-            <!-- QUICK ACTIONS -->
-            <div v-if="quickActions.length > 0" class="newtab-actions">
-              <div class="newtab-label">Suggested</div>
-              <button
-                v-for="action in quickActions"
-                :key="action.label"
-                class="newtab-action"
-                @click="sendQuickAction(action)"
-              >{{ action.label }} →</button>
-            </div>
-          </template>
-
+        <!-- Tab labels — pl-3 aligns with item text (› in gutter) -->
+        <div class="flex gap-5 mb-6 pl-5">
+          <button
+            v-for="tab in visibleTabs"
+            :key="tab.id"
+            class="text-[9px] font-semibold tracking-[0.08em] uppercase bg-transparent border-none cursor-pointer pb-0.5 transition-colors duration-75"
+            :style="{
+              color: activeTabId === tab.id ? 'var(--fg-primary)' : 'var(--fg-muted)',
+              borderBottom: activeTabId === tab.id ? '1px solid var(--fg-primary)' : '1px solid transparent',
+            }"
+            @click="setTab(tab.id)"
+          >{{ tab.label }}</button>
         </div>
+
+        <button
+          v-for="(item, i) in currentItems"
+          :key="activeTabId + i"
+          class="newtab-item flex items-center gap-2 w-full border-none bg-transparent text-left py-1 cursor-pointer transition-colors duration-75"
+          :class="item.group && item.group !== currentItems[i - 1]?.group && i > 0 ? 'mt-6' : ''"
+          :style="{ color: selectedIdx === i ? 'var(--fg-primary)' : (item.muted ? 'var(--fg-muted)' : 'var(--fg-secondary)') }"
+          @click="activate(item)"
+          @mouseenter="selectedIdx = i"
+        >
+          <span
+            class="w-3 shrink-0 leading-none select-none"
+            style="font-size: 14px;"
+            :style="{ color: selectedIdx === i ? 'var(--fg-muted)' : 'transparent' }"
+          >›</span>
+          <span class="flex-1 text-[13px] truncate min-w-0">{{ item.label }}</span>
+          <span
+            v-if="item.meta"
+            class="text-[11px] shrink-0 whitespace-nowrap mx-4"
+            style="color: var(--fg-muted);"
+          >{{ item.meta }}</span>
+        </button>
+
       </div>
     </div>
 
     <!-- Sticky bottom: ChatInput -->
-    <div class="newtab-bottom">
-      <div class="newtab-bottom-inner">
+    <div class="shrink-0 flex justify-center">
+      <div class="w-full max-w-[80ch]">
         <ChatInput
           ref="chatInputRef"
           :isStreaming="false"
@@ -105,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useEditorStore } from '../../stores/editor'
 import { useFilesStore } from '../../stores/files'
@@ -123,13 +98,25 @@ const filesStore  = useFilesStore()
 const chatStore   = useChatStore()
 const workspace   = useWorkspaceStore()
 
-// ─── State ─────────────────────────────────────────────────────────
-const chatInputRef    = ref(null)
-const selectedModelId = ref(workspace.selectedModelId || null)
-const filesVisible    = ref(5)
-const chatsVisible    = ref(3)
+// ─── Refs ──────────────────────────────────────────────────────────
 
-// ─── File types ────────────────────────────────────────────────────
+const chatInputRef    = ref(null)
+const itemListRef     = ref(null)
+const selectedModelId = ref(workspace.selectedModelId || null)
+const activeTabId     = ref('quick')
+const selectedIdx     = ref(0)
+const chatsLimit      = ref(10)
+
+// ─── Tab definitions ───────────────────────────────────────────────
+
+const TABS = [
+  { id: 'quick',     label: 'Quick' },
+  { id: 'recent',    label: 'Recent' },
+  { id: 'new',       label: 'New' },
+  { id: 'chats',     label: 'Chats' },
+  { id: 'suggested', label: 'Suggested' },
+]
+
 const fileTypes = [
   { ext: '.md',    label: 'Markdown document' },
   { ext: '.tex',   label: 'LaTeX document' },
@@ -138,7 +125,8 @@ const fileTypes = [
   { ext: '.py',    label: 'Code' },
 ]
 
-// ─── Computed ──────────────────────────────────────────────────────
+// ─── Data computeds ────────────────────────────────────────────────
+
 const allRecentFiles = computed(() => {
   const flatPaths = new Set(filesStore.flatFiles.map(f => f.path))
   return editorStore.recentFiles.filter(entry => flatPaths.has(entry.path))
@@ -156,20 +144,184 @@ const quickActions = computed(() => {
 
   if (isMarkdown(path) || path.endsWith('.tex') || path.endsWith('.docx')) {
     return [
-      { label: `Proofread ${name}`,                  prompt: 'Proofread this document',                     file: path },
-      { label: `Summarise key arguments in ${name}`, prompt: 'Summarise the key arguments in this document', file: path },
+      { label: `Proofread ${name}`,              prompt: 'Proofread this document for clarity, grammar, and academic tone.',                                  file: path },
+      { label: `Find argument gaps in ${name}`,  prompt: 'Identify logical gaps, unsupported claims, or missing evidence in this document.',                  file: path },
+      { label: `Summarise ${name}`,              prompt: 'Summarise the key arguments and contributions in this document.',                                   file: path },
+      { label: `Peer review ${name}`,            prompt: 'Conduct a thorough peer review: assess originality, methodology, clarity, and impact.',             file: path },
+      { label: `Check citation coverage`,        prompt: 'Are all major claims backed by citations? Identify where references are missing or weak.',          file: path },
+      { label: `Improve transitions in ${name}`, prompt: 'Strengthen the flow between sections and improve paragraph coherence throughout the document.',     file: path },
+      { label: `Shorten and tighten ${name}`,    prompt: 'Trim redundancy and tighten prose while preserving the meaning and academic register.',             file: path },
     ]
   }
   if (path.endsWith('.ipynb') || path.endsWith('.py') || path.endsWith('.r') || path.endsWith('.R') || path.endsWith('.jl')) {
     return [
-      { label: `Explain ${name}`, prompt: 'Explain this code',  file: path },
-      { label: `Debug ${name}`,   prompt: 'Help me debug this', file: path },
+      { label: `Explain ${name}`,                prompt: 'Explain what this code does and why — for someone new to this project.',                           file: path },
+      { label: `Debug ${name}`,                  prompt: 'Help me debug this code. Identify errors and suggest fixes.',                                      file: path },
+      { label: `Document ${name}`,               prompt: 'Add clear docstrings and inline comments explaining functions, parameters, and key logic.',         file: path },
+      { label: `Review code quality in ${name}`, prompt: 'Review code quality: clarity, style, error handling, and maintainability.',                        file: path },
+      { label: `Check reproducibility`,          prompt: 'Is this notebook reproducible? Identify missing data, dependencies, or unclear instructions.',      file: path },
+      { label: `Optimise ${name}`,               prompt: 'Suggest concrete ways to make this code faster or more memory-efficient.',                         file: path },
+      { label: `Interpret results`,              prompt: 'What do the outputs and plots show? Suggest visualisations or next steps.',                         file: path },
+    ]
+  }
+  if (path.endsWith('.csv') || path.endsWith('.tsv')) {
+    return [
+      { label: `Describe ${name}`,               prompt: 'Describe this dataset: variables, types, missing values, and sample size.',                         file: path },
+      { label: `Find patterns in ${name}`,       prompt: 'What are the key patterns, correlations, or outliers in this data?',                               file: path },
+      { label: `Data quality check`,             prompt: 'Are there missing values, duplicates, or data type issues I should fix?',                          file: path },
+      { label: `Suggest visualisations`,         prompt: 'What charts or plots would best communicate the key findings in this data?',                        file: path },
+      { label: `Statistical summary`,            prompt: 'Compute and interpret descriptive statistics for each column in this dataset.',                     file: path },
     ]
   }
   return []
 })
 
+// ─── Tab visibility ────────────────────────────────────────────────
+
+const visibleTabs = computed(() =>
+  TABS.filter(t => t.id !== 'suggested' || quickActions.value.length > 0)
+)
+
+// ─── QUICK tab items (curated, max 7) ─────────────────────────────
+
+const quickItems = computed(() => {
+  const items = []
+  for (const f of allRecentFiles.value.slice(0, 4)) {
+    items.push({
+      label: fileName(f.path),
+      meta: relativeTime(f.openedAt),
+      group: 'recent',
+      action: () => openFile(f.path),
+    })
+  }
+  items.push({ label: 'Markdown document', group: 'new', action: () => createNewFile('.md') })
+  for (const a of quickActions.value.slice(0, 2)) {
+    items.push({ label: a.label + ' →', group: 'suggested', action: () => sendQuickAction(a) })
+  }
+  return items.slice(0, 7)
+})
+
+// ─── Current tab items ─────────────────────────────────────────────
+
+const currentItems = computed(() => {
+  switch (activeTabId.value) {
+    case 'quick':
+      return quickItems.value
+    case 'recent':
+      return allRecentFiles.value.map(e => ({
+        label: fileName(e.path),
+        meta: relativeTime(e.openedAt),
+        action: () => openFile(e.path),
+      }))
+    case 'new':
+      return fileTypes.map(ft => ({
+        label: ft.label,
+        action: () => createNewFile(ft.ext),
+      }))
+    case 'chats': {
+      const visible = allChats.value.slice(0, chatsLimit.value)
+      const items = visible.map(s => ({
+        label: s.label,
+        meta: relativeTime(s.updatedAt),
+        action: () => openChat(s.id),
+      }))
+      if (allChats.value.length > chatsLimit.value) {
+        items.push({
+          label: 'Show more',
+          muted: true,
+          action: () => { chatsLimit.value += 10 },
+        })
+      }
+      return items
+    }
+    case 'suggested':
+      return quickActions.value.map(a => ({
+        label: a.label + ' →',
+        action: () => sendQuickAction(a),
+      }))
+    default:
+      return []
+  }
+})
+
+// ─── Watchers ──────────────────────────────────────────────────────
+
+// Fall back to quick if active tab is hidden (e.g. suggested empties)
+watch(visibleTabs, (tabs) => {
+  if (!tabs.find(t => t.id === activeTabId.value)) {
+    activeTabId.value = 'quick'
+    selectedIdx.value = 0
+  }
+})
+
+// Reset selection + chat pagination when switching tabs
+watch(activeTabId, () => {
+  selectedIdx.value = 0
+  chatsLimit.value = 10
+})
+
+// ─── Tab navigation ────────────────────────────────────────────────
+
+function setTab(id) {
+  activeTabId.value = id
+}
+
+function switchTab(delta) {
+  const tabs = visibleTabs.value
+  const idx = tabs.findIndex(t => t.id === activeTabId.value)
+  const next = (idx + delta + tabs.length) % tabs.length
+  activeTabId.value = tabs[next].id
+  selectedIdx.value = 0
+}
+
+function moveSelection(delta) {
+  const items = currentItems.value
+  const next = Math.max(0, Math.min(items.length - 1, selectedIdx.value + delta))
+  selectedIdx.value = next
+  nextTick(() => {
+    const buttons = itemListRef.value?.querySelectorAll('button.newtab-item')
+    buttons?.[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+
+function activateSelected() {
+  const item = currentItems.value[selectedIdx.value]
+  if (item) activate(item)
+}
+
+function activate(item) {
+  item.action()
+}
+
+// ─── Keyboard handler ──────────────────────────────────────────────
+
+function handleKeydown(e) {
+  // Only when this pane is active
+  if (editorStore.activePaneId !== props.paneId) return
+  // Don't intercept when typing in ChatInput
+  const richInput = chatInputRef.value?.$el?.querySelector('[contenteditable]')
+  if (richInput?.contains(document.activeElement)) return
+
+  switch (e.key) {
+    case 'ArrowLeft':  e.preventDefault(); switchTab(-1); break
+    case 'ArrowRight': e.preventDefault(); switchTab(1);  break
+    case 'ArrowUp':    e.preventDefault(); moveSelection(-1); break
+    case 'ArrowDown':  e.preventDefault(); moveSelection(1);  break
+    case 'Enter':      e.preventDefault(); activateSelected(); break
+    default:
+      // Printable character → warp focus + char into chat input
+      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        if (richInput) {
+          richInput.focus()
+          document.execCommand('insertText', false, e.key)
+        }
+      }
+  }
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────
+
 function fileName(path) {
   return path.split('/').pop() || path
 }
@@ -178,7 +330,7 @@ function relativeTime(ts) {
   if (!ts) return ''
   const val = typeof ts === 'number' ? ts : new Date(ts).getTime()
   const diff = Date.now() - val
-  const sec = Math.floor(diff / 1000)
+  const sec  = Math.floor(diff / 1000)
   if (sec < 60) return 'just now'
   const min = Math.floor(sec / 60)
   if (min < 60) return `${min}m ago`
@@ -186,11 +338,11 @@ function relativeTime(ts) {
   if (hr < 24) return `${hr}h ago`
   const days = Math.floor(hr / 24)
   if (days < 30) return `${days}d ago`
-  const months = Math.floor(days / 30)
-  return `${months}mo ago`
+  return `${Math.floor(days / 30)}mo ago`
 }
 
 // ─── Navigation ────────────────────────────────────────────────────
+
 function openFile(path) {
   editorStore.setActivePane(props.paneId)
   editorStore.openFile(path)
@@ -204,12 +356,8 @@ function openChat(sessionId) {
   })
 }
 
-function loadMoreChats() {
-  chatStore.loadAllSessionsMeta()
-  chatsVisible.value += 8
-}
-
 // ─── Send ──────────────────────────────────────────────────────────
+
 async function sendChat({ text, fileRefs, context }) {
   if (!text && !fileRefs?.length) return
   editorStore.setActivePane(props.paneId)
@@ -244,6 +392,7 @@ function selectModel(modelId) {
 }
 
 // ─── File creation ─────────────────────────────────────────────────
+
 async function createNewFile(ext) {
   if (!workspace.path) return
   const baseName = 'untitled'
@@ -266,160 +415,12 @@ async function createNewFile(ext) {
 }
 
 // ─── Lifecycle ─────────────────────────────────────────────────────
+
 onMounted(() => {
-  chatStore.loadAllSessionsMeta()
-  nextTick(() => chatInputRef.value?.focus())
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
-
-<style scoped>
-.newtab-scroll-area {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100%;
-  padding: 24px;
-  box-sizing: border-box;
-}
-
-.newtab-content {
-  width: 100%;
-  max-width: 80ch;
-}
-
-.newtab-section {
-  margin-top: 22px;
-}
-
-.newtab-section:first-child {
-  margin-top: 0;
-}
-
-/* Section labels */
-.newtab-label {
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.10em;
-  color: var(--fg-muted);
-  opacity: 0.45;
-  margin-bottom: 5px;
-  user-select: none;
-}
-
-/* File / conversation items */
-.newtab-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 3px 0;
-  border: none;
-  background: transparent;
-  color: var(--fg-secondary);
-  font-size: 13px;
-  line-height: 1.5;
-  cursor: pointer;
-  text-align: left;
-  gap: 16px;
-  transition: color 0.1s;
-}
-
-.newtab-item:hover {
-  color: var(--fg-primary);
-}
-
-.newtab-filename {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-}
-
-.newtab-time {
-  font-size: 11px;
-  color: var(--fg-muted);
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-/* "See more" link */
-.newtab-see-more {
-  display: block;
-  padding: 2px 0;
-  border: none;
-  background: transparent;
-  font-size: 11px;
-  color: var(--fg-muted);
-  opacity: 0.45;
-  cursor: pointer;
-  text-align: left;
-  transition: opacity 0.1s, color 0.1s;
-}
-
-.newtab-see-more:hover {
-  opacity: 0.8;
-  color: var(--fg-secondary);
-}
-
-/* New document items */
-.newtab-create-item {
-  display: block;
-  width: 100%;
-  padding: 3px 0;
-  border: none;
-  background: transparent;
-  font-size: 12px;
-  color: var(--fg-muted);
-  cursor: pointer;
-  text-align: left;
-  transition: color 0.1s;
-}
-
-.newtab-create-item:hover {
-  color: var(--fg-primary);
-}
-
-/* Zone separator — between file zone and AI zone */
-.newtab-zone-sep {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 22px 0;
-  opacity: 0.5;
-}
-
-/* Quick actions */
-.newtab-actions {
-  margin-top: 12px;
-}
-
-.newtab-action {
-  display: block;
-  padding: 3px 0;
-  border: none;
-  background: transparent;
-  font-size: 12px;
-  color: var(--fg-muted);
-  cursor: pointer;
-  text-align: left;
-  transition: color 0.1s;
-}
-
-.newtab-action:hover {
-  color: var(--fg-secondary);
-}
-
-/* Sticky bottom */
-.newtab-bottom {
-  flex-shrink: 0;
-  display: flex;
-  justify-content: center;
-}
-
-.newtab-bottom-inner {
-  width: 100%;
-  max-width: 80ch;
-}
-
-</style>

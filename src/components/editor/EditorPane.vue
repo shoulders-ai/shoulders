@@ -106,7 +106,7 @@
         />
       </div>
       <NewTab v-else-if="activeTab && viewerType === 'newtab'" :key="activeTab" :paneId="paneId" />
-      <NewTab v-else :paneId="paneId" />
+      <EmptyPane v-else-if="!activeTab" :paneId="paneId" />
     </div>
   </div>
 </template>
@@ -137,6 +137,7 @@ const MarkdownPreview = defineAsyncComponent(() => import('./MarkdownPreview.vue
 const CanvasEditor = defineAsyncComponent(() => import('./CanvasEditor.vue'))
 const ChatPanel = defineAsyncComponent(() => import('../chat/ChatPanel.vue'))
 const NewTab = defineAsyncComponent(() => import('./NewTab.vue'))
+const EmptyPane = defineAsyncComponent(() => import('./EmptyPane.vue'))
 
 const props = defineProps({
   paneId: { type: String, required: true },

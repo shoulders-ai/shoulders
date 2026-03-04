@@ -119,6 +119,7 @@ import { useToastStore } from './stores/toast'
 import { gitAdd, gitCommit, gitStatus } from './services/git'
 import { checkForUpdate, downloadUpdate, installAndRestart, isAutoCheckEnabled } from './services/appUpdater'
 import { isMod } from './platform'
+import { isChatTab } from './utils/fileTypes'
 
 import Header from './components/layout/Header.vue'
 import Footer from './components/layout/Footer.vue'
@@ -297,10 +298,14 @@ function handleKeydown(e) {
     return
   }
 
-  // Cmd+N: New file
+  // Cmd+N: New file, or new chat if active tab is a chat
   if (isMod(e) && e.key === 'n') {
     e.preventDefault()
-    leftSidebarRef.value?.createNewMarkdown()
+    if (editorStore.activeTab && isChatTab(editorStore.activeTab)) {
+      editorStore.openChat({ paneId: editorStore.activePaneId })
+    } else {
+      leftSidebarRef.value?.createNewMarkdown()
+    }
     return
   }
 
@@ -320,10 +325,10 @@ function handleKeydown(e) {
     return
   }
 
-  // Cmd+J: Split pane and open new chat tab
+  // Cmd+J: Split pane and open NewTab in the new pane
   if (isMod(e) && e.key === 'j') {
     e.preventDefault()
-    editorStore.openChatBeside()
+    editorStore.openNewTabBeside()
     return
   }
 
@@ -338,17 +343,6 @@ function handleKeydown(e) {
   if (isMod(e) && e.key === 'p') {
     e.preventDefault()
     headerRef.value?.focusSearch()
-    return
-  }
-
-  // Cmd+\: Split vertical
-  if (isMod(e) && e.key === '\\') {
-    e.preventDefault()
-    if (e.shiftKey) {
-      editorStore.splitPane('horizontal')
-    } else {
-      editorStore.splitPane('vertical')
-    }
     return
   }
 
@@ -499,6 +493,9 @@ function handleAltZ(e) {
   }
 }
 
+function handleFocusSearch() { headerRef.value?.focusSearch() }
+function handleNewFile() { leftSidebarRef.value?.createNewMarkdown() }
+
 // Refresh file tree when window regains focus (catches files added via Finder etc.)
 let lastFocusRefresh = 0
 function handleVisibilityChange() {
@@ -517,6 +514,8 @@ onMounted(() => {
   window.addEventListener('open-tasks', handleOpenTasks)
   window.addEventListener('open-chat', handleOpenChat)
   window.addEventListener('chat-prefill', handleChatPrefill)
+  window.addEventListener('app:focus-search', handleFocusSearch)
+  window.addEventListener('app:new-file', handleNewFile)
 })
 
 onUnmounted(() => {
@@ -526,6 +525,8 @@ onUnmounted(() => {
   window.removeEventListener('open-tasks', handleOpenTasks)
   window.removeEventListener('open-chat', handleOpenChat)
   window.removeEventListener('chat-prefill', handleChatPrefill)
+  window.removeEventListener('app:focus-search', handleFocusSearch)
+  window.removeEventListener('app:new-file', handleNewFile)
   workspace.cleanup()
   filesStore.cleanup()
   reviews.cleanup()

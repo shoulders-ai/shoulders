@@ -1,5 +1,5 @@
 <template>
-  <div class="flex items-center h-8 shrink-0 relative"
+  <div class="flex items-center h-7 shrink-0 relative"
     data-tab-bar
     :data-pane-id="paneId"
     style="background: var(--bg-secondary); border-bottom: 1px solid var(--border);">
@@ -24,12 +24,12 @@
         @mousedown.middle.prevent="$emit('close-tab', tab)"
       >
         <!-- NewTab icon -->
-        <svg v-if="isNewTab(tab)" class="shrink-0 mr-1" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--fg-muted);">
+        <!-- <svg v-if="isNewTab(tab)" class="shrink-0 mr-1" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--fg-muted);">
           <line x1="8" y1="3" x2="8" y2="13"/>
           <line x1="3" y1="8" x2="13" y2="8"/>
-        </svg>
+        </svg> -->
         <!-- Chat tab sparkle icon -->
-        <svg v-else-if="isChatTab(tab)" class="shrink-0 mr-1" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+        <svg v-if="isChatTab(tab)" class="shrink-0 mr-1" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
           <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275z"/>
         </svg>
         <span class="truncate max-w-[120px]">{{ fileName(tab) }}</span>

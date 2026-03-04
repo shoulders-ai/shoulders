@@ -256,9 +256,8 @@ export const useEditorStore = defineStore('editor', {
       chatStore.activeSessionId = sessionId
       this.saveEditorState()
 
-      if (options.prefill) {
-        nextTick(() => window.dispatchEvent(new CustomEvent('chat-set-input', { detail: { message: options.prefill } })))
-      }
+      // Store prefill for ChatInput to consume on mount (async component may not be mounted yet)
+      if (options.prefill) chatStore.pendingPrefill = options.prefill
     },
 
     /**
@@ -290,14 +289,13 @@ export const useEditorStore = defineStore('editor', {
 
       chatStore.activeSessionId = sid
 
-      if (options.prefill) {
-        nextTick(() => window.dispatchEvent(new CustomEvent('chat-set-input', { detail: { message: options.prefill } })))
-      }
+      // Store prefill for ChatInput to consume on mount (async component may not be mounted yet)
+      if (options.prefill) chatStore.pendingPrefill = options.prefill
     },
 
     /**
-     * Open a NewTab page as a first-class tab.
-     * If one already exists in the target pane, just switch to it.
+     * Open a NewTab page as a first-class tab in the target pane.
+     * Always creates a fresh tab — Cmd+T should behave like a browser.
      */
     openNewTab(paneId) {
       const targetPane = paneId
@@ -305,18 +303,19 @@ export const useEditorStore = defineStore('editor', {
         : this.findPane(this.paneTree, this.activePaneId)
       if (!targetPane) return
 
-      // Reuse existing newtab in this pane
-      const existing = targetPane.tabs.find(t => isNewTab(t))
-      if (existing) {
-        targetPane.activeTab = existing
-        this.saveEditorState()
-        return
-      }
-
       const tabPath = `newtab:${nanoid()}`
       targetPane.tabs.push(tabPath)
       targetPane.activeTab = tabPath
       this.saveEditorState()
+    },
+
+    /**
+     * Split the active pane vertically and open a NewTab in the new pane.
+     * Used by Cmd+J — "I want a side pane, let me decide what to do there."
+     */
+    openNewTabBeside() {
+      const tabPath = `newtab:${nanoid()}`
+      this.splitPaneWith(this.activePaneId, 'vertical', tabPath)
     },
 
     /**
@@ -401,13 +400,11 @@ export const useEditorStore = defineStore('editor', {
         }
       }
 
-      // If pane is now empty: collapse split panes, open new tab in root
+      // If pane is now empty: collapse split panes; root pane shows EmptyPane
       if (pane.tabs.length === 0) {
         const parent = this.findParent(this.paneTree, pane.id)
         if (parent) {
           this.collapsePane(pane.id)
-        } else {
-          this.openNewTab(pane.id)
         }
       }
 
