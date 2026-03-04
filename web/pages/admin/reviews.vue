@@ -9,6 +9,10 @@
         <option value="failed">Failed</option>
       </select>
       <span class="text-xs text-stone-400" v-if="data">{{ data.pagination.total }} reviews</span>
+      <button v-if="data?.reviews?.length" @click="downloadCsv"
+        class="ml-auto px-2 py-1.5 text-xs rounded border border-stone-300 bg-white hover:bg-stone-50 text-stone-600 transition-colors">
+        Download CSV
+      </button>
     </div>
 
     <div v-if="error" class="text-xs text-red-600">Failed to load. <NuxtLink to="/admin/login" class="underline">Re-login</NuxtLink></div>
@@ -83,7 +87,7 @@
               <span v-else class="font-mono text-stone-400">{{ r.slug }}</span>
             </td>
             <td class="py-2 px-3 text-stone-600 max-w-[150px] truncate">{{ r.filename || '-' }}</td>
-            <td class="py-2 px-3 text-stone-600 max-w-[150px] truncate">{{ r.email || '-' }}</td>
+            <td class="py-2 px-3 text-stone-600 max-w-[150px] truncate" :title="r.email || ''">{{ r.email || '-' }}</td>
             <td class="py-2 px-3 text-stone-400">{{ r.domainHint || '-' }}</td>
             <td class="py-2 px-3 text-right font-mono text-stone-600">
               {{ r.commentCount || '-' }}
@@ -145,6 +149,23 @@ function formatDuration(ms) {
   const minutes = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${minutes}m ${secs}s`
+}
+
+function downloadCsv() {
+  const rows = data.value.reviews
+  const headers = ['slug', 'status', 'email', 'filename', 'domainHint', 'commentCount', 'costCents', 'durationMs', 'createdAt']
+  const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const csv = [
+    headers.join(','),
+    ...rows.map(r => headers.map(h => escape(r[h])).join(','))
+  ].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `reviews-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 async function fetchData() {
