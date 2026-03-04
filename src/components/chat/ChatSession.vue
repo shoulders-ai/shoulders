@@ -1,27 +1,24 @@
 <template>
   <div class="flex flex-col h-full">
     <!-- Messages area -->
-    <div ref="messagesRef" class="flex-1 overflow-y-auto pt-4 pb-8" @scroll="onScroll">
+    <div ref="messagesRef" class="flex-1 overflow-y-auto pt-4 pb-8 flex flex-col" @scroll="onScroll">
 
-      <!-- Empty state: suggestion chips only -->
-      <div v-if="messages.length === 0"
-        class="flex flex-col justify-center h-full pb-20"
-        style="color: var(--fg-muted);">
-        <div class="max-w-[100ch] mx-auto w-full px-4">
-          <div class="ui-text-md uppercase tracking-wider mb-2" style="color: var(--fg-muted);">
-            Start with
-          </div>
-          <div v-for="chip in suggestionChips" :key="chip.text"
-            class="py-1 cursor-pointer ui-text-base hover:underline"
-            style="color: var(--fg-secondary);"
+      <!-- Empty state: suggestion chips -->
+      <div v-if="messages.length === 0" class="flex-1">
+        <div class="max-w-[80ch] mx-auto w-full px-3" style="padding-top: max(3rem, 40vh);">
+          <button
+            v-for="chip in suggestionChips"
+            :key="chip.text"
+            class="chip-row"
             @click="setSuggestion(chip.text)">
-            {{ chip.text }}
-          </div>
+            <span class="gutter">›</span>
+            <span>{{ chip.text }}</span>
+          </button>
         </div>
       </div>
 
       <!-- Messages -->
-      <div class="max-w-[100ch] mx-auto px-3" v-if="messages.length > 0">
+      <div class="max-w-[80ch] mx-auto px-3" v-if="messages.length > 0">
         <div v-for="(msg, idx) in messages" :key="msg.id"
           class="group"
           :class="idx > 0 && messages[idx - 1].role !== msg.role ? 'mt-4' : 'mt-2'"
@@ -36,7 +33,7 @@
       </div>
 
       <!-- Error display -->
-      <div v-if="chatError" class="max-w-[100ch] mx-auto px-3 mt-3">
+      <div v-if="chatError" class="max-w-[80ch] mx-auto px-3 mt-3">
         <div class="rounded-lg border px-3 py-2.5"
           style="background: color-mix(in srgb, var(--error) 8%, var(--bg-primary));
                  border-color: color-mix(in srgb, var(--error) 30%, var(--border));">
@@ -255,3 +252,35 @@ function focus() {
 
 defineExpose({ focus })
 </script>
+
+<style scoped>
+.chip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fg-secondary);
+  padding: 4px 0;
+  transition: color 75ms;
+}
+.chip-row:hover {
+  color: var(--fg-primary);
+}
+.gutter {
+  width: 12px;
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: transparent;
+  transition: color 75ms;
+  user-select: none;
+}
+.chip-row:hover .gutter {
+  color: var(--fg-muted);
+}
+</style>
