@@ -1,6 +1,6 @@
 <template>
   <footer class="grid items-center px-3 text-xs select-none shrink-0"
-    style="grid-template-columns: 1fr auto 1fr; background: var(--bg-secondary); border-top: 1px solid var(--border); color: var(--fg-muted); height: 30px; font-variant-numeric: tabular-nums;">
+    style="grid-template-columns: 1fr auto 1fr; background: var(--bg-secondary); border-top: 1px solid var(--border); color: var(--fg-muted); height: 26px; font-variant-numeric: tabular-nums;">
 
     <!-- LEFT: source control + AI review -->
     <div class="flex items-center gap-4 justify-self-start whitespace-nowrap">

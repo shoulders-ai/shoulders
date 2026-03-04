@@ -2,7 +2,7 @@
   <div ref="rootEl" data-ref-drop-zone class="flex flex-col h-full overflow-hidden" :style="{ background: 'var(--bg-secondary)' }">
     <!-- Header -->
     <div
-      class="flex items-center h-10 shrink-0 px-2 gap-1 select-none"
+      class="flex items-center h-7 shrink-0 px-2 gap-1 select-none"
       :style="{ color: 'var(--fg-muted)', borderBottom: collapsed ? 'none' : '1px solid var(--border)' }"
     >
       <div class="flex items-center gap-1 cursor-pointer" @click="$emit('toggle-collapse')">

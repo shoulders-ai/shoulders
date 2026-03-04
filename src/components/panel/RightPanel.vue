@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col h-full" style="background: var(--bg-secondary);">
     <!-- Main tab bar (Outline / Tasks / Backlinks) -->
-    <div class="flex items-center h-8 border-b shrink-0" style="border-color: var(--border);">
+    <div class="flex items-center h-7 border-b shrink-0" style="border-color: var(--border);">
       <button
         v-for="tab in mainTabs"
         :key="tab"
