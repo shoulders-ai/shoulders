@@ -21,6 +21,21 @@ import { listen } from '@tauri-apps/api/event'
 
 let _counter = 0
 
+function _injectAnthropicCacheControl(body) {
+  // Cache the system prompt (string → array with cache_control; array → mark last block)
+  if (typeof body.system === 'string') {
+    body.system = [{ type: 'text', text: body.system, cache_control: { type: 'ephemeral' } }]
+  } else if (Array.isArray(body.system) && body.system.length > 0) {
+    const last = body.system[body.system.length - 1]
+    if (last.type === 'text' && !last.cache_control) last.cache_control = { type: 'ephemeral' }
+  }
+  // Cache the full tools list (breakpoint on last tool — Anthropic caches everything up to it)
+  if (Array.isArray(body.tools) && body.tools.length > 0) {
+    const last = body.tools[body.tools.length - 1]
+    if (!last.cache_control) last.cache_control = { type: 'ephemeral' }
+  }
+}
+
 /**
  * Create a fetch function that routes through Tauri's Rust HTTP proxy.
  * Use this as the `fetch` option for AI SDK provider constructors.
@@ -47,6 +62,16 @@ export function createTauriFetch() {
     let body = ''
     if (options.body) {
       body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body)
+    }
+
+    // Inject Anthropic prompt caching for direct API calls (desktop with own API key)
+    // Shoulders proxy users get this server-side; direct users need it here
+    if (body && url.toString().includes('api.anthropic.com')) {
+      try {
+        const parsed = JSON.parse(body)
+        _injectAnthropicCacheControl(parsed)
+        body = JSON.stringify(parsed)
+      } catch { /* ignore malformed body */ }
     }
 
     const encoder = new TextEncoder()

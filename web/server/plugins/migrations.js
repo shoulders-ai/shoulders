@@ -88,6 +88,8 @@ export default defineNitroPlugin(() => {
 
   // Additive migrations (idempotent — SQLite throws if column already exists)
   const alterStatements = [
+    `ALTER TABLE api_calls ADD COLUMN cache_read_tokens INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE api_calls ADD COLUMN cache_creation_tokens INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN last_active_at TEXT`,
     `ALTER TABLE users ADD COLUMN suspended INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE contact_submissions ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0`,

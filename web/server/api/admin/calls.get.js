@@ -50,6 +50,8 @@ export default defineEventHandler((event) => {
       sum(case when c.status = 'error' then 1 else 0 end) as errors,
       sum(c.input_tokens) as total_input,
       sum(c.output_tokens) as total_output,
+      sum(c.cache_read_tokens) as total_cache_read,
+      sum(c.cache_creation_tokens) as total_cache_creation,
       sum(c.credits_used) as total_credits,
       avg(case when c.status = 'success' then c.duration_ms end) as avg_duration
     FROM api_calls c ${whereClause}
@@ -58,7 +60,7 @@ export default defineEventHandler((event) => {
   const rows = sqlite.prepare(`
     SELECT
       c.id, c.user_id, c.provider, c.model,
-      c.input_tokens, c.output_tokens, c.credits_used,
+      c.input_tokens, c.output_tokens, c.cache_read_tokens, c.cache_creation_tokens, c.credits_used,
       c.duration_ms, c.status, c.error_message, c.created_at,
       u.email as user_email
     FROM api_calls c
@@ -82,6 +84,8 @@ export default defineEventHandler((event) => {
       errorRate: statusCounts.total > 0 ? ((statusCounts.errors || 0) / statusCounts.total * 100).toFixed(1) : '0.0',
       totalInput: statusCounts.total_input || 0,
       totalOutput: statusCounts.total_output || 0,
+      totalCacheRead: statusCounts.total_cache_read || 0,
+      totalCacheCreation: statusCounts.total_cache_creation || 0,
       totalCredits: statusCounts.total_credits || 0,
       avgDuration: statusCounts.avg_duration ? Math.round(statusCounts.avg_duration) : null,
     },

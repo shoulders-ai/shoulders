@@ -10,10 +10,11 @@ import { calculateCostCentsWithSurcharge } from './pricing.js'
  * @param {string} model - model ID (e.g. 'claude-sonnet-4-5-20250929')
  * @returns {number} cents (rounded to 2 decimal places)
  */
-export function calculateCredits(inputTokens, outputTokens, model) {
-  return calculateCostCentsWithSurcharge(inputTokens, outputTokens, model)
+export function calculateCredits(inputTokens, outputTokens, model, { cacheRead = 0, cacheCreation = 0 } = {}) {
+  return calculateCostCentsWithSurcharge(inputTokens, outputTokens, model, { cacheRead, cacheCreation })
 }
 
+// amount is in cents (same unit as users.credits)
 export async function deductCredits(userId, amount) {
   const db = useDb()
   const result = db

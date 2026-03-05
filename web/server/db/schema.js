@@ -5,7 +5,7 @@ export const users = sqliteTable('users', {
   email: text('email').unique(),
   passwordHash: text('password_hash'),
   plan: text('plan').notNull().default('free'),
-  credits: integer('credits').notNull().default(500),
+  credits: integer('credits').notNull().default(500), // in cents (500 = $5.00)
   emailVerified: integer('email_verified').notNull().default(0),
   lastActiveAt: text('last_active_at'),
   suspended: integer('suspended').notNull().default(0),
@@ -57,7 +57,9 @@ export const apiCalls = sqliteTable('api_calls', {
   model: text('model'),
   inputTokens: integer('input_tokens'),
   outputTokens: integer('output_tokens'),
-  creditsUsed: integer('credits_used'),
+  cacheReadTokens: integer('cache_read_tokens').default(0),
+  cacheCreationTokens: integer('cache_creation_tokens').default(0),
+  creditsUsed: integer('credits_used'), // in cents
   durationMs: integer('duration_ms'),
   status: text('status').notNull().default('success'),
   errorMessage: text('error_message'),

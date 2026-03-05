@@ -56,6 +56,12 @@ export default defineEventHandler(async (event) => {
     return { error: `Provider ${provider} is not configured on this server` }
   }
 
+  // Inject Anthropic prompt caching — system prompt + tools are repeated every turn
+  // and can be cached after the first call (system: 0.1× reads, tools: 0.1× reads)
+  if (provider === 'anthropic') {
+    injectAnthropicCacheControl(body)
+  }
+
   const startTime = Date.now()
 
   // Build upstream URL and headers (server-side API keys)
@@ -82,11 +88,26 @@ export default defineEventHandler(async (event) => {
       return await handleNonStreaming(event, { url, headers, body, provider, model, user, startTime })
     }
   } catch (err) {
-    logApiCall(user.id, provider, model, 0, 0, 0, Date.now() - startTime, 'error', err.message)
+    logApiCall(user.id, provider, model, 0, 0, 0, 0, 0, Date.now() - startTime, 'error', err.message)
     setResponseStatus(event, 502)
     return { error: 'Upstream provider error' }
   }
 })
+
+function injectAnthropicCacheControl(body) {
+  // Cache the system prompt (string → array with cache_control; array → mark last block)
+  if (typeof body.system === 'string') {
+    body.system = [{ type: 'text', text: body.system, cache_control: { type: 'ephemeral' } }]
+  } else if (Array.isArray(body.system) && body.system.length > 0) {
+    const last = body.system[body.system.length - 1]
+    if (last.type === 'text' && !last.cache_control) last.cache_control = { type: 'ephemeral' }
+  }
+  // Cache the full tools list (breakpoint on last tool — Anthropic caches everything up to it)
+  if (Array.isArray(body.tools) && body.tools.length > 0) {
+    const last = body.tools[body.tools.length - 1]
+    if (!last.cache_control) last.cache_control = { type: 'ephemeral' }
+  }
+}
 
 async function handleStreaming(event, { url, headers, body, provider, model, user, startTime }) {
   const upstreamRes = await fetch(url, {
@@ -97,7 +118,7 @@ async function handleStreaming(event, { url, headers, body, provider, model, use
 
   if (!upstreamRes.ok) {
     const errorText = await upstreamRes.text()
-    logApiCall(user.id, provider, model, 0, 0, 0, Date.now() - startTime, 'error', errorText.slice(0, 500))
+    logApiCall(user.id, provider, model, 0, 0, 0, 0, 0, Date.now() - startTime, 'error', errorText.slice(0, 500))
     setResponseStatus(event, upstreamRes.status)
     return { error: 'API request failed' }
   }
@@ -116,6 +137,8 @@ async function handleStreaming(event, { url, headers, body, provider, model, use
 
   let totalInputTokens = 0
   let totalOutputTokens = 0
+  let totalCacheReadTokens = 0
+  let totalCacheCreationTokens = 0
   let sseBuffer = '' // Buffer for incomplete SSE lines split across TCP chunks
 
   const stream = new ReadableStream({
@@ -133,8 +156,10 @@ async function handleStreaming(event, { url, headers, body, provider, model, use
                 try {
                   const parsed = JSON.parse(data)
                   const usage = extractUsage(provider, parsed)
-                  if (usage.inputTokens) totalInputTokens = usage.inputTokens
-                  if (usage.outputTokens) totalOutputTokens = usage.outputTokens
+                  if (usage.inputTokens)         totalInputTokens = usage.inputTokens
+                  if (usage.outputTokens)        totalOutputTokens = usage.outputTokens
+                  if (usage.cacheReadTokens)     totalCacheReadTokens = usage.cacheReadTokens
+                  if (usage.cacheCreationTokens) totalCacheCreationTokens = usage.cacheCreationTokens
                 } catch { /* ignore */ }
               }
             }
@@ -144,11 +169,14 @@ async function handleStreaming(event, { url, headers, body, provider, model, use
 
           // Deduct actual cost now that we know the real token counts
           try {
-            const creditsUsed = calculateCredits(totalInputTokens, totalOutputTokens, model)
+            const creditsUsed = calculateCredits(totalInputTokens, totalOutputTokens, model, {
+              cacheRead: totalCacheReadTokens,
+              cacheCreation: totalCacheCreationTokens,
+            })
             if (creditsUsed > 0) {
               await deductCredits(user.id, creditsUsed)
             }
-            logApiCall(user.id, provider, model, totalInputTokens, totalOutputTokens, creditsUsed, Date.now() - startTime, 'success', null)
+            logApiCall(user.id, provider, model, totalInputTokens, totalOutputTokens, totalCacheReadTokens, totalCacheCreationTokens, creditsUsed, Date.now() - startTime, 'success', null)
 
             // Send updated balance to client as SSE trailer
             const freshDb = useDb()
@@ -193,8 +221,10 @@ async function handleStreaming(event, { url, headers, body, provider, model, use
           try {
             const parsed = JSON.parse(data)
             const usage = extractUsage(provider, parsed)
-            if (usage.inputTokens) totalInputTokens = usage.inputTokens
-            if (usage.outputTokens) totalOutputTokens = usage.outputTokens
+            if (usage.inputTokens)         totalInputTokens = usage.inputTokens
+            if (usage.outputTokens)        totalOutputTokens = usage.outputTokens
+            if (usage.cacheReadTokens)     totalCacheReadTokens = usage.cacheReadTokens
+            if (usage.cacheCreationTokens) totalCacheCreationTokens = usage.cacheCreationTokens
           } catch { /* incomplete JSON — ignore */ }
         }
 
@@ -222,7 +252,7 @@ async function handleNonStreaming(event, { url, headers, body, provider, model, 
   const elapsed = Date.now() - startTime
   if (!upstreamRes.ok) {
     const errorText = await upstreamRes.text()
-    logApiCall(user.id, provider, model, 0, 0, 0, elapsed, 'error', errorText.slice(0, 500))
+    logApiCall(user.id, provider, model, 0, 0, 0, 0, 0, elapsed, 'error', errorText.slice(0, 500))
     setResponseStatus(event, upstreamRes.status)
     return { error: 'API request failed' }
   }
@@ -230,9 +260,12 @@ async function handleNonStreaming(event, { url, headers, body, provider, model, 
   const json = await upstreamRes.json()
   const usage = extractUsage(provider, json)
 
-  const creditsUsed = calculateCredits(usage.inputTokens, usage.outputTokens, model)
+  const creditsUsed = calculateCredits(usage.inputTokens, usage.outputTokens, model, {
+    cacheRead: usage.cacheReadTokens,
+    cacheCreation: usage.cacheCreationTokens,
+  })
   await deductCredits(user.id, creditsUsed)
-  logApiCall(user.id, provider, model, usage.inputTokens, usage.outputTokens, creditsUsed, Date.now() - startTime, 'success', null)
+  logApiCall(user.id, provider, model, usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.cacheCreationTokens, creditsUsed, Date.now() - startTime, 'success', null)
 
   // Fire-and-forget recharge if near threshold
   if (user.plan === 'pro' && user.autoRechargeEnabled) {
@@ -246,7 +279,7 @@ async function handleNonStreaming(event, { url, headers, body, provider, model, 
   return json
 }
 
-function logApiCall(userId, provider, model, inputTokens, outputTokens, creditsUsed, durationMs, status, errorMessage) {
+function logApiCall(userId, provider, model, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, creditsUsed, durationMs, status, errorMessage) {
   try {
     const db = useDb()
     db.insert(apiCalls).values({
@@ -256,6 +289,8 @@ function logApiCall(userId, provider, model, inputTokens, outputTokens, creditsU
       model,
       inputTokens,
       outputTokens,
+      cacheReadTokens,
+      cacheCreationTokens,
       creditsUsed,
       durationMs,
       status,
