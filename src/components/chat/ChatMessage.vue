@@ -334,11 +334,15 @@ const isWaitingForContent = computed(() => {
   }
   const status = chat.state.statusRef.value
   if (status !== 'submitted' && status !== 'streaming') return false
-  if (textContent.value) return false
-  // Hide dots when tool parts exist — they have their own pending indicator.
-  // (part.state is mutated in place by AI SDK and isn't reactive, so we can't
-  // reliably distinguish pending vs completed tools here.)
-  return !displayParts.value.some(p => isToolPart(p))
+  // Read parts from props.message directly (not via displayParts/textContent computeds)
+  // because AI SDK shallow-clones messages but reuses the same parts array reference,
+  // causing Vue's computed caching to skip updates on downstream computeds.
+  const parts = props.message.parts
+  if (parts?.length > 0) {
+    if (parts.some(p => p.type === 'text' && p.text)) return false
+    if (parts.some(p => isToolPart(p))) return false
+  }
+  return true
 })
 
 function isReasoningActive(partIdx) {

@@ -72,10 +72,14 @@ export const useTasksStore = defineStore('tasks', () => {
           if (msgs.length > 0) {
             const last = msgs[msgs.length - 1]
             if (last.role === 'assistant') {
-              const brokenPart = last.parts?.find(
-                p => p.type === 'dynamic-tool' &&
-                     (p.state === 'input-available' || p.state === 'input-streaming'),
-              )
+              const brokenPart = last.parts?.find(p => {
+                if (p.type !== 'dynamic-tool') return false
+                // Stuck without execution (original case)
+                if (p.state === 'input-available' || p.state === 'input-streaming') return true
+                // SDK handled the error but input is not a valid dict — will poison API calls
+                if (p.input !== undefined && (typeof p.input !== 'object' || p.input === null || Array.isArray(p.input))) return true
+                return false
+              })
               if (brokenPart) {
                 const { toolCallId, toolName } = brokenPart
                 const errMsg = err?.message || String(err)
