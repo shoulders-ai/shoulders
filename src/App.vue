@@ -164,9 +164,10 @@ onMounted(async () => {
   // Telemetry: app launched
   import('./services/telemetry').then(({ events }) => events.appOpen())
 
-  // Restore saved theme + font sizes
+  // Restore saved theme + font sizes + prose font
   workspace.restoreTheme()
   workspace.applyFontSizes()
+  workspace.restoreProseFont()
 
   // Silent update check (non-blocking, respects user preference)
   if (isAutoCheckEnabled()) {

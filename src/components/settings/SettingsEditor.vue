@@ -4,6 +4,31 @@
     <p class="settings-hint">Behavior and display preferences for the text editor.</p>
 
     <div class="editor-toggles">
+      <!-- Writing Font -->
+      <div class="env-lang-card">
+        <div class="env-lang-header">
+          <span class="env-lang-dot good"></span>
+          <span class="env-lang-name">Writing font</span>
+          <span class="env-lang-version">{{ currentFontLabel }}</span>
+        </div>
+        <div class="env-lang-hint" style="margin-top: 4px; padding-left: 16px;">
+          Font for Markdown files. Other files use monospace editor font.
+        </div>
+        <div class="wrap-column-row" style="margin-top: 8px; padding-left: 16px;">
+          <label class="ghost-model-label">Prose font:</label>
+          <div class="wrap-preset-group">
+            <button
+              v-for="font in proseFonts"
+              :key="font.value"
+              class="wrap-preset-btn font-preset-btn"
+              :class="{ active: workspace.proseFont === font.value }"
+              :style="{ fontFamily: font.family, fontSize: font.fontSize }"
+              @click="workspace.setProseFont(font.value)"
+            >{{ font.label }}</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Soft Wrap -->
       <div class="env-lang-card">
         <div class="env-lang-header">
@@ -140,6 +165,16 @@ import { useWorkspaceStore } from '../../stores/workspace'
 import { GHOST_MODELS, getBillingRoute } from '../../services/apiClient'
 
 const workspace = useWorkspaceStore()
+
+const proseFonts = [
+  { value: 'inter', label: 'Sans',  family: "'Inter', system-ui, sans-serif",     fontSize: '11px' },
+  { value: 'stix',  label: 'Serif', family: "'STIX Two Text', Georgia, serif",    fontSize: '13px' },
+  { value: 'mono',  label: 'Mono',  family: "'JetBrains Mono', monospace",        fontSize: '11px' },
+]
+
+const currentFontLabel = computed(() =>
+  proseFonts.find(f => f.value === workspace.proseFont)?.label ?? 'Sans'
+)
 
 const WRAP_PRESETS = [
   { label: 'Narrow', value: 60 },
@@ -307,5 +342,11 @@ function selectGhostModel(model) {
 .wrap-preset-btn.active {
   background: var(--accent);
   color: #fff;
+}
+
+.font-preset-btn {
+  width: 52px;
+  text-align: center;
+  padding: 2px 0;
 }
 </style>

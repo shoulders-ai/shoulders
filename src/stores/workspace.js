@@ -34,6 +34,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     spellcheck: localStorage.getItem('spellcheck') !== 'false',
     editorFontSize: parseInt(localStorage.getItem('editorFontSize')) || 14,
     uiFontSize: parseInt(localStorage.getItem('uiFontSize')) || 13,
+    proseFont: localStorage.getItem('proseFont') || 'inter',
     docxZoomPercent: parseInt(localStorage.getItem('docxZoomPercent')) || 100,
     theme: localStorage.getItem('theme') || 'default',
     referencesPanelHeight: parseInt(localStorage.getItem('referencesPanelHeight')) || 250,
@@ -779,6 +780,21 @@ exit 0
       document.documentElement.style.setProperty('--ui-font-size', this.uiFontSize + 'px')
       localStorage.setItem('editorFontSize', String(this.editorFontSize))
       localStorage.setItem('uiFontSize', String(this.uiFontSize))
+    },
+
+    setProseFont(name) {
+      this.proseFont = name
+      localStorage.setItem('proseFont', name)
+      const stacks = {
+        inter: "'Inter', system-ui, sans-serif",
+        stix:  "'STIX Two Text', Georgia, serif",
+        mono:  "'JetBrains Mono', 'Menlo', 'Consolas', monospace",
+      }
+      document.documentElement.style.setProperty('--font-prose', stacks[name] || stacks.geist)
+    },
+
+    restoreProseFont() {
+      this.setProseFont(this.proseFont)
     },
 
     setTheme(name) {

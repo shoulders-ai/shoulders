@@ -1,5 +1,5 @@
 <template>
-  <div ref="editorContainer" class="h-full w-full overflow-hidden" :data-editor-filepath="props.filePath" @contextmenu.prevent="onContextMenu"></div>
+  <div ref="editorContainer" class="h-full w-full overflow-hidden" :class="{ 'cm-prose-file': isMd }" :data-editor-filepath="props.filePath" @contextmenu.prevent="onContextMenu"></div>
   <EditorContextMenu
     :visible="ctxMenu.show"
     :x="ctxMenu.x"

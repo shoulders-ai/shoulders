@@ -5,6 +5,18 @@
   font-variant-ligatures: none;
   font-size: var(--editor-font-size);
 }
+
+/* Prose font for .md files */
+.cm-prose-file .cm-content {
+  font-family: var(--font-prose);
+  line-height: 1.75;
+  font-variant-ligatures: normal;
+}
+/* Keep inline code spans monospace within prose documents */
+.cm-prose-file .cm-content .tok-monospace,
+.cm-prose-file .cm-content .tok-string2 {
+  font-family: var(--font-mono);
+}
 .cm-editor.cm-focused {
   outline: none;
 }

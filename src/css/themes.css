@@ -69,6 +69,7 @@
   /* Font stacks — single source of truth */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+  --font-prose: 'Inter', system-ui, sans-serif;
   --ui-font: var(--font-sans);
 }
 
