@@ -167,6 +167,7 @@ const props = defineProps({
   prevRole: { type: String, default: null },
   threadId: { type: String, default: null },
   sessionId: { type: String, default: null },
+  isLastAssistant: { type: Boolean, default: false },
 })
 
 defineEmits(['proposal-select'])
@@ -325,6 +326,8 @@ function _getChatInstance() {
 }
 
 const isWaitingForContent = computed(() => {
+  // Only the last assistant message can be actively streaming
+  if (!props.isLastAssistant) return false
   const chat = _getChatInstance()
   if (!chat) {
     return props.message.status === 'streaming' && !textContent.value && !displayParts.value.some(p => isToolPart(p))
@@ -339,6 +342,8 @@ const isWaitingForContent = computed(() => {
 })
 
 function isReasoningActive(partIdx) {
+  // Only the last assistant message can have active reasoning
+  if (!props.isLastAssistant) return false
   const parts = displayParts.value
   const partsAfter = parts.slice(partIdx + 1)
   if (partsAfter.length > 0) return false

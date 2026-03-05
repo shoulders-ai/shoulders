@@ -67,6 +67,7 @@
             :message="msg"
             :prevRole="idx > 0 ? visibleMessages[idx - 1].role : null"
             :threadId="thread.id"
+            :isLastAssistant="msg.id === lastAssistantId"
           />
         </div>
       </div>
@@ -126,6 +127,14 @@ const chat = computed(() => tasksStore.getTaskChatInstance(props.thread.id))
 const visibleMessages = computed(() => {
   if (chat.value) return chat.value.state.messagesRef.value
   return []
+})
+
+const lastAssistantId = computed(() => {
+  const msgs = visibleMessages.value
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'assistant') return msgs[i].id
+  }
+  return null
 })
 
 const isStreaming = computed(() => {

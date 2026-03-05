@@ -27,6 +27,7 @@
             :message="msg"
             :prevRole="idx > 0 ? messages[idx - 1].role : null"
             :sessionId="session.id"
+            :isLastAssistant="msg.id === lastAssistantId"
             @proposal-select="onProposalSelect"
           />
         </div>
@@ -110,6 +111,13 @@ const messages = computed(() => {
     return chat.value.state.messagesRef.value.filter(m => !m._isToolResult)
   }
   return (props.session.messages || []).filter(m => !m._isToolResult)
+})
+
+const lastAssistantId = computed(() => {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'assistant') return messages.value[i].id
+  }
+  return null
 })
 
 const isStreaming = computed(() => {

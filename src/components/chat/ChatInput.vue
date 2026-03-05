@@ -63,6 +63,12 @@
           {{ reviews.directMode ? 'Auto-apply' : 'Review changes' }}
         </button>
 
+        <!-- Spacer -->
+        <div class="flex-1"></div>
+
+        <!-- Budget reached label -->
+        <span v-if="isOverBudget" class="ui-text-lg" style="color: var(--error); margin-right: 4px;">Budget reached</span>
+
         <!-- Token donut -->
         <div v-if="props.estimatedTokens !== null"
           class="shrink-0 flex items-center token-donut-wrap">
@@ -79,16 +85,10 @@
           <span class="token-donut-tip">{{ tokenTooltip }}</span>
         </div>
 
-        <!-- Spacer -->
-        <div class="flex-1"></div>
-
-        <!-- Budget reached label -->
-        <span v-if="isOverBudget" class="ui-text-lg" style="color: var(--error); margin-right: 4px;">Budget reached</span>
-
         <!-- Send button -->
         <button
           v-if="!isStreaming"
-          class="shrink-0 w-7 h-7 rounded flex items-center justify-center border-none cursor-pointer transition-colors"
+          class="shrink-0 w-7 h-7 rounded flex items-center justify-center border-none cursor-pointer transition-colors ml-1"
           :style="{
             background: canSend ? 'var(--accent)' : 'var(--bg-tertiary)',
             color: canSend ? 'var(--bg-primary)' : 'var(--fg-muted)',
@@ -102,7 +102,7 @@
         <!-- Stop button -->
         <button
           v-else
-          class="shrink-0 w-7 h-7 rounded flex items-center justify-center border-none cursor-pointer"
+          class="shrink-0 w-7 h-7 rounded flex items-center justify-center border-none cursor-pointer ml-1"
           style="background: var(--error); color: white;"
           @click="$emit('abort')">
           <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
