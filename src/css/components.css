@@ -1,25 +1,33 @@
-/* Context menu */
+/* Context menu — !important needed because SuperDoc's style.css (loaded
+   dynamically for DOCX editing) defines its own .context-menu with
+   background:white / z-index:50 / color:#47484a.  In production the
+   late-loaded chunk wins the cascade, breaking dark-theme colors and
+   z-index stacking (backdrop covers the menu, stealing clicks). */
 .context-menu {
-  position: fixed;
-  z-index: 1000;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 0;
-  min-width: 160px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  position: fixed !important;
+  z-index: 1000 !important;
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  padding: 4px 0 !important;
+  min-width: 160px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+  color: var(--fg-secondary) !important;
+  width: auto !important;
+  margin-top: 0 !important;
+  font-size: var(--ui-font-size) !important;
 }
 .context-menu-item {
-  padding: 6px 12px;
+  padding: 6px 12px !important;
   cursor: pointer;
-  display: flex;
+  display: flex !important;
   align-items: center;
   gap: 8px;
-  color: var(--fg-secondary);
+  color: var(--fg-secondary) !important;
 }
 .context-menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--fg-primary);
+  background: var(--bg-hover) !important;
+  color: var(--fg-primary) !important;
 }
 .context-menu-section {
   padding: 4px 12px 2px;
