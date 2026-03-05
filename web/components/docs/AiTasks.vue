@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h1>Tasks</h1>
+    <h1>AI Tasks</h1>
     <p class="docs-subtitle">AI-powered task threads anchored to specific text selections.</p>
 
     <h2>Creating a task</h2>

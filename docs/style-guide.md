@@ -46,7 +46,7 @@ Switching: `workspace.setTheme('monokai')` → adds `.theme-monokai` to `<html>`
 
 **Size** (2): `--editor-font-size`, `--ui-font-size`
 
-**Fonts** (3): `--font-sans`, `--font-mono`, `--ui-font`
+**Fonts** (4): `--font-sans`, `--font-mono`, `--font-prose`, `--ui-font`
 
 ### Adding a new theme
 
@@ -59,16 +59,29 @@ Switching: `workspace.setTheme('monokai')` → adds `.theme-monokai` to `<html>`
 
 ### Fonts
 Self-hosted variable fonts in `public/fonts/`, declared in `src/css/fonts.css`:
-- **Inter** (variable, 100–900 + italic): UI text — labels, buttons, status bar
+- **Inter** (variable, 100–900 + italic): UI text — labels, buttons, status bar; default prose font for .md editing
 - **JetBrains Mono** (variable, 100–800 + italic, `font-variant-ligatures: none`): Editor, terminal, code
-- **Geist** (variable, 100–900): Markdown preview only
+- **Geist** (variable, 100–900): Markdown preview only (no italic variant in bundled files)
+- **Lora** (variable, 400–700 + italic): Available prose font option
+- **STIX Two Text** (variable + italic): Available prose font option; designed for academic/math typography
+- **Crimson Text** (SemiBold only): Brand wordmark on web frontend
 
 ### Font CSS Variables (`:root` in `themes.css`)
 - `--font-sans`: `'Inter', system-ui, sans-serif` — body default, inherited everywhere
 - `--font-mono`: `'JetBrains Mono', 'Menlo', 'Consolas', monospace` — used via `var(--font-mono)` wherever code/mono is needed
+- `--font-prose`: `'Inter', system-ui, sans-serif` — prose editing font for `.md` files (default Inter; user-selectable via Settings → Editor). Overridden at runtime by `workspace.setProseFont()` via `document.documentElement.style.setProperty`.
 - `--ui-font`: alias for `--font-sans` — used in SuperDoc/DOCX overrides
 
 Only set `font-family` explicitly when switching to mono. Sans inherits from body. Exception: `Terminal.vue` hardcodes the font string because xterm.js renders to canvas and can't resolve CSS vars.
+
+### Prose Font System
+`.md` files get a proportional prose font instead of monospace via:
+- `TextEditor.vue`: adds `.cm-prose-file` CSS class to the editor container when `filePath.endsWith('.md')`
+- `src/css/editor.css`: `.cm-prose-file .cm-content { font-family: var(--font-prose); line-height: 1.75; }`
+- Inline code spans within prose documents stay monospace (`.tok-monospace`, `.tok-string2` selectors)
+- User selects Sans (Inter) / Serif (STIX Two) / Mono in Settings → Editor → "Writing font"
+- Stored in `workspace.proseFont` (localStorage: `proseFont`), applied via `workspace.setProseFont(name)`
+- `.tex`, `.R`, `.py` and all other file types always use `var(--font-mono)` regardless of this setting
 
 ### Font Sizes
 - Base: 13px (`html, body, #app` in style.css)

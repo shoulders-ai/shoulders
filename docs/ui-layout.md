@@ -58,7 +58,7 @@ No sidebars, no footer. Header is always visible (hamburger menu works in both s
 | `src/components/Launcher.vue` | Empty state: logo, Open Folder, Clone Repository, recent workspaces |
 | `src/components/layout/Header.vue` | Titlebar: hamburger menu + inline search bar + sidebar toggles + settings |
 | `src/components/SearchResults.vue` | Search dropdown (file/content/reference/chat results) |
-| `src/components/layout/Footer.vue` | Status bar: git, review mode, zoom, billing, editor stats |
+| `src/components/layout/Footer.vue` | Status bar: word count, sync status, zoom, billing |
 | `src/components/layout/ResizeHandle.vue` | Sidebar resize dividers |
 | `src/components/layout/SnapshotDialog.vue` | Named snapshot input dialog (Cmd+S → "Name this version") |
 | `src/components/layout/SyncPopover.vue` | GitHub sync status popover (from Footer) |
@@ -79,7 +79,7 @@ No sidebars, no footer. Header is always visible (hamburger menu works in both s
 | `src/components/editor/ReviewBar.vue` | Pending edits banner (text files) |
 | `src/components/editor/DocxReviewBar.vue` | Pending edits banner (DOCX files) |
 | `src/components/editor/NotebookReviewBar.vue` | Pending edits banner (notebooks) |
-| `src/components/editor/EditorContextMenu.vue` | Right-click: Ask AI, Add Task, clipboard, spell suggestions |
+| `src/components/editor/EditorContextMenu.vue` | Right-click: Ask AI, Add AI Task, clipboard, spell suggestions |
 | `src/components/editor/DocxContextMenu.vue` | Right-click context menu for DOCX editor |
 | **Right panel** | |
 | `src/components/right/RightPanel.vue` | Right sidebar: Outline / Tasks / Terminal / Backlinks tabs |
@@ -119,6 +119,7 @@ Two storage mechanisms: **localStorage** for global UI preferences, **`.shoulder
 | Theme | localStorage | `theme` |
 | Font sizes (editor + UI) | localStorage | `editorFontSize`, `uiFontSize` |
 | Soft wrap, spell check, wrap column | localStorage | `softWrap`, `spellcheck`, `wrapColumn` |
+| Prose font (for .md files) | localStorage | `proseFont` |
 | Ghost/live preview enabled | localStorage | `ghostEnabled`, `livePreviewEnabled` |
 | Last model selections | localStorage | `lastModelId`, `ghostModelId` |
 | Recent files (per workspace) | localStorage | `recentFiles:{workspacePath}` |
@@ -189,24 +190,22 @@ Plus the capability `"core:window:allow-start-dragging"` in `capabilities/defaul
 
 - Height: 30px
 - Layout: CSS grid `1fr auto 1fr` (same pattern as Header — centers the middle section)
-- **Left section** (source control + review):
-  - Git branch name (with branch icon, polled every 10s)
-  - GitHub sync status icon (cloud variants: synced/syncing/error/idle, clickable → `SyncPopover`)
-  - Review mode toggle: "Mode: DIRECT" (yellow) / "Mode: REVIEW" (muted)
+- **Left section** (writing stats + sync):
+  - Word count + char count (fixed-width number spans with `tabular-nums`, accent-colored when selection active)
+  - Separator (only when GitHub connected)
+  - GitHub sync status icon (cloud variants: synced/syncing/error/idle, clickable → `SyncPopover`) + contextual label: "Backed up" / "Saving..." / "Sync issue". Entire cluster hidden when GitHub not configured.
   - Pending changes count (yellow, clickable)
 - **Center section** (crossfade between three layers):
   - **Default**: Zoom controls (−, percentage, +). Percentage is accent-colored when ≠ 100%. Click percentage → zoom popover.
   - **Save confirmation**: "Saved ✓" + "Name this version?" link (8s window after Cmd+S, opens `SnapshotDialog`)
   - **Transient message**: e.g., "All saved (no changes)" (auto-fading)
-- **Right section** (tools + editor info):
+- **Right section** (tools + billing):
   - Keyboard shortcuts button (popover with full shortcut reference)
   - Soft wrap toggle button (accent when active)
   - Billing context display (Shoulders balance or estimated monthly cost, when enabled)
-  - Editor stats: word count, char count, selection counts (accent-colored when selection active)
-  - Cursor position (Ln X, Col Y)
 
 ### Exposed Methods (called by App.vue)
-- `setCursorPos({line, col})` — Updates cursor position display
+- `setCursorPos({line, col})` — accepted but no longer rendered (kept for call-site compatibility)
 - `setEditorStats(stats)` — Updates word/char/selection counts
 - `showSaveMessage(msg)` — Shows a transient right-side message (fades after 2s)
 - `showCenterMessage(msg)` — Shows a transient center message (fades after 2s)

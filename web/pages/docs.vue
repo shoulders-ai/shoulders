@@ -95,7 +95,7 @@ const sidebarGroups = [
       { id: 'ai-setup', title: 'Setup' },
       { id: 'inline-suggestions', title: 'Inline Suggestions' },
       { id: 'ai-chat', title: 'AI Chat' },
-      { id: 'ai-tasks', title: 'Tasks' },
+      { id: 'ai-tasks', title: 'AI Tasks' },
       { id: 'ai-tools', title: 'Tools & Review' },
     ]
   },
