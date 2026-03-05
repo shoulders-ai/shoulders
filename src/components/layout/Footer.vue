@@ -2,17 +2,22 @@
   <footer class="grid items-center px-3 text-xs select-none shrink-0"
     style="grid-template-columns: 1fr auto 1fr; background: var(--bg-secondary); border-top: 1px solid var(--border); color: var(--fg-muted); height: 26px; font-variant-numeric: tabular-nums;">
 
-    <!-- LEFT: source control + AI review -->
-    <div class="flex items-center gap-4 justify-self-start whitespace-nowrap">
-      <!-- Git branch -->
-      <span v-if="gitBranchName" class="flex items-center gap-1">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M11.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122V6A2.5 2.5 0 0110 8.5H6a1 1 0 00-1 1v1.128a2.251 2.251 0 11-1.5 0V5.372a2.25 2.25 0 111.5 0v1.836A2.492 2.492 0 016 7h4a1 1 0 001-1v-.628A2.25 2.25 0 019.5 3.25zM4.25 12a.75.75 0 100 1.5.75.75 0 000-1.5zM3.5 3.25a.75.75 0 111.5 0 .75.75 0 01-1.5 0z"/>
-        </svg>
-        {{ gitBranchName }}
-      </span>
+    <!-- LEFT: word count + sync status -->
+    <div class="flex items-center gap-2 justify-self-start whitespace-nowrap">
+      <!-- Word count -->
+      <template v-if="stats.words > 0">
+        <span :style="{ color: stats.selWords > 0 ? 'var(--accent)' : 'var(--fg-muted)' }">
+          <span style="display:inline-block;min-width:3ch;text-align:right;">{{ (stats.selWords > 0 ? stats.selWords : stats.words).toLocaleString() }}</span> words
+        </span>
+        <span :style="{ color: stats.selChars > 0 ? 'var(--accent)' : 'var(--fg-muted)' }">
+          <span style="display:inline-block;min-width:3ch;text-align:right;">{{ (stats.selChars > 0 ? stats.selChars : stats.chars).toLocaleString() }}</span> chars
+        </span>
+      </template>
 
-      <!-- Sync status -->
+      <!-- Separator -->
+      <div v-if="workspace.githubUser && stats.words > 0" class="w-px h-3 shrink-0" style="background: var(--border);"></div>
+
+      <!-- Sync status (only when GitHub connected) -->
       <span
         v-if="workspace.githubUser"
         ref="syncTriggerRef"
@@ -22,46 +27,28 @@
         :title="syncTooltip"
       >
         <!-- Cloud icon variations -->
-        <!-- Synced: plain cloud, muted -->
         <svg v-if="workspace.syncStatus === 'synced'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/>
         </svg>
-        <!-- Syncing: cloud with arrows, subtle pulse -->
         <svg v-else-if="workspace.syncStatus === 'syncing'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sync-pulse">
           <path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/>
           <path d="M11 13l-2 2 2 2M13 11l2-2-2-2"/>
         </svg>
-        <!-- Error/conflict: cloud with ! -->
         <svg v-else-if="workspace.syncStatus === 'error' || workspace.syncStatus === 'conflict'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/>
           <path d="M12 9v4M12 17h.01"/>
         </svg>
-        <!-- Idle/disconnected: cloud with slash, dimmed -->
         <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.4;">
           <path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/>
           <path d="M4 20L20 4"/>
         </svg>
+        <span v-if="syncLabel" class="text-[11px]">{{ syncLabel }}</span>
       </span>
-
-      <!-- Separator -->
-      <div v-if="gitBranchName" class="w-px h-3 shrink-0" style="background: var(--border);"></div>
-
-      <!-- Review mode -->
-       <div>
-       <span>Mode: </span>
-      <span
-        class="cursor-pointer hover:opacity-80 font-medium tracking-wide"
-        :style="{ color: reviews.directMode ? 'var(--warning)' : 'var(--fg-muted)' }"
-        @click="reviews.toggleDirectMode()"
-        :title="reviews.directMode ? 'Direct mode: Claude edits files directly' : 'Review mode: Claude edits are queued for review'">
-        {{ reviews.directMode ? 'DIRECT' : 'REVIEW' }}
-      </span>
-    </div>
 
       <!-- Pending changes -->
       <span v-if="reviews.pendingCount > 0"
         ref="pendingTriggerRef"
-        class="flex items-center gap-1 cursor-pointer hover:opacity-80 ml-1"
+        class="flex items-center gap-1 cursor-pointer hover:opacity-80"
         style="color: var(--warning);"
         @click="togglePendingPopover">
         {{ reviews.pendingCount }} change{{ reviews.pendingCount !== 1 ? 's' : '' }}
@@ -190,23 +177,12 @@
         <div class="w-px h-3 shrink-0" style="background: var(--border);"></div>
       </template>
 
-      <!-- Editor stats -->
+      <!-- Save message -->
       <span v-if="saveMessage"
         class="transition-opacity"
         :style="{ color: 'var(--success)', opacity: saveMessageFading ? 0 : 1 }">
         {{ saveMessage }}
       </span>
-      <template v-if="stats.words > 0">
-        <span v-if="stats.selWords > 0" style="color: var(--accent);">
-          {{ stats.selWords }} words
-        </span>
-        <span v-else style="color: var(--fg-muted);">{{ stats.words.toLocaleString() }} words</span>
-        <span v-if="stats.selChars > 0" style="color: var(--accent);">
-          {{ stats.selChars.toLocaleString() }} chars
-        </span>
-        <span v-else style="color: var(--fg-muted);">{{ stats.chars.toLocaleString() }} chars</span>
-      </template>
-      <span v-if="cursorPos.line" style="color: var(--fg-muted);">Ln {{ cursorPos.line }}, Col {{ cursorPos.col }}</span>
     </div>
   </footer>
 
@@ -323,14 +299,13 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useReviewsStore } from '../../stores/reviews'
 import { useEditorStore } from '../../stores/editor'
 import { useUsageStore } from '../../stores/usage'
 import { useToastStore } from '../../stores/toast'
 import { getBillingRoute } from '../../services/apiClient'
-import { gitBranch } from '../../services/git'
 import { modKey, altKey } from '../../platform'
 import SyncPopover from './SyncPopover.vue'
 import SnapshotDialog from './SnapshotDialog.vue'
@@ -345,7 +320,6 @@ const editorStore = useEditorStore()
 const usageStore = useUsageStore()
 const toastStore = useToastStore()
 
-const gitBranchName = ref('')
 const stats = ref({ words: 0, chars: 0, selWords: 0, selChars: 0 })
 const cursorPos = ref({ line: 0, col: 0 })
 const saveMessage = ref('')
@@ -433,6 +407,16 @@ const syncTooltip = computed(() => {
     case 'error': return 'Needs attention — click for details'
     case 'idle': return 'GitHub: connected'
     default: return 'GitHub: not connected'
+  }
+})
+
+const syncLabel = computed(() => {
+  switch (workspace.syncStatus) {
+    case 'synced': return 'Backed up'
+    case 'syncing': return 'Saving...'
+    case 'error':
+    case 'conflict': return 'Sync issue'
+    default: return null
   }
 })
 
@@ -612,22 +596,6 @@ defineExpose({
   beginSaveConfirmation,
 })
 
-let branchInterval = null
-
-async function updateBranch() {
-  if (workspace.path) {
-    gitBranchName.value = await gitBranch(workspace.path)
-  }
-}
-
-onMounted(() => {
-  updateBranch()
-  branchInterval = setInterval(updateBranch, 10000)
-})
-
-onUnmounted(() => {
-  clearInterval(branchInterval)
-})
 </script>
 
 <style scoped>

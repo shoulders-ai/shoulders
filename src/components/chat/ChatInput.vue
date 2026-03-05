@@ -52,6 +52,17 @@
           </svg>
         </button>
 
+        <!-- Review mode toggle -->
+        <button
+          class="ui-text-lg px-1.5 py-0.5 rounded cursor-pointer bg-transparent border-none flex items-center"
+          :style="reviews.directMode
+            ? { color: 'var(--warning)' }
+            : { color: 'var(--fg-muted)', opacity: '0.6' }"
+          title="Controls how AI-suggested edits are applied — affects all AI features"
+          @click="reviews.toggleDirectMode()">
+          {{ reviews.directMode ? 'Auto-apply' : 'Review changes' }}
+        </button>
+
         <!-- Token donut -->
         <div v-if="props.estimatedTokens !== null"
           class="shrink-0 flex items-center token-donut-wrap">
@@ -117,7 +128,8 @@
               <span v-if="m.id === currentModelId" class="mr-1.5" style="color: var(--accent);">&#x2713;</span>
               <span v-else style="width: 16px; display: inline-block;"></span>
               {{ m.name }}
-              <span v-if="showRouteBadges && m.route === 'direct'" class="route-label">API Key</span>
+              <span v-if="m.recommended" class="recommended-badge">default</span>
+              <span v-else-if="showRouteBadges && m.route === 'direct'" class="route-label">API Key</span>
             </div>
           </template>
           <div v-else class="px-3 py-2 ui-text-sm" style="color: var(--fg-muted);">
@@ -145,6 +157,7 @@ import { useWorkspaceStore } from '../../stores/workspace'
 import { useEditorStore } from '../../stores/editor'
 import { useUsageStore } from '../../stores/usage'
 import { useChatStore } from '../../stores/chat'
+import { useReviewsStore } from '../../stores/reviews'
 import { getBillingRoute } from '../../services/apiClient'
 import RichTextInput from '../shared/RichTextInput.vue'
 
@@ -162,6 +175,7 @@ const workspace   = useWorkspaceStore()
 const editorStore = useEditorStore()
 const usageStore  = useUsageStore()
 const chatStore   = useChatStore()
+const reviews     = useReviewsStore()
 
 const isOverBudget = computed(() => usageStore.isOverBudget)
 
@@ -278,6 +292,13 @@ const currentModelName = computed(() => {
 const availableModels = computed(() => {
   const config = workspace.modelsConfig
   if (!config || !config.models) return []
+  // Determine if user has ANY direct API key (vs Shoulders-account-only)
+  const hasAnyDirectKey = config.models.some(m => {
+    const keyEnv = config.providers?.[m.provider]?.apiKeyEnv
+    const key = keyEnv ? workspace.apiKeys?.[keyEnv] : null
+    return key && !key.includes('your-')
+  })
+  const isShouldersOnly = !hasAnyDirectKey && !!workspace.shouldersAuth?.token
   return config.models.map(m => {
     const providerConfig = config.providers?.[m.provider]
     const keyEnv = providerConfig?.apiKeyEnv
@@ -285,7 +306,8 @@ const availableModels = computed(() => {
     const hasDirectKey = key && !key.includes('your-')
     const hasProxyAccess = !!workspace.shouldersAuth?.token
     const route = getBillingRoute(m.id, workspace)
-    return { ...m, hasKey: hasDirectKey || hasProxyAccess, route: route?.route || null }
+    const recommended = isShouldersOnly && m.id.toLowerCase().includes('sonnet')
+    return { ...m, hasKey: hasDirectKey || hasProxyAccess, route: route?.route || null, recommended }
   }).filter(m => m.hasKey)
 })
 
@@ -402,6 +424,17 @@ defineExpose({ focus })
   font-size: 10px;
   color: var(--fg-muted);
   opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.recommended-badge {
+  margin-left: auto;
+  font-size: 10px;
+  background: var(--accent);
+  color: var(--bg-primary);
+  padding: 1px 5px;
+  border-radius: 3px;
+  opacity: 0.85;
   flex-shrink: 0;
 }
 </style>
