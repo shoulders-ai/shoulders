@@ -25,10 +25,15 @@ const { data: release } = useFetch('/api/releases')
 const platform = ref('unknown')
 
 onMounted(() => {
-  const ua = navigator.userAgent.toLowerCase()
-  if (ua.includes('mac')) platform.value = 'mac'
-  else if (ua.includes('win')) platform.value = 'windows'
-  else if (ua.includes('linux')) platform.value = 'linux'
+  const ua = navigator.userAgent
+  // Mobile/tablet devices can't run the desktop app — stay 'unknown' → generic "Download" → /download
+  if (/iPhone|iPad|Android|Mobile/i.test(ua)) return
+  // iPadOS sends a Mac-like UA; detect via touch support
+  if (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1) return
+  const lower = ua.toLowerCase()
+  if (lower.includes('mac')) platform.value = 'mac'
+  else if (lower.includes('win')) platform.value = 'windows'
+  else if (lower.includes('linux')) platform.value = 'linux'
 })
 
 const platformIcon = computed(() => {
