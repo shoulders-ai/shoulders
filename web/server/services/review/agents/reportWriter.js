@@ -1,38 +1,48 @@
 import { callAnthropic } from '../../../utils/ai'
 
-const SYSTEM_PROMPT = `You are a senior academic peer reviewer writing a summary report for a research paper. You have access to detailed inline comments from two reviewers (Technical and Editorial).
+const SYSTEM_PROMPT = `You are a senior academic peer reviewer writing a summary report. The reader will also see every inline comment anchored in the document — your summary orients them, it does not repeat the comments.
 
-Write a peer review summary (500-1000 words) structured as:
+Scale your summary to the paper: a short letter needs a short summary; a long methods paper needs more. The summary must always fit on one page (≤400 words). For minor papers or few comments, a single paragraph may suffice.
+
+Use this structure, but skip or compress sections that have nothing substantive to say:
 
 ## Peer Review Summary
 
 ### General Impression
-A 2-3 sentence overview of the paper's contribution and quality.
+What the paper does and how well it does it.
 
 ### Strengths
-Bullet points highlighting what the paper does well.
+Only if there are genuine, specific strengths worth highlighting.
 
-### Areas for Improvement
-Organised by theme (not reviewer). Reference the inline comments where relevant. Focus on the most important issues.
+### Key Issues
+The most important problems, grouped by theme. Reference inline comment numbers in brackets (e.g. [3, 7]). Do not explain what the comments already say — just identify the theme and point to them.
+
+### Bibliography & Citations
+Only if citation issues were flagged.
 
 ### Overall Assessment
-A concluding paragraph. Be specific and qualitative — no numerical scores. Example tone: "This paper presents interesting findings but several methodological concerns should be addressed before publication."
+A concluding sentence or two. Specific and qualitative — no numerical scores.
 
-Write in the voice of a fair, thorough senior colleague. Professional but direct. No hedging, no filler.`
+Be direct. No filler, no hedging, no restating the inline comments.`
 
 export async function writeReport(plainText, comments, { citationSummary } = {}) {
+  const wordCount = plainText.split(/\s+/).length
   const commentsSummary = comments.map((c, i) => {
     return `[${i + 1}] (${c.reviewer}, ${c.severity}) "${c.text_snippet?.slice(0, 80)}..." → ${c.content}`
   }).join('\n')
 
+  let userMessage = `Paper length: ~${wordCount} words, ${comments.length} inline comments.\n\n`
+  userMessage += `Here is the paper:\n\n${plainText.slice(0, 30000)}\n\n---\n\nInline reviewer comments:\n\n${commentsSummary}`
+  if (citationSummary) {
+    userMessage += `\n\n---\n\nCitation & Reference check:\n${citationSummary}`
+  }
+  userMessage += '\n\nWrite the peer review summary.'
+
   const { text, usage } = await callAnthropic({
     model: 'claude-sonnet-4-6',
     system: SYSTEM_PROMPT,
-    messages: [{
-      role: 'user',
-      content: `Here is the paper (plain text):\n\n${plainText.slice(0, 30000)}\n\n---\n\nHere are the inline reviewer comments:\n\n${commentsSummary}${citationSummary ? `\n\n---\n\nCitation & Reference check (include as "### Bibliography & Citations" subsection just before Overall Assessment):\n${citationSummary}` : ''}\n\nWrite the peer review summary.`
-    }],
-    maxTokens: 4000,
+    messages: [{ role: 'user', content: userMessage }],
+    maxTokens: 8000,
   })
 
   return { text, usage }
