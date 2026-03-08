@@ -60,8 +60,9 @@ export const TOOL_CATEGORIES = [
     id: 'feedback',
     label: 'Feedback',
     tools: [
-      { name: 'add_task', description: 'Create task on text' },
-      { name: 'read_tasks', description: 'Read existing tasks' },
+      { name: 'add_comment', description: 'Add comment to text' },
+      { name: 'reply_to_comment', description: 'Reply to a comment' },
+      { name: 'resolve_comment', description: 'Resolve a comment' },
       { name: 'create_proposal', description: 'Present choice cards' },
     ],
   },
@@ -357,7 +358,29 @@ export function getAiTools(workspace) {
           return `[${ext.toUpperCase()} image format is not supported for visual analysis. Supported formats: PNG, JPG, GIF, WebP.]`
         }
 
-        return await invoke('read_file', { path: readPath })
+        const content = await invoke('read_file', { path: readPath })
+
+        // Append any active comments on this file
+        const { useCommentsStore } = await import('../stores/comments')
+        const commentsStore = useCommentsStore()
+        const unresolved = commentsStore.unresolvedForFile(readPath)
+        if (unresolved.length) {
+          const lines = content.split('\n')
+          let commentBlock = '\n\n<document-comments>\n'
+          for (const c of unresolved) {
+            const lineNum = content.substring(0, c.range.from).split('\n').length
+            commentBlock += `  <comment id="${c.id}" line="${lineNum}" author="${c.author}">`
+            commentBlock += c.text
+            for (const r of c.replies) {
+              commentBlock += `\n    <reply author="${r.author}">${r.text}</reply>`
+            }
+            commentBlock += '</comment>\n'
+          }
+          commentBlock += '</document-comments>'
+          return content + commentBlock
+        }
+
+        return content
       },
       toModelOutput({ output }) {
         // Image with base64: send as image-data content for native vision
@@ -520,9 +543,18 @@ export function getAiTools(workspace) {
         const tree = await invoke('read_dir_recursive', { path: resolved })
         const lines = []
         const flatten = (entries, prefix = '') => {
-          for (const e of entries) {
-            lines.push(`${prefix}${e.is_dir ? '\u{1F4C1} ' : ''}${e.name}`)
-            if (e.children) flatten(e.children, prefix + '  ')
+          for (let i = 0; i < entries.length; i++) {
+            const e = entries[i]
+            const last = i === entries.length - 1
+            const connector = prefix + (last ? '└── ' : '├── ')
+            let line = `${connector}${e.name}${e.is_dir ? '/' : ''}`
+            if (e.modified) {
+              line += `  (${new Date(e.modified * 1000).toISOString().slice(0, 10)})`
+            }
+            lines.push(line)
+            if (e.children) {
+              flatten(e.children, prefix + (last ? '    ' : '│   '))
+            }
           }
         }
         flatten(tree)
@@ -855,84 +887,95 @@ export function getAiTools(workspace) {
       },
     }),
 
-    // ── Task Injection Tools ────────────────────────────────────────
+    // ── Comment Tools ─────────────────────────────────────────────
 
-    add_task: tool({
-      description: 'Create a spatially-anchored task thread on a specific piece of text in a file. The task appears as a gutter dot in the editor. Optionally include a proposed edit.',
+    add_comment: tool({
+      description: 'Add a comment annotation to a specific text in a document. Use this when reviewing a document to leave feedback, suggestions, or questions at specific locations. The comment appears in the document margin.',
       inputSchema: z.object({
-        file_path: z.string().describe('File path relative to workspace'),
-        target_text: z.string().describe('The exact text to anchor the task to (must exist in the file)'),
-        message: z.string().describe('The task/feedback message'),
+        file_path: z.string().describe('Path to the file to comment on'),
+        anchor_text: z.string().describe('The exact text in the document to anchor the comment to. Must match text in the file exactly.'),
+        text: z.string().describe('The comment text — your feedback, suggestion, or question'),
         proposed_edit: z.object({
-          old_string: z.string().describe('Text to replace'),
-          new_string: z.string().describe('Replacement text'),
-        }).optional().describe('Optional proposed text replacement'),
+          old_text: z.string().describe('The text to replace'),
+          new_text: z.string().describe('The replacement text'),
+        }).optional().describe('Optional: propose a specific text edit along with the comment'),
       }),
-      execute: async ({ file_path, target_text, message, proposed_edit }) => {
-        const path = _resolvePath(file_path, workspace)
-        if (!path) return PATH_ERROR
-        const filesStore = useFilesStore()
-        const editorStore = useEditorStore()
-        const { useTasksStore } = await import('../stores/tasks')
-        const tasksStore = useTasksStore()
+      execute: async ({ file_path, anchor_text, text, proposed_edit }) => {
+        const resolved = _resolvePath(file_path, workspace)
+        if (!resolved) return PATH_ERROR
+        const { useCommentsStore } = await import('../stores/comments')
+        const commentsStore = useCommentsStore()
 
-        let content = filesStore.fileContents[path]
-        if (!content) content = await invoke('read_file', { path })
+        // Read file to find anchor position
+        const content = await invoke('read_file', { path: resolved })
+        const anchorIdx = content.indexOf(anchor_text)
+        if (anchorIdx === -1) {
+          return `Error: Could not find the text "${anchor_text.substring(0, 50)}..." in the file.`
+        }
 
-        const idx = content.indexOf(target_text)
-        if (idx === -1) throw new Error(`target_text not found in ${path}. Make sure it matches exactly.`)
+        const range = { from: anchorIdx, to: anchorIdx + anchor_text.length }
+        const proposedEdit = proposed_edit
+          ? { oldText: proposed_edit.old_text, newText: proposed_edit.new_text }
+          : null
 
-        editorStore.openFile(path)
+        commentsStore.createComment(resolved, range, anchor_text, text, 'ai', null, proposedEdit)
 
-        const threadId = tasksStore.createThreadFromChat(
-          path,
-          { from: idx, to: idx + target_text.length },
-          target_text,
-          null,
-          message,
-          proposed_edit || null,
-        )
-
-        return `Task created on "${target_text.slice(0, 50)}${target_text.length > 50 ? '...' : ''}" in ${path.split('/').pop()}. Thread ID: ${threadId}`
+        return `Comment added at "${anchor_text.substring(0, 30)}...". The user can see it in the document margin.`
       },
     }),
 
-    read_tasks: tool({
-      description: 'Read all task threads for a file, including conversation messages and proposed edits.',
+    reply_to_comment: tool({
+      description: 'Reply to an existing comment on a document. Use this to respond to user feedback, answer questions, or suggest edits.',
       inputSchema: z.object({
-        file_path: z.string().describe('File path relative to workspace'),
+        comment_id: z.string().describe('The ID of the comment to reply to'),
+        text: z.string().describe('Your reply text'),
+        proposed_edit: z.object({
+          old_text: z.string().describe('The text to replace'),
+          new_text: z.string().describe('The replacement text'),
+        }).optional().describe('Optional: propose a specific text edit as part of your reply'),
       }),
-      execute: async ({ file_path }) => {
-        const path = _resolvePath(file_path, workspace)
-        if (!path) return PATH_ERROR
-        const { useTasksStore } = await import('../stores/tasks')
-        const tasksStore = useTasksStore()
-        const threads = tasksStore.threadsForFile(path)
-        if (threads.length === 0) return `No tasks on ${path.split('/').pop()}.`
-        return threads.map(t => {
-          // Get messages from Chat instance or saved messages
-          const messages = tasksStore.getThreadMessages(t.id)
-          const msgs = messages
-            .map(m => {
-              const text = m.parts?.find(p => p.type === 'text')?.text || m.content || ''
-              return `  [${m.role}]: ${text.slice(0, 200)}`
-            })
-            .join('\n')
-          const edits = messages
-            .flatMap(m => (m.parts || [])
-              .filter(p => p.toolName === 'propose_edit')
-              .map(p => {
-                const editStatus = tasksStore.getEditStatus(p.toolCallId)
-                return {
-                  input: p.input || {},
-                  status: editStatus?.status || p.state,
-                }
-              })
-            )
-            .map(tc => `  [proposed edit]: "${tc.input?.old_string?.slice(0, 50)}" -> "${tc.input?.new_string?.slice(0, 50)}" (${tc.status})`)
-            .join('\n')
-          return `Thread ${t.id} (${t.status}):\n  Selection: "${t.selectedText?.slice(0, 80)}"\n${msgs}${edits ? '\n' + edits : ''}`
-        }).join('\n\n')
+      execute: async (args) => {
+        console.log('[reply_to_comment] raw args:', JSON.stringify(args))
+
+        const { comment_id, text, proposed_edit } = args
+        const { useCommentsStore } = await import('../stores/comments')
+        const commentsStore = useCommentsStore()
+
+        const comment = commentsStore.comments.find(c => c.id === comment_id)
+        if (!comment) {
+          return `Error: Comment ${comment_id} not found.`
+        }
+
+        const proposedEdit = proposed_edit
+          ? { oldText: proposed_edit.old_text, newText: proposed_edit.new_text }
+          : null
+
+        commentsStore.addReply(comment_id, {
+          author: 'ai',
+          text,
+          proposedEdit,
+        })
+
+        return `Reply added to comment ${comment_id.substring(0, 12)}...`
+      },
+    }),
+
+    resolve_comment: tool({
+      description: 'Mark a comment as resolved after addressing it. Use this after you have made the requested changes or answered the question.',
+      inputSchema: z.object({
+        comment_id: z.string().describe('The ID of the comment to resolve'),
+      }),
+      execute: async ({ comment_id }) => {
+        const { useCommentsStore } = await import('../stores/comments')
+        const commentsStore = useCommentsStore()
+
+        const comment = commentsStore.comments.find(c => c.id === comment_id)
+        if (!comment) {
+          return `Error: Comment ${comment_id} not found.`
+        }
+
+        commentsStore.resolveComment(comment_id)
+        return `Comment ${comment_id.substring(0, 12)}... resolved.`
       },
     }),
 
