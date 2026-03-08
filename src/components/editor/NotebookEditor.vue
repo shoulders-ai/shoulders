@@ -164,7 +164,6 @@
           :active="activeCell === idx"
           :running="runningCells.has(cell.id)"
           :language="notebookLanguage"
-          :taskCount="cellTaskCounts[cell.id] || 0"
           :pendingEdit="cell._pendingEdit"
           :pendingDelete="cell._pendingDelete"
           :pendingAdd="cell._pendingAdd"
@@ -178,7 +177,6 @@
           @add-above="addCell(idx, 'code')"
           @add-below="addCell(idx + 1, 'code')"
           @content-change="(src) => updateCellSource(idx, src)"
-          @open-task="openCellTask(idx)"
           @accept-edit="(id) => reviews.acceptNotebookEdit(id)"
           @reject-edit="(id) => reviews.rejectNotebookEdit(id)"
         />
@@ -200,7 +198,6 @@ import { useWorkspaceStore } from '../../stores/workspace'
 import { useFilesStore } from '../../stores/files'
 import { useEditorStore } from '../../stores/editor'
 import { useKernelStore } from '../../stores/kernel'
-import { useTasksStore } from '../../stores/tasks'
 import { useReviewsStore } from '../../stores/reviews'
 import { useEnvironmentStore } from '../../stores/environment'
 import { parseNotebook, serializeNotebook, generateCellId, getNotebookLanguage } from '../../utils/notebookFormat'
@@ -215,7 +212,6 @@ const workspace = useWorkspaceStore()
 const filesStore = useFilesStore()
 const editorStore = useEditorStore()
 const kernelStore = useKernelStore()
-const tasksStore = useTasksStore()
 const reviews = useReviewsStore()
 const envStore = useEnvironmentStore()
 
@@ -236,16 +232,6 @@ const showStatusPopover = ref(false)
 const statusChipRef = ref(null)
 const popoverX = ref(0)
 const popoverY = ref(0)
-
-// Computed: task counts per cell
-const cellTaskCounts = computed(() => {
-  const counts = {}
-  for (const cell of cells) {
-    const threads = tasksStore.threadsForCell(props.filePath, cell.id)
-    if (threads.length > 0) counts[cell.id] = threads.length
-  }
-  return counts
-})
 
 // Pending notebook edits
 const pendingNotebookEdits = computed(() => reviews.notebookEditsForFile(props.filePath))
@@ -526,70 +512,6 @@ function clearAllOutputs() {
   scheduleSave()
 }
 
-// ============ Cell tasks ============
-
-function formatCellOutputsAsText(outputs) {
-  if (!outputs || outputs.length === 0) return ''
-  return outputs.map(o => {
-    if (o.output_type === 'stream') {
-      const text = Array.isArray(o.text) ? o.text.join('') : (o.text || '')
-      return text.slice(0, 500)
-    }
-    if (o.output_type === 'execute_result' || o.output_type === 'display_data') {
-      const plain = o.data?.['text/plain']
-      if (plain) return (Array.isArray(plain) ? plain.join('') : plain).slice(0, 500)
-      return '[rich output]'
-    }
-    if (o.output_type === 'error') {
-      return `${o.ename}: ${o.evalue}`.slice(0, 500)
-    }
-    return ''
-  }).filter(Boolean).join('\n')
-}
-
-function startCellTask(cellIndex) {
-  const cell = cells[cellIndex]
-  if (!cell) return
-
-  const cellRef = cellRefs[cellIndex]
-  const selection = cellRef?.getSelection?.()
-
-  // Use selection text if available, else full cell source
-  const selectedText = selection?.text || cell.source || ''
-  const range = selection || { from: 0, to: selectedText.length }
-  const outputsText = formatCellOutputsAsText(cell.outputs)
-
-  const threadId = tasksStore.createThread(
-    props.filePath,
-    range,
-    selectedText,
-    null,
-    {
-      cellId: cell.id,
-      cellIndex,
-      cellType: cell.type,
-      cellOutputs: outputsText || null,
-      cellLanguage: notebookLanguage.value,
-    }
-  )
-
-  return threadId
-}
-
-function openCellTask(cellIndex) {
-  const cell = cells[cellIndex]
-  if (!cell) return
-
-  const existing = tasksStore.threadsForCell(props.filePath, cell.id)
-  if (existing.length > 0) {
-    tasksStore.setActiveThread(existing[0].id)
-  } else {
-    startCellTask(cellIndex)
-  }
-
-  window.dispatchEvent(new CustomEvent('open-tasks'))
-}
-
 function scrollToCell(cellIndex) {
   const cellRef = cellRefs[cellIndex]
   if (cellRef?.$el) {
@@ -727,19 +649,6 @@ function normalizeOutput(raw) {
 
 // ============ External event listeners (for AI tools) ============
 
-function onNotebookCellTask(e) {
-  const { path } = e.detail || {}
-  if (path !== props.filePath) return
-  // Use active cell
-  const idx = activeCell.value
-  if (idx >= 0 && idx < cells.length) {
-    const threadId = startCellTask(idx)
-    if (threadId) {
-      window.dispatchEvent(new CustomEvent('open-tasks', { detail: { threadId } }))
-    }
-  }
-}
-
 function onNotebookScrollToCell(e) {
   const { path, cellId } = e.detail || {}
   if (path !== props.filePath) return
@@ -841,7 +750,6 @@ onMounted(async () => {
 
   window.addEventListener('run-notebook-cell', onRunNotebookCell)
   window.addEventListener('run-all-notebook-cells', onRunAllNotebookCells)
-  window.addEventListener('notebook-cell-task', onNotebookCellTask)
   window.addEventListener('notebook-scroll-to-cell', onNotebookScrollToCell)
   window.addEventListener('notebook-pending-edit', onNotebookPendingEdit)
   window.addEventListener('notebook-review-resolved', onNotebookReviewResolved)
@@ -850,7 +758,6 @@ onMounted(async () => {
 onUnmounted(async () => {
   window.removeEventListener('run-notebook-cell', onRunNotebookCell)
   window.removeEventListener('run-all-notebook-cells', onRunAllNotebookCells)
-  window.removeEventListener('notebook-cell-task', onNotebookCellTask)
   window.removeEventListener('notebook-scroll-to-cell', onNotebookScrollToCell)
   window.removeEventListener('notebook-pending-edit', onNotebookPendingEdit)
   window.removeEventListener('notebook-review-resolved', onNotebookReviewResolved)

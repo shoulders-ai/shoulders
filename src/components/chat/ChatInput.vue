@@ -2,7 +2,7 @@
   <div class="px-2 pb-2 pt-1">
     <!-- Container: rounded border -->
     <div
-      class="rounded-lg border transition-all"
+      class="rounded-md border transition-all"
       :style="{
         borderColor: isFocused ? 'var(--accent)' : 'var(--border)',
         background: isLightTheme ? 'var(--bg-primary)' : 'var(--bg-secondary)',
@@ -71,12 +71,12 @@
 
         <!-- Token donut -->
         <div v-if="props.estimatedTokens !== null"
-          class="shrink-0 flex items-center token-donut-wrap">
-          <svg width="16" height="16" viewBox="0 0 20 20">
+          class="shrink-0 flex items-center token-donut-wrap px-1">
+          <svg width="18" height="18" viewBox="0 0 20 20">
             <circle cx="10" cy="10" r="7" fill="none"
-              stroke="var(--border)" stroke-width="2.5" />
+              stroke="var(--border)" stroke-width="3" />
             <circle cx="10" cy="10" r="7" fill="none"
-              :stroke="donutColor" stroke-width="2.5"
+              :stroke="donutColor" stroke-width="3"
               stroke-linecap="round"
               :stroke-dasharray="donutCircumference"
               :stroke-dashoffset="donutOffset"
@@ -88,7 +88,7 @@
         <!-- Send button -->
         <button
           v-if="!isStreaming"
-          class="shrink-0 w-7 h-7 rounded flex items-center justify-center border-none cursor-pointer transition-colors ml-1"
+          class="shrink-0 w-7 h-7 rounded flex items-center justify-center border-none cursor-pointer transition-colors mx-1"
           :style="{
             background: canSend ? 'var(--accent)' : 'var(--bg-tertiary)',
             color: canSend ? 'var(--bg-primary)' : 'var(--fg-muted)',

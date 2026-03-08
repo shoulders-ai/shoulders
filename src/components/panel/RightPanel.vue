@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col h-full" style="background: var(--bg-secondary);">
-    <!-- Main tab bar (Outline / Tasks / Backlinks) -->
+    <!-- Main tab bar (Outline / Backlinks) -->
     <div class="flex items-center h-7 border-b shrink-0" style="border-color: var(--border);">
       <button
         v-for="tab in mainTabs"
@@ -12,7 +12,7 @@
         }"
         @click="mainTab = tab"
       >
-        {{ tab }} <span class="text-sm text-gray-500"> {{ currentDocumentThreads.length > 0 && tab === 'ai tasks' ? '(' + currentDocumentThreads.length + ')' : '' }}
+        {{ tab }} <span class="text-sm text-gray-500">
           {{ backlinkCount > 0 && tab === 'backlinks' ? '(' + backlinkCount + ')' : '' }}
         </span>
       </button>
@@ -25,11 +25,6 @@
         <OutlinePanel :collapsed="false" :overrideActiveFile="documentTab" />
       </div>
 
-      <!-- Tasks panel -->
-      <div v-show="mainTab === 'ai tasks'" class="absolute inset-0 overflow-hidden">
-        <TaskThreads ref="taskThreadsRef" :documentTab="documentTab" />
-      </div>
-
       <!-- Backlinks panel -->
       <div v-show="mainTab === 'backlinks'" class="absolute inset-0 overflow-auto">
         <Backlinks :overrideActiveFile="documentTab" />
@@ -40,15 +35,12 @@
 </template>
 
 <script setup>
-import { ref, nextTick, computed, watch } from 'vue'
-import { useTasksStore } from '../../stores/tasks'
+import { ref, computed, watch } from 'vue'
 import { useLinksStore } from '../../stores/links'
 import { useEditorStore } from '../../stores/editor'
-import TaskThreads from '../tasks/TaskThreads.vue'
 import Backlinks from './Backlinks.vue'
 import OutlinePanel from './OutlinePanel.vue'
 
-const tasksStore = useTasksStore()
 const linksStore = useLinksStore()
 const editorStore = useEditorStore()
 
@@ -76,23 +68,11 @@ const backlinkCount = computed(() => {
   return linksStore.backlinksForFile(active).length
 })
 const mainTabs = computed(() => {
-  const tabs = ['outline', 'ai tasks']
+  const tabs = ['outline']
   if (backlinkCount.value > 0) tabs.push('backlinks')
   return tabs
 })
-// Migrate legacy 'tasks' → 'ai tasks' for existing users
-const _storedTab = localStorage.getItem('rightPanelTab')
-if (_storedTab === 'tasks') localStorage.setItem('rightPanelTab', 'ai tasks')
-const mainTab = ref((_storedTab === 'tasks' ? 'ai tasks' : _storedTab) || 'outline')
-const taskThreadsRef = ref(null)
-
-// Get threads for the current document tab or all threads
-const currentDocumentThreads = computed(() => {
-  if (documentTab.value) {
-    return tasksStore.threadsForFile(documentTab.value)
-  }
-  return tasksStore.threads
-})
+const mainTab = ref(localStorage.getItem('rightPanelTab') || 'outline')
 
 // Fall back to outline if current tab disappears (e.g. backlinks hidden)
 watch(mainTabs, (tabs) => {
@@ -100,14 +80,4 @@ watch(mainTabs, (tabs) => {
     mainTab.value = 'outline'
   }
 }, { flush: 'post' })
-
-defineExpose({
-  focusTasks(threadId) {
-    mainTab.value = 'ai tasks'
-    if (threadId) tasksStore.setActiveThread(threadId)
-    nextTick(() => {
-      taskThreadsRef.value?.focusInput()
-    })
-  },
-})
 </script>

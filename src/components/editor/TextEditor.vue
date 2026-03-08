@@ -32,7 +32,8 @@ import { languages } from '@codemirror/language-data'
 import { createEditorExtensions, createEditorState, wrapCompartment, spellCheckCompartment, columnWidthCompartment, columnWidthExtension } from '../../editor/setup'
 import { ghostSuggestionExtension } from '../../editor/ghostSuggestion'
 import { mergeViewExtension, reconfigureMergeView, computeOriginalContent } from '../../editor/diffOverlay'
-import { tasksExtension, addTask, removeTask, updateTask, taskField } from '../../editor/tasks'
+import { commentsExtension, addComment, removeComment, updateComment, setActiveComment, commentField } from '../../editor/comments'
+import { useCommentsStore } from '../../stores/comments'
 import { wikiLinksExtension } from '../../editor/wikiLinks'
 import { livePreviewExtension } from '../../editor/livePreview'
 import { citationsExtension, CITATION_GROUP_RE, CITE_KEY_RE } from '../../editor/citations'
@@ -42,7 +43,6 @@ import { useFilesStore } from '../../stores/files'
 import { useEditorStore } from '../../stores/editor'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useReviewsStore } from '../../stores/reviews'
-import { useTasksStore } from '../../stores/tasks'
 import { useLinksStore } from '../../stores/links'
 import { useReferencesStore } from '../../stores/references'
 import { isMarkdown, isLatex, isImage, isRunnable, getLanguage, isRmdOrQmd, relativePath } from '../../utils/fileTypes'
@@ -57,17 +57,17 @@ const props = defineProps({
   paneId: { type: String, required: true },
 })
 
-const emit = defineEmits(['cursor-change', 'editor-stats'])
+const emit = defineEmits(['cursor-change', 'editor-stats', 'selection-change'])
 
 const editorContainer = ref(null)
 const files = useFilesStore()
 const editorStore = useEditorStore()
 const workspace = useWorkspaceStore()
 const reviews = useReviewsStore()
-const tasksStore = useTasksStore()
 const linksStore = useLinksStore()
 const referencesStore = useReferencesStore()
 const latexStore = useLatexStore()
+const commentsStore = useCommentsStore()
 
 const ctxMenu = reactive({ show: false, x: 0, y: 0, hasSelection: false })
 
@@ -264,11 +264,17 @@ onMounted(async () => {
     ),
     // Merge view for inline diffs (always available)
     mergeViewExtension(),
-    // Tasks (always available)
-    ...tasksExtension(),
-    // Track doc changes for task position mapping
+    // Comments (always available)
+    ...commentsExtension(),
+    // Track doc changes for comment position mapping, and selection changes
     EditorView.updateListener.of((update) => {
-      if (update.docChanged) handleDocChanged()
+      if (update.docChanged) {
+        pushCommentPositionsToStore(update.view)
+      }
+      if (update.selectionSet || update.docChanged) {
+        const sel = update.state.selection.main
+        emit('selection-change', sel.from !== sel.to)
+      }
     }),
   ]
 
@@ -595,8 +601,8 @@ onMounted(async () => {
     editorContainer.value.addEventListener('click', handleLatexCitationClick)
   }
 
-  // Task-click handler (gutter dot clicks)
-  editorContainer.value.addEventListener('task-click', handleTaskClick)
+  // Comment-click handler (gutter dot + range clicks)
+  editorContainer.value.addEventListener('comment-click', handleCommentClick)
 
   // Chunk execute handlers for .Rmd/.qmd
   if (chunkExecuteHandler) {
@@ -604,8 +610,8 @@ onMounted(async () => {
     editorContainer.value.addEventListener('chunk-execute-all', chunkExecuteAllHandler)
   }
 
-  // Initial task sync
-  syncTasksToEditor(tasksStore.threadsForFile(props.filePath))
+  // Initial comment sync
+  syncCommentsToEditor(view)
 })
 
 // LaTeX: backward sync listener (PDF → editor line jump)
@@ -765,69 +771,91 @@ function handleLatexCitationClick(event) {
   }
 }
 
-// Watch task threads → sync to CodeMirror
-watch(
-  () => tasksStore.threadsForFile(props.filePath),
-  (storeThreads) => { if (view) syncTasksToEditor(storeThreads) },
-  { deep: true }
-)
+// ── Comment sync ───────────────────────────────────────────────────
+function handleCommentClick(event) {
+  const commentId = event.detail?.commentId
+  if (commentId) {
+    commentsStore.setActiveComment(commentId)
+    if (view) {
+      view.dispatch({ effects: setActiveComment.of(commentId) })
+    }
+    // Auto-show margin if hidden
+    if (!commentsStore.isMarginVisible(props.filePath)) {
+      commentsStore.toggleMargin(props.filePath)
+    }
+  }
+}
 
-function syncTasksToEditor(storeThreads) {
-  if (!view) return
-  const cmTasks = view.state.field(taskField)
-  const storeIds = new Set(storeThreads.map(t => t.id))
-  const cmIds = new Set(cmTasks.map(c => c.id))
+function syncCommentsToEditor(editorView) {
+  if (!editorView) return
+
+  const storeComments = commentsStore.commentsForFile(props.filePath)
+  const cmState = editorView.state.field(commentField)
+  const cmComments = cmState.comments
   const effects = []
 
-  // Add new threads
-  for (const t of storeThreads) {
-    if (!cmIds.has(t.id)) {
-      effects.push(addTask.of({
-        id: t.id,
-        range: { from: t.range.from, to: t.range.to },
-        status: t.status,
-        messages: t.messages,
+  // Add comments that are in store but not in CM
+  for (const sc of storeComments) {
+    const existing = cmComments.find(c => c.id === sc.id)
+    if (!existing) {
+      effects.push(addComment.of({
+        id: sc.id,
+        from: Math.min(sc.range.from, editorView.state.doc.length),
+        to: Math.min(sc.range.to, editorView.state.doc.length),
+        status: sc.status,
+        author: sc.author,
       }))
     }
   }
 
-  // Remove deleted threads
-  for (const c of cmTasks) {
-    if (!storeIds.has(c.id)) {
-      effects.push(removeTask.of(c.id))
+  // Remove comments that are in CM but not in store
+  for (const cc of cmComments) {
+    if (!storeComments.find(sc => sc.id === cc.id)) {
+      effects.push(removeComment.of(cc.id))
     }
   }
 
-  // Update changed threads (status)
-  for (const t of storeThreads) {
-    const existing = cmTasks.find(c => c.id === t.id)
-    if (existing && existing.status !== t.status) {
-      effects.push(updateTask.of({ id: t.id, status: t.status }))
+  // Update comments whose status changed
+  for (const sc of storeComments) {
+    const existing = cmComments.find(c => c.id === sc.id)
+    if (existing && existing.status !== sc.status) {
+      effects.push(updateComment.of({ id: sc.id, status: sc.status }))
     }
   }
 
-  if (effects.length > 0) {
-    view.dispatch({ effects })
+  // Sync active comment
+  if (cmState.activeId !== commentsStore.activeCommentId) {
+    effects.push(setActiveComment.of(commentsStore.activeCommentId))
+  }
+
+  if (effects.length) {
+    editorView.dispatch({ effects })
   }
 }
 
-// Position mapping: on doc changes, update store with new ranges
-function handleDocChanged() {
-  if (!view) return
-  const cmTasks = view.state.field(taskField)
-  for (const c of cmTasks) {
-    tasksStore.updateRange(c.id, c.range.from, c.range.to)
+function pushCommentPositionsToStore(editorView) {
+  const cmState = editorView.state.field(commentField)
+  for (const cc of cmState.comments) {
+    commentsStore.updateRange(cc.id, cc.from, cc.to)
   }
 }
 
-function handleTaskClick(event) {
-  const taskId = event.detail?.taskId
-  if (taskId) {
-    tasksStore.setActiveThread(taskId)
-    // Dispatch a custom event that App.vue can listen to for opening the right panel
-    window.dispatchEvent(new CustomEvent('open-tasks', { detail: { threadId: taskId } }))
+// Watch comment store → sync to CM
+watch(
+  () => commentsStore.commentsForFile(props.filePath),
+  () => { if (view) syncCommentsToEditor(view) },
+  { deep: true }
+)
+
+// Watch active comment → sync highlight to CM
+watch(
+  () => commentsStore.activeCommentId,
+  (newId) => {
+    if (view) {
+      view.dispatch({ effects: setActiveComment.of(newId) })
+    }
   }
-}
+)
 
 // Watch for pending edits changes → toggle merge view
 // Uses nextTick to ensure the fileContents watcher (which updates the editor
@@ -1044,7 +1072,7 @@ onUnmounted(() => {
     editorContainer.value?.removeEventListener('chunk-execute', chunkExecuteHandler)
     editorContainer.value?.removeEventListener('chunk-execute-all', chunkExecuteAllHandler)
   }
-  editorContainer.value?.removeEventListener('task-click', handleTaskClick)
+  editorContainer.value?.removeEventListener('comment-click', handleCommentClick)
   if (rmdKernelBridge) {
     rmdKernelBridge.shutdown()
     rmdKernelBridge = null

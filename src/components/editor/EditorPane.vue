@@ -33,15 +33,19 @@
     <NotebookReviewBar v-else-if="activeTab && viewerType === 'notebook'" :filePath="activeTab" />
 
     <!-- Editor or empty state -->
-    <div class="flex-1 overflow-hidden" style="background: var(--bg-primary);">
-      <TextEditor
-        v-if="activeTab && viewerType === 'text'"
-        :key="activeTab"
-        :filePath="activeTab"
-        :paneId="paneId"
-        @cursor-change="(pos) => $emit('cursor-change', pos)"
-        @editor-stats="(stats) => $emit('editor-stats', stats)"
-      />
+    <div class="flex-1 overflow-hidden relative" ref="editorContainerRef"
+         :class="{ 'flex': viewerType === 'text' }"
+         style="background: var(--bg-primary);">
+      <div v-if="activeTab && viewerType === 'text'" class="flex-1 min-w-0 h-full">
+        <TextEditor
+          :key="activeTab"
+          :filePath="activeTab"
+          :paneId="paneId"
+          @cursor-change="(pos) => $emit('cursor-change', pos)"
+          @editor-stats="(stats) => $emit('editor-stats', stats)"
+          @selection-change="onSelectionChange"
+        />
+      </div>
       <LatexPdfViewer
         v-else-if="activeTab && viewerType === 'pdf' && hasTexSource"
         :key="activeTab"
@@ -107,17 +111,42 @@
       </div>
       <NewTab v-else-if="activeTab && viewerType === 'newtab'" :key="activeTab" :paneId="paneId" />
       <EmptyPane v-else-if="!activeTab" :paneId="paneId" />
+
+      <!-- Comment margin (only for text files with margin visible) -->
+      <CommentMargin
+        v-if="activeTab && viewerType === 'text' && commentsStore.isMarginVisible(activeTab)"
+        :filePath="activeTab"
+        :paneId="paneId"
+        :hasSelection="hasEditorSelection"
+      />
+
+      <!-- Comment floating panel (absolute overlay) -->
+      <CommentPanel
+        v-if="activeTab && viewerType === 'text' && showCommentPanel"
+        :comment="commentsStore.activeComment"
+        :filePath="activeTab"
+        :paneId="paneId"
+        :editorView="currentEditorView"
+        :containerRect="containerRect"
+        :mode="commentPanelMode"
+        :selectionRange="commentSelectionRange"
+        :selectionText="commentSelectionText"
+        @close="closeCommentPanel"
+        @comment-created="onCommentCreated"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import { computed, ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useEditorStore } from '../../stores/editor'
 import { useFilesStore } from '../../stores/files'
 import { useChatStore } from '../../stores/chat'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useToastStore } from '../../stores/toast'
+import { useCommentsStore } from '../../stores/comments'
+import { EditorView } from '@codemirror/view'
 import { getViewerType, isReferencePath, referenceKeyFromPath, getLanguage, isLatex, isRmdOrQmd, isChatTab, getChatSessionId } from '../../utils/fileTypes'
 import { sendCode, runFile, renderDocument } from '../../services/codeRunner'
 import { useLatexStore } from '../../stores/latex'
@@ -136,6 +165,8 @@ const LatexPdfViewer = defineAsyncComponent(() => import('./LatexPdfViewer.vue')
 const MarkdownPreview = defineAsyncComponent(() => import('./MarkdownPreview.vue'))
 const CanvasEditor = defineAsyncComponent(() => import('./CanvasEditor.vue'))
 const ChatPanel = defineAsyncComponent(() => import('../chat/ChatPanel.vue'))
+const CommentMargin = defineAsyncComponent(() => import('../comments/CommentMargin.vue'))
+const CommentPanel = defineAsyncComponent(() => import('../comments/CommentPanel.vue'))
 const NewTab = defineAsyncComponent(() => import('./NewTab.vue'))
 const EmptyPane = defineAsyncComponent(() => import('./EmptyPane.vue'))
 
@@ -145,7 +176,7 @@ const props = defineProps({
   activeTab: { type: String, default: null },
 })
 
-const emit = defineEmits(['cursor-change', 'editor-stats'])
+const emit = defineEmits(['cursor-change', 'editor-stats', 'selection-change'])
 
 const editorStore = useEditorStore()
 const filesStore = useFilesStore()
@@ -153,6 +184,81 @@ const chatStore = useChatStore()
 const workspace = useWorkspaceStore()
 const latexStore = useLatexStore()
 const toastStore = useToastStore()
+const commentsStore = useCommentsStore()
+
+// ── Comment state ──────────────────────────────────────────────────
+const hasEditorSelection = ref(false)
+const editorContainerRef = ref(null)
+const commentPanelMode = ref('view')
+const commentSelectionRange = ref(null)
+const commentSelectionText = ref(null)
+
+function onSelectionChange(hasSelection) {
+  hasEditorSelection.value = hasSelection
+}
+
+const showCommentPanel = computed(() => {
+  if (commentPanelMode.value === 'create') return true
+  if (!commentsStore.activeCommentId) return false
+  const comment = commentsStore.activeComment
+  return comment && comment.filePath === props.activeTab
+})
+
+const containerRect = computed(() => {
+  return editorContainerRef.value?.getBoundingClientRect() || null
+})
+
+const currentEditorView = computed(() => {
+  if (!props.activeTab || viewerType.value !== 'text') return null
+  return editorStore.getEditorView(props.paneId, props.activeTab)
+})
+
+function closeCommentPanel() {
+  commentsStore.setActiveComment(null)
+  commentPanelMode.value = 'view'
+  commentSelectionRange.value = null
+  commentSelectionText.value = null
+}
+
+function onCommentCreated(comment) {
+  commentPanelMode.value = 'view'
+  commentSelectionRange.value = null
+  commentSelectionText.value = null
+  commentsStore.setActiveComment(comment.id)
+}
+
+function startComment() {
+  const view = currentEditorView.value
+  if (!view) return
+  const sel = view.state.selection.main
+  if (sel.from === sel.to) return
+
+  commentPanelMode.value = 'create'
+  commentSelectionRange.value = { from: sel.from, to: sel.to }
+  commentSelectionText.value = view.state.sliceDoc(sel.from, sel.to)
+  commentsStore.setActiveComment(null)
+
+  if (!commentsStore.isMarginVisible(props.activeTab)) {
+    commentsStore.toggleMargin(props.activeTab)
+  }
+}
+
+function handleCommentCreate(e) {
+  if (e.detail?.paneId !== props.paneId) return
+  startComment()
+}
+
+function handleCommentScrollTo(e) {
+  const { commentId, filePath } = e.detail || {}
+  if (filePath !== props.activeTab) return
+  const view = currentEditorView.value
+  if (!view) return
+  const comment = commentsStore.commentsForFile(filePath).find(c => c.id === commentId)
+  if (!comment) return
+  view.dispatch({
+    effects: EditorView.scrollIntoView(comment.range.from, { y: 'start', yMargin: 50 }),
+  })
+}
 
 const isActive = computed(() => editorStore.activePaneId === props.paneId)
 const viewerType = computed(() => props.activeTab ? getViewerType(props.activeTab) : null)
@@ -432,9 +538,13 @@ function handleLatexCompileDone(e) {
 
 onMounted(() => {
   window.addEventListener('latex-compile-done', handleLatexCompileDone)
+  window.addEventListener('comment-create', handleCommentCreate)
+  window.addEventListener('comment-scroll-to', handleCommentScrollTo)
 })
 onUnmounted(() => {
   window.removeEventListener('latex-compile-done', handleLatexCompileDone)
+  window.removeEventListener('comment-create', handleCommentCreate)
+  window.removeEventListener('comment-scroll-to', handleCommentScrollTo)
 })
 
 function closePane() {
@@ -452,5 +562,7 @@ function closePane() {
   // Directly collapse this pane so sibling expands to fill space
   editorStore.collapsePane(props.paneId)
 }
+
+defineExpose({ startComment })
 </script>
 

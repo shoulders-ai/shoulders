@@ -14,20 +14,12 @@
       </template>
 
       <template v-if="hasSelection">
-        <div class="context-menu-item" @click="askAI">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.4V11h3a3 3 0 0 1 3 3v1.5a2.5 2.5 0 0 1-5 0V14H9v1.5a2.5 2.5 0 0 1-5 0V14a3 3 0 0 1 3-3h3V9.4A4 4 0 0 1 12 2"/>
-            <circle cx="12" cy="6" r="1"/>
-          </svg>
-          Ask AI
-          <span class="ml-auto" style="color: var(--fg-muted); font-size: 11px;">&#x21E7;&#x2318;L</span>
-        </div>
-        <div class="context-menu-item" @click="addTask">
+        <div class="context-menu-item" @click="addComment">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
-          Add AI Task
-          <span class="ml-auto" style="color: var(--fg-muted); font-size: 11px;">&#x21E7;&#x2318;C</span>
+          Add Comment
+          <span class="ml-auto" style="color: var(--fg-muted); font-size: 11px;">&#x21E7;&#x2318;L</span>
         </div>
         <div class="context-menu-separator"></div>
         <div class="context-menu-item" @click="cut">Cut</div>
@@ -46,6 +38,7 @@
 import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useEditorStore } from '../../stores/editor'
+import { useCommentsStore } from '../../stores/comments'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -59,6 +52,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 const editorStore = useEditorStore()
+const commentsStore = useCommentsStore()
 
 const spellSuggestions = ref([])
 // Word range in the document for replacement
@@ -128,30 +122,17 @@ function applySuggestion(suggestion) {
   emit('close')
 }
 
-function getSelectionWithContext() {
-  if (!props.view) return null
-  const state = props.view.state
-  const sel = state.selection.main
-  if (sel.from === sel.to) return null
+function addComment() {
+  // Auto-show margin
+  const filePath = editorStore.activePane?.activeTab
+  if (filePath && !commentsStore.isMarginVisible(filePath)) {
+    commentsStore.toggleMargin(filePath)
+  }
 
-  const text = state.sliceDoc(sel.from, sel.to)
-  const beforeStart = Math.max(0, sel.from - 200)
-  const afterEnd = Math.min(state.doc.length, sel.to + 200)
-  const contextBefore = state.sliceDoc(beforeStart, sel.from)
-  const contextAfter = state.sliceDoc(sel.to, afterEnd)
-
-  return { file: props.filePath, text, contextBefore, contextAfter }
-}
-
-function askAI() {
-  const selection = getSelectionWithContext()
-  editorStore.openChatBeside({ selection })
-  emit('close')
-}
-
-function addTask() {
-  document.dispatchEvent(new KeyboardEvent('keydown', {
-    key: 'C', code: 'KeyC', shiftKey: true, metaKey: true, bubbles: true,
+  // Dispatch event for EditorPane to handle
+  const pane = editorStore.activePane
+  window.dispatchEvent(new CustomEvent('comment-create', {
+    detail: { paneId: pane?.id }
   }))
   emit('close')
 }

@@ -21,18 +21,6 @@
         </span>
         <!-- Type badge -->
         <span class="cell-type-badge">{{ cell.type === 'code' ? 'Code' : 'Md' }}</span>
-        <!-- Task indicator (inline in toolbar) -->
-        <button
-          v-if="taskCount > 0"
-          class="cell-task-btn"
-          @click.stop="$emit('open-task')"
-          :title="`${taskCount} task${taskCount > 1 ? 's' : ''}`"
-        >
-          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M2 2h12a1 1 0 011 1v8a1 1 0 01-1 1H5l-3 3V3a1 1 0 011-1z"/>
-          </svg>
-          {{ taskCount }}
-        </button>
       </div>
       <div class="cell-toolbar-right" v-if="!hasPendingState">
         <button v-if="cell.type === 'code'" class="cell-btn cell-btn-run" @click.stop="$emit('run')" title="Run cell (Shift+Enter)">
@@ -118,7 +106,6 @@ const props = defineProps({
   active: { type: Boolean, default: false },
   running: { type: Boolean, default: false },
   language: { type: String, default: 'python' },
-  taskCount: { type: Number, default: 0 },
   pendingEdit: { type: Object, default: null },
   pendingDelete: { type: Boolean, default: false },
   pendingAdd: { type: Boolean, default: false },
@@ -128,7 +115,7 @@ const props = defineProps({
 const emit = defineEmits([
   'focus', 'run', 'delete', 'move-up', 'move-down',
   'toggle-type', 'add-above', 'add-below', 'content-change',
-  'open-task', 'accept-edit', 'reject-edit',
+  'accept-edit', 'reject-edit',
 ])
 
 const hasPendingState = computed(() => !!props.pendingEdit || props.pendingDelete || props.pendingAdd)
@@ -467,27 +454,6 @@ defineExpose({
 .cell-btn-delete:hover {
   color: var(--error, #ff5555);
   background: rgba(255, 85, 85, 0.1);
-}
-
-/* Task button (inline in toolbar) */
-.cell-task-btn {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 5px;
-  border: none;
-  border-radius: 6px;
-  background: rgba(122, 162, 247, 0.15);
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-  line-height: 1;
-}
-
-.cell-task-btn:hover {
-  background: rgba(122, 162, 247, 0.3);
 }
 
 /* Pending review states */

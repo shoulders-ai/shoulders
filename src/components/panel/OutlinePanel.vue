@@ -231,7 +231,7 @@ function navigateToHeading(heading) {
       // Set PM selection at heading position
       superdoc.activeEditor.commands.setTextSelection(heading.offset)
 
-      // Scroll visible painted layer — same text-search approach as TaskThread.navigateDocx()
+      // Scroll visible painted layer — text-search approach for DOCX navigation
       const wrapper = document.querySelector('.docx-editor .overflow-auto')
       if (!wrapper) return
       const needle = (heading.text || '').replace(/\s+/g, ' ').trim().toLowerCase()

@@ -1090,7 +1090,7 @@ async function revealInFinder(entry) {
 
 defineExpose({
   activateFilter,
-  createNewMarkdown() {
+  createNewFile(ext = '.md') {
     let targetDir = workspace.path
 
     if (selectedPaths.size > 0) {
@@ -1106,7 +1106,7 @@ defineExpose({
       }
     }
 
-    createTypedFile(targetDir, '.md')
+    createTypedFile(targetDir, ext)
   },
 })
 </script>

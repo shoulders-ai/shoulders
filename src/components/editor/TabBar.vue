@@ -255,6 +255,25 @@
 
     <!-- Pane actions -->
     <div class="flex items-center gap-0.5 px-1 shrink-0">
+      <!-- Comment margin toggle (for text files) -->
+      <button
+        v-if="showCommentToggle"
+        class="w-6 h-6 flex items-center justify-center rounded hover:bg-[var(--bg-hover)] relative"
+        :style="{ color: commentsStore.isMarginVisible(activeTab) ? 'var(--accent)' : 'var(--fg-muted)' }"
+        @click="commentsStore.toggleMargin(activeTab)"
+        title="Toggle comments"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M3 2.5h10a1.5 1.5 0 011.5 1.5v6a1.5 1.5 0 01-1.5 1.5H9.414l-2.707 2.707a.5.5 0 01-.854-.354V11.5H3A1.5 1.5 0 011.5 10V4A1.5 1.5 0 013 2.5z"/>
+        </svg>
+        <span
+          v-if="commentBadgeCount > 0"
+          class="absolute -top-0.5 -right-0.5 min-w-[12px] h-3 flex items-center justify-center rounded-full text-white"
+          style="font-size: 8px; font-weight: 600; background: var(--accent); padding: 0 2px;"
+        >
+          {{ commentBadgeCount > 9 ? '9+' : commentBadgeCount }}
+        </span>
+      </button>
       <button
         class="w-6 h-6 flex items-center justify-center rounded hover:bg-[var(--bg-hover)]"
         style="color: var(--fg-muted);"
@@ -299,13 +318,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useEditorStore } from '../../stores/editor'
 import { useReferencesStore } from '../../stores/references'
 import { useLatexStore } from '../../stores/latex'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useTypstStore } from '../../stores/typst'
-import { isReferencePath, referenceKeyFromPath, isRunnable, isRmdOrQmd, isLatex, isMarkdown, isPreviewPath, isChatTab, getChatSessionId, isNewTab } from '../../utils/fileTypes'
+import { isReferencePath, referenceKeyFromPath, isRunnable, isRmdOrQmd, isLatex, isMarkdown, isPreviewPath, isChatTab, getChatSessionId, isNewTab, getViewerType } from '../../utils/fileTypes'
+import { useCommentsStore } from '../../stores/comments'
 import { useChatStore } from '../../stores/chat'
 import PdfSettingsPopover from './PdfSettingsPopover.vue'
 import { modKey } from '../../platform'
@@ -321,6 +341,18 @@ const emit = defineEmits(['select-tab', 'close-tab', 'split-vertical', 'split-ho
 const workspace = useWorkspaceStore()
 const typstStore = useTypstStore()
 const chatStore = useChatStore()
+const commentsStore = useCommentsStore()
+
+// Comment margin toggle
+const showCommentToggle = computed(() => {
+  if (!props.activeTab) return false
+  return getViewerType(props.activeTab) === 'text'
+})
+
+const commentBadgeCount = computed(() => {
+  if (!props.activeTab) return 0
+  return commentsStore.unresolvedCount(props.activeTab)
+})
 
 // PDF settings popover
 const pdfSettingsOpen = ref(false)
@@ -443,6 +475,19 @@ const dirtyFiles = editorStore.dirtyFiles
 
 const tabsContainer = ref(null)
 const tabEls = reactive({})
+
+function scrollActiveTabIntoView() {
+  const idx = props.tabs.indexOf(props.activeTab)
+  if (idx === -1) return
+  const el = tabEls[idx]
+  if (!el) return
+  el.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' })
+}
+
+watch(() => props.activeTab, (tab) => {
+  if (!tab) return
+  nextTick(scrollActiveTabIntoView)
+})
 const dragIdx = ref(-1)
 const dragOverIdx = ref(-1)
 const dropIndicatorLeft = ref(null)

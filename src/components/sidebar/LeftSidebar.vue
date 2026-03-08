@@ -1,5 +1,5 @@
 <template>
-  <div ref="containerEl" class="flex flex-col h-full overflow-hidden">
+  <div ref="containerEl" class="flex flex-col h-full overflow-hidden bg-[var(--bg-secondary)]">
     <!-- Explorer section -->
     <div
       class="overflow-hidden"
@@ -16,14 +16,20 @@
     <!-- Resize handle: explorer ↔ refs (when both expanded) -->
     <div
       v-if="showHandleExplorerRefs"
-      class="h-[3px] shrink-0 cursor-row-resize hover:bg-[var(--accent)]"
-      :style="{ background: 'var(--border)' }"
+      class="relative h-0.5 shrink-0 cursor-row-resize bg-transparent"
       @mousedown="startResizeRefs"
-    ></div>
+    >
+      <!-- Visual handle, stays at 1px -->
+      <div
+        class="absolute left-0 right-0 top-0.5 -translate-y-1/2 h-4 w-full z-10"
+        
+      ></div>
+      <!-- Hover indicator remains at 1px high for visual, but you can increase its opacity or style on hover if needed -->
+    </div>
 
     <!-- References section -->
     <div
-      class="overflow-hidden relative"
+      class="overflow-hidden relative border-b border-t border-[var(--border)]"
       :style="refsStyle"
     >
       <ReferenceList
@@ -130,8 +136,8 @@ function startResizeRefs(event) {
 
 // Expose FileTree methods for App.vue
 defineExpose({
-  createNewMarkdown() {
-    fileTreeRef.value?.createNewMarkdown()
+  createNewFile(ext = '.md') {
+    fileTreeRef.value?.createNewFile(ext)
   },
   activateFilter() {
     fileTreeRef.value?.activateFilter()
