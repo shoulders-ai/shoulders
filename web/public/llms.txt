@@ -16,7 +16,7 @@ The name comes from Newton: "If I have seen further, it is by standing on the sh
 - [AI Setup](https://shoulde.rs/docs?section=ai-setup): Multi-provider (Anthropic, OpenAI, Google), bring-your-own-keys or subscription, per-tool privacy controls, usage tracking
 - [Inline Suggestions](https://shoulde.rs/docs?section=inline-suggestions): Ghost text triggered with ++, multi-alternative cycling, works across Markdown, code, .docx, and notebook cells
 - [AI Chat](https://shoulde.rs/docs?section=ai-chat): Sidebar chat with automatic workspace context, file attachments, multi-session tabs, model switching
-- [Task Threads](https://shoulde.rs/docs?section=ai-tasks): Select text to start threaded AI conversations, proposed edits shown as inline diffs
+- [Document Comments](https://shoulde.rs/docs?section=ai-comments): Annotate documents with margin comments, submit to AI for batch revision
 - [Tools & Review](https://shoulde.rs/docs?section=ai-tools): 28 tools across 5 categories (workspace, references, feedback, notebooks, web), all edits shown as reviewable inline diffs
 - [Code & Notebooks](https://shoulde.rs/docs?section=code): R/Python/Julia execution, Jupyter .ipynb editing with inline outputs, embedded terminal, code chunks in .rmd/.qmd
 - [Navigation & Settings](https://shoulde.rs/docs?section=navigation): File tree, outline panel, search, split panes, themes, configuration

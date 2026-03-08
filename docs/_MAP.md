@@ -16,15 +16,16 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 |---|---|---|
 | Overall architecture | [architecture.md](architecture.md) | App structure, data flow, component hierarchy, how systems connect |
 | CodeMirror editor | [editor-system.md](editor-system.md) | Extensions, pane tree, tab management, auto-save, soft wrap |
-| AI features | [ai-system.md](ai-system.md) | Ghost suggestions, task agents, AI chat (streaming, tools, multi-provider), API proxy, skills system, shared system prompt |
+| AI features | [ai-system.md](ai-system.md) | Ghost suggestions, AI chat (streaming, tools, multi-provider), API proxy, skills system, shared system prompt |
+| Document comments | [comments-system.md](comments-system.md) | Margin annotations, per-file visibility, store/extension/UI architecture, AI tools, submit-to-chat, gotchas |
 | File operations | [file-system.md](file-system.md) | Rust file commands, tree building, file watching, content search |
 | Edit review | [review-system.md](review-system.md) | Edit interception hook, pending-edits.json, diff overlays, direct mode |
 | Terminal & code runner | [terminal-system.md](terminal-system.md) | PTY in Rust, xterm.js frontend, multi-tab, language REPLs, code chunks |
 | R Markdown / Quarto | [rmd-system.md](rmd-system.md) | Inline chunk execution (Jupyter), chunk identity, knitting pipeline, PDF-aware output formatting |
-| Notebooks & kernels | [notebook-system.md](notebook-system.md) | .ipynb editing, Jupyter kernel protocol (ZeroMQ), cell execution, environment detection, AI tools, cell tasks, review diffs |
+| Notebooks & kernels | [notebook-system.md](notebook-system.md) | .ipynb editing, Jupyter kernel protocol (ZeroMQ), cell execution, environment detection, AI tools, review diffs |
 | Git integration | [git-system.md](git-system.md) | Auto-commit, manual save, version history, restore, GitHub sync (push/pull/merge/conflict) |
 | Wiki links & backlinks | [wiki-links.md](wiki-links.md) | `[[wiki links]]`, autocomplete, click-navigate, backlinks panel, rename propagation |
-| State management | [state-management.md](state-management.md) | All 6 Pinia stores, their fields, getters, actions, and cross-store dependencies |
+| State management | [state-management.md](state-management.md) | All Pinia stores, their fields, getters, actions, and cross-store dependencies |
 | UI layout & components | [ui-layout.md](ui-layout.md) | Component tree, layout structure, resize handles, modals |
 | Design & style | [style-guide.md](style-guide.md) | Color palette, fonts, CSS variables, Tailwind usage, styling conventions |
 | Building & releasing | [building.md](building.md) | Local builds, CI/CD workflow, GitHub releases, icon changes, docs search indexing |
@@ -111,7 +112,7 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 
 ### Want to change AI context (system prompt, instructions, workspace meta)?
 - System prompt: `.shoulders/system.md` — internal base prompt, loaded by `workspace.loadSettings()`
-- Instructions: `_instructions.md` (workspace root) — user-editable, loaded as `workspace.instructions`, hot-reloads on save, feeds chat + tasks + ghost
+- Instructions: `_instructions.md` (workspace root) — user-editable, loaded as `workspace.instructions`, hot-reloads on save, feeds chat + comments (via submit to chat) + ghost
 - Workspace meta: `src/services/workspaceMeta.js` — builds `<workspace-meta>` block (tabs, git diff)
 - Git diff helper: `src/services/git.js:gitDiffSummary()` — abbreviated diff for meta
 - Injection: `src/stores/chat.js:_buildConfig()` — meta appended to system prompt
@@ -123,19 +124,20 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 - Rust DB: `src-tauri/src/usage_db.rs` — SQLite at `~/.shoulders/usage.db`, 4 Tauri commands
 - Footer display: `src/components/layout/Footer.vue` — monthly total (click opens Settings > Usage)
 - Settings tab: `src/components/settings/SettingsUsage.vue` — breakdown tables, budget, footer toggle
-- Call sites: `chat.js`, `tasks.js`, `ghostSuggestion.js`, `docxGhost.js`, `refAi.js`, `docxProvider.js`
+- Call sites: `chat.js`, `ghostSuggestion.js`, `docxGhost.js`, `refAi.js`, `docxProvider.js`
 - See [usage-system.md](usage-system.md)
 
-### Want to change the task thread system?
-- Task creation: `src/App.vue:startTask()` → routes by file type: `.ipynb` dispatches `notebook-cell-task` event, `.docx` uses SuperDoc, else uses CodeMirror selection
-- Store (streaming + persistence): `src/stores/tasks.js` — uses Chat composable (same pattern as `chat.js`), `taskChatInstances` Map outside Pinia, `createChatTransport()` with `extraTools` + `maxSteps`
-- Notebook cells: threads have `cellId`/`cellIndex`/`cellType`/`cellOutputs`/`cellLanguage` fields, cell-aware system prompt, `_applyNotebookEdit()` writes edits into .ipynb cell source, `threadsForCell()` getter
-- Editor decorations: `src/editor/tasks.js` — gutter dots, range underlines, position mapping
-- Editor bridge: `src/components/editor/TextEditor.vue` — store↔CM sync, docChanged position mapping
-- Notebook bridge: `src/components/editor/NotebookEditor.vue` — `startCellTask()`, `openCellTask()`, `scrollToCell()`, task count badges
-- Right panel UI: `src/components/tasks/TaskThreads.vue` (list/detail, shows "Cell N" for notebook threads), `TaskThread.vue` (conversation, cell header, notebook-aware navigation), `TaskInput.vue` (input with @file + model picker)
-- Reuses: `apiClient.js`, `aiSdk.js`, `tauriFetch.js`, `chatModels.js`, `src/components/shared/FileRefPopover.vue`, `chat.rs` (Rust streaming proxy)
-- See [ai-system.md](ai-system.md)
+### Want to change the comment system?
+- Store: `src/stores/comments.js` — pure CRUD data store (no Chat instances), persistence to `.shoulders/comments.json`
+- Editor decorations: `src/editor/comments.js` — gutter markers, anchor highlights, position mapping
+- Margin UI: `src/components/comments/CommentMargin.vue` — 200px side panel showing compact comment cards
+- Floating panel: `src/components/comments/CommentPanel.vue` — overlay for viewing/editing comments
+- Comment card: `src/components/comments/CommentCard.vue` — individual comment display
+- Comment input: `src/components/comments/CommentInput.vue` — input for adding/replying to comments
+- CSS: `src/css/comments.css` — comment system styles
+- Chat tools: `src/services/chatTools.js` — `add_comment`, `reply_to_comment`, `resolve_comment`
+- Submit to chat: "Submit N comments" button sends all unresolved comments to chat as structured context
+- See [comments-system.md](comments-system.md)
 
 ### Want to change the edit review system?
 - Hook script: `.claude/hooks/intercept-edits.sh` - captures Edit/Write tool calls
@@ -156,18 +158,17 @@ These are hard-won lessons from this codebase. Violating any of them causes subt
 - See [terminal-system.md](terminal-system.md)
 
 ### Want to change notebook editing (.ipynb)?
-- Viewer: `src/components/editor/NotebookEditor.vue` - main notebook component (cell list, toolbar, kernel lifecycle, auto-save, cell tasks)
-- Cell: `src/components/editor/NotebookCell.vue` - CodeMirror per code cell, rendered markdown, cell toolbar, ghost suggestions (`++`), task indicator badge
+- Viewer: `src/components/editor/NotebookEditor.vue` - main notebook component (cell list, toolbar, kernel lifecycle, auto-save)
+- Cell: `src/components/editor/NotebookCell.vue` - CodeMirror per code cell, rendered markdown, cell toolbar, ghost suggestions (`++`)
 - Output: `src/components/editor/CellOutput.vue` - Jupyter output renderer (stream, display_data, images, errors, ANSI)
 - Format: `src/utils/notebookFormat.js` - .ipynb v4 JSON parse/serialize
 - Kernel store: `src/stores/kernel.js` - Pinia store wrapping Rust kernel commands
 - Kernel backend: `src-tauri/src/kernel.rs` - Jupyter wire protocol (ZeroMQ), kernel discovery/launch/execute/interrupt/shutdown, `find_python_with_ipykernel()` (8-category probe)
-- Cell tasks: `src/stores/tasks.js` - `cellId`/`cellIndex`/`cellType`/`cellOutputs`/`cellLanguage` fields, `threadsForCell()` getter, `_applyNotebookEdit()` for .ipynb write-through
 - Ghost suggestions: `ghostSuggestionExtension` from `src/editor/ghostSuggestion.js` added per-cell in `NotebookCell.vue`
 - AI tools: `src/services/chatTools.js` - `read_notebook`, `edit_cell`, `run_cell`, `run_all_cells`, `add_cell`, `delete_cell`
 - File routing: `src/utils/fileTypes.js` - `.ipynb` → `'notebook'` viewer type
 - EditorPane: `src/components/editor/EditorPane.vue` - NotebookEditor loaded as async component
-- Events: `notebook-cell-task` (App.vue → NotebookEditor), `notebook-scroll-to-cell` (TaskThread → NotebookEditor)
+- Events: `notebook-scroll-to-cell` (chat navigation → NotebookEditor)
 
 ### Want to change git behavior?
 - Rust git ops: `src-tauri/src/git.rs` - all git2 commands (clone, push, pull, fetch, merge, ahead/behind, diff)
@@ -280,7 +281,7 @@ The `/web` folder contains both the web front and backend (Nuxt) of the Shoulder
 | `files.js` | File tree data, expanded dirs, file content cache, CRUD operations, file watching |
 | `editor.js` | Pane tree (recursive leaf/split), tab management, cross-pane moves, smart chat routing, editor view registry |
 | `reviews.js` | Pending edits from Claude Code, accept/reject, direct mode toggle |
-| `tasks.js` | Task threads: streaming via chat.rs, multi-turn, propose_edit, persistence |
+| `comments.js` | Document comments: CRUD, persistence to `.shoulders/comments.json`, anchor tracking |
 | `links.js` | Wiki link index: forward/backlinks, name map, aliases, headings, rename propagation |
 | `toast.js` | Toast notifications: `show(message, opts)`, auto-dismiss, used for attention-worthy alerts |
 | `usage.js` | Usage tracking: record API calls, query monthly aggregates, budget settings |
@@ -297,7 +298,7 @@ The `/web` folder contains both the web front and backend (Nuxt) of the Shoulder
 | `shouldersAuth.js` | Desktop auth: browser login (polling + deep link), OS keychain (keyring), token refresh, logout |
 | `git.js` | Git commands: init, add, commit, status, branch, log, show, restore, diff, diffSummary, push, pull, fetch, merge, ahead/behind |
 | `githubSync.js` | GitHub sync orchestration: `syncNow()` (fetch→pull/merge→push), conflict detection + branch escalation, error classification, GitHub API (user/repos/create), token keychain helpers |
-| `chatTools.js` | 28 AI SDK `tool()` definitions with zod schemas + execution with review system integration |
+| `chatTools.js` | 28 AI SDK `tool()` definitions (incl. comment tools) with zod schemas + execution with review system integration |
 | `chatModels.js` | Context window sizes, thinking config detection, model access checks |
 | `workspaceMeta.js` | Builds `<workspace-meta>` block: open tabs, active tab, git branch, abbreviated diff |
 | `tokenEstimator.js` | Token estimation (~4 chars/token), conversation totals, sliding-window truncation |
@@ -312,7 +313,7 @@ The `/web` folder contains both the web front and backend (Nuxt) of the Shoulder
 | `theme.js` | Tokyo Night theme for CodeMirror + syntax highlighting rules |
 | `ghostSuggestion.js` | `++` trigger, ghost state field, inline widgets, accept/cycle/cancel handlers |
 | `diffOverlay.js` | Inline diff rendering: strikethrough + insertion widget + accept/reject buttons |
-| `tasks.js` | Task gutter markers, range highlights, position mapping, click events |
+| `comments.js` | Comment gutter markers, anchor highlights, position mapping |
 | `wikiLinks.js` | `[[wiki link]]` decorations, Cmd+click navigation, `[[` autocomplete |
 | `livePreview.js` | Semi-WYSIWYG: hides markdown syntax when cursor is elsewhere, renders tables as HTML widgets (StateField), inline images via async base64 loading (ViewPlugin). Toggled via Settings > Hide Markup |
 | `markdownShortcuts.js` | Cmd+B bold, Cmd+I italic, Cmd+K link, Cmd+E code, etc. |
@@ -344,7 +345,7 @@ The `/web` folder contains both the web front and backend (Nuxt) of the Shoulder
 | **editor/** | |
 | `PaneContainer.vue` | Recursive: EditorPane for leaves, split with SplitHandle for split nodes |
 | `EditorPane.vue` | Pane: TabBar + MarkdownEditor + empty state |
-| `TextEditor.vue` | CodeMirror mount: loads file, wires all extensions, task store↔CM sync, watches external changes |
+| `TextEditor.vue` | CodeMirror mount: loads file, wires all extensions, comment store↔CM sync, watches external changes |
 | `TabBar.vue` | Draggable tabs (within-pane reorder + cross-pane drag), "+" new tab button, close buttons, unsaved dot, split/close pane actions |
 | `SplitHandle.vue` | Drag handle between editor panes |
 | `ReviewBar.vue` | Banner: "N pending changes from Claude Code" + Accept All button |
@@ -355,16 +356,17 @@ The `/web` folder contains both the web front and backend (Nuxt) of the Shoulder
 | `ChatInput.vue` | Input: textarea, model picker, @file refs, send/stop buttons, token count display |
 | `ToolCallLine.vue` | Individual tool call display with state machine rendering |
 | `ProposalCard.vue` | Proposed edit diff card with apply/reject actions |
-| **tasks/** | |
-| `TaskThreads.vue` | Two-mode: thread list (with resolved at bottom) / active thread detail |
-| `TaskThread.vue` | Full conversation view: messages, proposed edits, Apply/Resolve/Delete, Navigate |
-| `TaskInput.vue` | Input for task threads: textarea, @file refs, model picker |
+| **comments/** | |
+| `CommentMargin.vue` | 200px side panel in editor showing compact comment cards, "Submit N" button |
+| `CommentPanel.vue` | Floating overlay for viewing and editing comments |
+| `CommentCard.vue` | Individual comment display with reply/resolve/delete actions |
+| `CommentInput.vue` | Input for adding and replying to comments |
 | **panel/** | |
-| `RightPanel.vue` | Tabbed panel: Outline / Tasks / Terminal / Backlinks |
+| `RightPanel.vue` | Tabbed panel: Outline / Terminal / Backlinks |
 | `Backlinks.vue` | Backlinks panel: shows files linking to active file, click to navigate |
 | `OutlinePanel.vue` | Document outline: headings for .md/.tex/.docx/.ipynb, click-to-navigate, cursor highlight |
 | **shared/** | |
-| `RichTextInput.vue` | Rich text input with @file mention support (used in chat and task inputs) |
+| `RichTextInput.vue` | Rich text input with @file mention support (used in chat input) |
 | `FileRefPopover.vue` | @mention file search dropdown (fuzzy match against flatFiles) |
 
 ### Configuration & Hooks
@@ -377,7 +379,7 @@ The `/web` folder contains both the web front and backend (Nuxt) of the Shoulder
 | `~/.shoulders/keys.env` | Global API key storage (ANTHROPIC/OPENAI/GOOGLE). Workspace `.shoulders/.env` migrated on first load. |
 | `.shoulders/models.json` | Model configs: 4 presets, provider URLs, key env mappings |
 | `.shoulders/chats/` | Persisted chat sessions (one JSON per session) |
-| `.shoulders/tasks.json` | Persisted task threads (single file, all threads) |
+| `.shoulders/comments.json` | Persisted document comments (single file, all comments) |
 | `.shoulders/pending-edits.json` | Edit review queue |
 | `.shoulders/.direct-mode` | Flag file: when present, bypasses edit interception |
 | `~/.shoulders/usage.db` | Global SQLite DB: per-call usage records + settings (cross-workspace) |

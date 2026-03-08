@@ -10,7 +10,7 @@ The editor is built on CodeMirror 6 with custom extensions. The pane/tab layout 
 | `src/editor/theme.js` | CodeMirror theme (Tokyo Night) + syntax highlighting |
 | `src/editor/ghostSuggestion.js` | Ghost text inline completions (see [ai-system.md](ai-system.md)) |
 | `src/editor/diffOverlay.js` | Inline diff rendering (see [review-system.md](review-system.md)) |
-| `src/editor/tasks.js` | Task gutter + range highlights (see [ai-system.md](ai-system.md)) |
+| `src/editor/comments.js` | Comment gutter markers + anchor highlights (see [ai-system.md](ai-system.md)) |
 | `src/editor/livePreview.js` | Semi-WYSIWYG: hides markdown syntax when cursor is elsewhere, renders tables as HTML widgets |
 | `src/editor/wikiLinks.js` | `[[wiki link]]` decorations, click nav, autocomplete (see [wiki-links.md](wiki-links.md)) |
 | `src/stores/editor.js` | Pane tree data structure, tab management, editor view registry |
@@ -20,7 +20,7 @@ The editor is built on CodeMirror 6 with custom extensions. The pane/tab layout 
 | `src/components/editor/ImageViewer.vue` | Image display with zoom/pan |
 | `src/components/editor/DocxEditor.vue` | DOCX editing (SuperDoc) |
 | `src/utils/fileTypes.js` | File type detection, viewer routing, icon mapping |
-| `src/components/editor/EditorContextMenu.vue` | Right-click context menu (Ask AI, Task, clipboard) |
+| `src/components/editor/EditorContextMenu.vue` | Right-click context menu (Ask AI, Add Comment, clipboard) |
 | `src/components/editor/EditorPane.vue` | Pane container with TabBar |
 | `src/components/editor/PaneContainer.vue` | Recursive pane renderer |
 | `src/components/editor/TabBar.vue` | Tab bar with drag reorder |
@@ -139,7 +139,7 @@ Each tab type is validated differently (`isTabValid()` in `editorPersistence.js`
 ```js
 editorStore.registerEditorView(paneId, path, view)   // MarkdownEditor onMounted
 editorStore.unregisterEditorView(paneId, path)        // MarkdownEditor onUnmounted
-editorStore.getEditorView(paneId, path)               // used by App.vue for tasks
+editorStore.getEditorView(paneId, path)               // used by App.vue for comments
 ```
 
 **Important:** These view objects are **not reactive** and not serializable. They're stored outside Pinia's reactive system (as a plain property on the store). This is intentional - EditorView instances are heavy and shouldn't be tracked by Vue.
@@ -156,7 +156,7 @@ editorStore.getEditorView(paneId, path)               // used by App.vue for tas
 6. **Auto-save** - `EditorView.updateListener` with 1-second debounce after last edit
 7. **Cursor tracking** - emits `{line, col}` on selection/doc changes
 8. **Word count** - emits word count on doc changes
-9. **Extra extensions** - passed in by MarkdownEditor: ghost suggestions, diff overlay, tasks, wiki links
+9. **Extra extensions** - passed in by MarkdownEditor: ghost suggestions, diff overlay, comments, wiki links
 
 ### Auto-Save Flow
 ```
@@ -167,14 +167,14 @@ User types → docChanged → 1s debounce → onSave(content) → files.saveFile
 
 ### Mount
 1. Read file content from `files.fileContents` cache (or load via `files.readFile()`)
-2. Build extensions via `createEditorExtensions()` with ghost, diff, and task extensions
+2. Build extensions via `createEditorExtensions()` with ghost, diff, and comment extensions
 3. Create `EditorState` and `EditorView`
 4. Register view in `editorStore.editorViews`
 5. Load initial pending edits into the diff overlay
 
 ### Watchers
 - **Pending edits**: When `reviews.editsForFile(filePath)` changes, dispatch `setPendingEdits` effect to update diff overlays
-- **External file changes**: When `files.fileContents[filePath]` changes (e.g., from file watcher or AI edit), applies a **surgical diff** via `computeMinimalChange()` (`src/utils/textDiff.js`) — only the changed span is dispatched, preserving task/annotation positions. A full-document swap would destroy all `mapPos`-tracked ranges (see [gotchas.md](gotchas.md)).
+- **External file changes**: When `files.fileContents[filePath]` changes (e.g., from file watcher or AI edit), applies a **surgical diff** via `computeMinimalChange()` (`src/utils/textDiff.js`) — only the changed span is dispatched, preserving comment/annotation positions. A full-document swap would destroy all `mapPos`-tracked ranges (see [gotchas.md](gotchas.md)).
 - **Soft wrap**: When `workspace.softWrap` toggles, reconfigure the wrap compartment
 
 ### Unmount
@@ -218,9 +218,10 @@ Relative paths are computed by `relativePath()` in `src/utils/fileTypes.js`. The
 
 ### NewTab as a First-Class Tab
 
-The NewTab page (hub with recent files, recent chats, chat input) is a proper tab with the virtual path `newtab:{nanoid}`. It appears in the TabBar with a "+" icon and "New Tab" label, is draggable between panes like any other tab, and persists across restarts.
+The NewTab page (Start page with recent files, file creation, suggestions, and chat input) is a proper tab with the virtual path `newtab:{nanoid}`. It appears in the TabBar with a "+" icon and "New Tab" label, is draggable between panes like any other tab, and persists across restarts. The Start page has five tabs: Start (curated mix with section headers), Files (recent files), Create (new file by type), Chats (chat history), and Suggested (context-aware AI prompts).
 
-- **Cmd+T** opens a NewTab tab in the active pane (reuses existing if one is already there)
+- **Cmd+T** opens a NewTab tab in the active pane (like a browser new tab)
+- **Cmd+N** is context-aware: in a document → new file of same type; in a chat → new chat; in NewTab or no tab → new `.md`
 - **Tab replacement**: When you open a file or chat while a NewTab is the active tab, it replaces the NewTab (like Chrome replacing a blank tab on navigation)
 - **`isNewTab(path)`** in `fileTypes.js` detects the `newtab:` prefix; `getViewerType()` returns `'newtab'`
 - **EditorPane.vue** routes `newtab` viewer type to `<NewTab>` component; the `v-else` fallback still handles panes with zero tabs
@@ -260,7 +261,7 @@ The custom right-click menu (`EditorContextMenu.vue`) blocks the native context 
 3. If the word is misspelled, up to 5 suggestions appear at the top of our custom context menu in accent color
 4. Clicking a suggestion replaces the word in the editor via `view.dispatch({ changes })`
 
-This preserves our custom menu items (Ask AI, Add Task, clipboard) while adding spell corrections inline.
+This preserves our custom menu items (Ask AI, Add Comment, clipboard) while adding spell corrections inline.
 
 ### Relevant Files
 
@@ -342,7 +343,7 @@ A second compartment (`columnWidthCompartment`) constrains `.cm-content` to a `m
 
 | Viewer | File Types / Path Prefix | Key Features |
 |---|---|---|
-| `TextEditor` | `.md`, `.js`, `.py`, `.rs`, etc. | CodeMirror 6, ghost suggestions (`.md` only), wiki links (`.md` only), merge view, tasks |
+| `TextEditor` | `.md`, `.js`, `.py`, `.rs`, etc. | CodeMirror 6, ghost suggestions (`.md` only), wiki links (`.md` only), merge view, comments |
 | `PdfViewer` | `.pdf` | Embeds the Firefox PDF.js viewer app via iframe (blob URL). Full-featured: thumbnails sidebar, page navigation, text selection, Cmd+F search, annotations, highlights, zoom. Theme follows app (dark/light). |
 | `CsvEditor` | `.csv`, `.tsv` | Handsontable grid, auto-save on debounce |
 | `ImageViewer` | `.png`, `.jpg`, `.gif`, `.svg`, etc. | Opens at 1:1 (actual size), zoom/pan with mouse, Fit button and double-click reset to 1:1 |

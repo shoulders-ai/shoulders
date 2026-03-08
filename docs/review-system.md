@@ -149,11 +149,9 @@ The AI chat's `edit_file` and `write_file` tools also record edits through the s
 
 Edit IDs from chat use the format `chat-{timestamp}-{nanoid6}` (vs `edit-{timestamp}-{pid}` from the hook).
 
-## Task Thread Integration
+## Comment-Driven Edits
 
-The task system's `propose_edit` tool also records edits through the same review system. When a user clicks "Apply" on a proposed edit in a task thread, `tasksStore.applyProposedEdit()` performs the same sequence as the chat tools: write to disk → update `filesStore.fileContents` → record pending edit → merge view appears.
-
-Edit IDs from tasks use the format `task-{timestamp}-{nanoid6}`.
+When the AI processes submitted comments and makes file edits, those edits go through the same review system as any other AI edit. The chat tools (`edit_file`, `write_file`) record pending edits identically regardless of whether the request originated from direct chat or from submitted comments.
 
 ## Notebook Cell Review
 

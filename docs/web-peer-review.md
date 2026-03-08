@@ -155,7 +155,7 @@ Comments are deduplicated across all agents by snippet before passing to Stage 4
 
 ### Stage 4: Report
 
-`writeReport(plainText, comments, { citationSummary })` — Claude Sonnet synthesises all inline comments into a structured summary: General Impression, Strengths, Areas for Improvement, Bibliography & Citations (if reference checker produced a summary), Overall Assessment. 500-1000 words.
+`writeReport(plainText, comments, { citationSummary })` — Claude Sonnet synthesises all inline comments into a concise summary (≤400 words, scales to paper length): General Impression, Strengths, Key Issues, Bibliography & Citations, Overall Assessment. Sections are optional — the agent skips those with nothing substantive to say.
 
 ### Stage 5: Anchor
 

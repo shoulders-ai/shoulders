@@ -313,9 +313,7 @@ const result = await ai.action.literalReplace(oldString, newString, {
 | `src/components/VersionHistory.vue` | Read-only SuperDoc preview for docx version history (`documentMode: 'viewing'`) |
 | `src/components/editor/DocxReviewBar.vue` | Tracked changes bar (Accept All / Reject All) |
 | `src/editor/docxGhost.js` | ProseMirror ghost suggestion plugin (standalone run insertion, state + keyboard) |
-| `src/editor/docxTaskPositions.js` | ProseMirror plugin: maps task thread ranges through edits |
-| `src/editor/docxTasks.js` | `DocxTaskBridge`: applies proposed edits via `ai.action.literalReplace()` |
-| `src/components/editor/DocxTaskIndicators.vue` | Floating overlay dots in DOCX margin (text-search positioning) |
+| (DOCX task files removed — comments are document-level, not DOCX-specific) | |
 | `src/services/docxContext.js` | Text extraction utilities for ProseMirror docs |
 | `src/services/docxProvider.js` | AI provider adapter for @superdoc-dev/ai |
 | `src/utils/docxBridge.js` | Binary conversion: base64 <-> Blob <-> File |
@@ -395,15 +393,6 @@ Transactions marked `addToHistory: false` are NOT in the undo stack but ARE used
 - Auto-save and text cache suppressed while ghost is active (checks `ghostPluginKey.getState()` directly, not Vue ref)
 - See [ghost-work.md](ghost-work.md) for full implementation details and SuperDoc internals
 
-### AI task indicators (floating overlay dots)
-- AI task threads on DOCX files show margin dots via `DocxTaskIndicators.vue` — a floating overlay (same pattern as ghost loading dots)
-- Position calculated by text-searching visible `.superdoc-line` elements for `thread.selectedText`
-- Fallback: estimate position from `range.from / docSize` ratio when text not found (shown as dashed outline dot)
-- `docxTaskPositions.js`: SuperDoc extension (PM plugin) that maps `thread.range.from/to` through transactions via `tr.mapping.map()`
-- Recalc triggers: scroll (RAF), resize (ResizeObserver), thread changes (watcher), content edits (`docx-content-changed` custom event)
-- Click dot → `tasksStore.setActiveThread()` + `open-tasks` event → right panel opens
-- Gutter left position read from first `.superdoc-fragment`'s `getBoundingClientRect()` minus 20px
-
 ### Native comments (right-click → Comment)
 - Uses SuperDoc's public `ed.commands.addComment()` API — NOT the internal sidebar/`showAddComment()` flow
 - Context menu emits `add-comment` → `DocxEditor.vue` shows a Teleported input dialog → user types → `submitComment()` restores PM selection and calls `addComment({ content, author, authorEmail })`
@@ -412,16 +401,11 @@ Transactions marked `addToHistory: false` are NOT in the undo stack but ARE used
 - Right-click collapses PM selection — saved in capture-phase `mousedown` handler (`handleRightMouseDown`), restored before API call
 - SuperDoc's native floating tools panel (`.superdoc__tools`) is hidden via CSS (`display: none !important`)
 
-### Task bridge
-- `DocxTaskBridge` in `src/editor/docxTasks.js` handles `applyProposedEdit` for DOCX files
-- Uses `ai.action.literalReplace()` — the official SuperDoc API for atomic find-and-replace
-- Registered via `editorStore.registerSuperdoc()` after `superdoc.on('ready')`
-
 ### Scrolling the visible painted layer
 - PM `tr.setSelection()` + `scrollIntoView()` and `editor.commands.scrollIntoView()` only scroll the hidden view (x:-9999)
 - `presentationEditor.scrollToPosition(pos)` exists but returns `false` in our embedded setup (viewport host resolution issue) — do NOT rely on it
 - **Working approach:** text-search `.superdoc-line` elements for target text, then `line.scrollIntoView({ block: 'center' })`. Fallback: wait ~100ms for painter, scroll `.presentation-editor__selection-caret`
-- See `TaskThread.vue:navigateDocx()` (task jump-to) and `OutlinePanel.vue:navigateToHeading()` (outline click)
+- See `OutlinePanel.vue:navigateToHeading()` (outline click)
 - **Cross-file navigation** needs brute-force 4x retry (0ms, 500ms, 1000ms, 1500ms) because `editorStore.openFile()` may need to mount SuperDoc first
 - **Auto-scroll on type:** `DocxEditor.vue` selectionUpdate handler checks caret visibility in `requestAnimationFrame`, scrolls with `behavior: 'auto', block: 'nearest'`
 
@@ -430,7 +414,7 @@ Transactions marked `addToHistory: false` are NOT in the undo stack but ARE used
 - When `!reviews.directMode`: temporarily sets `suggesting` mode before the replacement, restores previous mode after → creates DOCX native tracked change
 - `DocxReviewBar` is wired: `trackChangesHelpers.getTrackChanges()` for count, `editor.commands.acceptAllChanges/rejectAllChanges` for Accept All / Reject All — mounted in `EditorPane.vue`
 - `updateTextCache()` in `DocxEditor.vue` uses `extractDocumentText()` (filters `trackDelete` nodes) — NOT `.textContent`, which would include both deleted and inserted text and corrupt subsequent AI reads
-- **Do NOT use `ai.action.literalReplace()` for AI chat edits** — fragile: Unicode mismatch (curly quotes vs ASCII), multi-run fragmentation (same text split across `<w:run>` elements). Still used by `DocxTaskBridge` for task threads (proposed edits apply whole-selection)
+- **Do NOT use `ai.action.literalReplace()` for AI chat edits** — fragile: Unicode mismatch (curly quotes vs ASCII), multi-run fragmentation (same text split across `<w:run>` elements).
 
 ---
 

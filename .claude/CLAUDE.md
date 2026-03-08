@@ -39,7 +39,7 @@ Desktop shell is Tauri v2 (Rust + webview). All file operations and API calls go
 | DOCX editing (SuperDoc) | `DocxEditor.vue`, `editor/docxGhost.js`, `stores/editor.js` | [superdoc-system.md](../docs/superdoc-system.md) |
 | AI chat | `stores/chat.js`, `services/chatTransport.js`, `services/chatTools.js`, `services/aiSdk.js` | [ai-system.md](../docs/ai-system.md) |
 | Ghost suggestions | `editor/ghostSuggestion.js`, `editor/docxGhost.js`, `services/ai.js` | [ai-system.md](../docs/ai-system.md) |
-| Task threads | `stores/tasks.js`, `editor/tasks.js`, `TaskThread.vue` | [ai-system.md](../docs/ai-system.md) |
+| Document comments | `stores/comments.js`, `editor/comments.js`, `CommentMargin.vue` | [ai-system.md](../docs/ai-system.md) |
 | Edit review | `stores/reviews.js`, `editor/diffOverlay.js`, `.claude/hooks/intercept-edits.sh` | [review-system.md](../docs/review-system.md) |
 | Git & GitHub sync | `services/git.js`, `services/githubSync.js`, `src-tauri/src/git.rs` | [git-system.md](../docs/git-system.md) |
 | References | `stores/references.js`, `editor/citations.js`, `services/openalex.js` | [state-management.md](../docs/state-management.md) |
@@ -58,15 +58,15 @@ Desktop shell is Tauri v2 (Rust + webview). All file operations and API calls go
 Multi-provider streaming chat in the right sidebar with parallel sessions.
 
 - **Providers**: Anthropic, OpenAI, Google (configured in `~/.shoulders/models.json` + `~/.shoulders/keys.env`)
-- **27 tools** across 5 categories:
+- **28 tools** across 5 categories:
   - **Workspace** (10): `read_file`, `list_files`, `search_content`, `write_file`, `edit_file`, `rename_file`, `move_file`, `duplicate_file`, `delete_file`, `run_command`
   - **References** (5): `search_references`, `get_reference`, `add_reference`, `cite_reference`, `edit_reference`
-  - **Feedback** (3): `add_task`, `read_tasks`, `create_proposal`
+  - **Comments** (4): `add_comment`, `reply_to_comment`, `resolve_comment`, `create_proposal`
   - **Notebooks** (6): `read_notebook`, `edit_cell`, `run_cell`, `run_all_cells`, `add_cell`, `delete_cell`
   - **Web** (3): `web_search`, `search_papers`, `fetch_url`
 - **Streaming**: AI SDK (`Chat` composable → `ToolLoopAgent` → `streamText()`) → tauriFetch → Rust proxy (`chat.rs`) → Tauri events
 - **Sessions**: persist to `.shoulders/chats/`, close/reopen via history dropdown
-- **System prompt**: `services/systemPrompt.js` — shared base for chat, tasks, and ghost
+- **System prompt**: `services/systemPrompt.js` — shared base for chat and ghost
 - **Skills**: `.project/skills/` — user-defined skill manifests injected into system prompt
 - **Context**: `services/workspaceMeta.js` builds `<workspace-meta>` (open tabs, git diff) appended to system prompt
 
@@ -82,7 +82,7 @@ Toggle "direct mode" in the footer to let edits through without review.
 
 ## Config Directories
 
-- **`.shoulders/`** — private AI state (gitignored): `system.md`, `pending-edits.json`, `.direct-mode`, `chats/`, `tasks.json`, `open-sessions.json`
+- **`.shoulders/`** — private AI state (gitignored): `system.md`, `pending-edits.json`, `.direct-mode`, `chats/`, `comments.json`, `open-sessions.json`
 - **`.project/`** — public project data (syncs via git): `references/`, `styles/`, `skills/`, `pdf-settings.json`, `citation-style.json`
 - **`~/.shoulders/`** — global config: `keys.env` (API keys), `models.json`, `usage.db`
 

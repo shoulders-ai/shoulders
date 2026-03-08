@@ -19,7 +19,7 @@ const fileToSectionMap = {
   'AiSetup.vue': 'ai-setup',
   'InlineSuggestions.vue': 'inline-suggestions',
   'AiChat.vue': 'ai-chat',
-  'AiTasks.vue': 'ai-tasks',
+  'AiComments.vue': 'ai-comments',
   'AiTools.vue': 'ai-tools',
   'CodeAndNotebooks.vue': 'code',
   'NavigationSettings.vue': 'navigation',

@@ -1,0 +1,335 @@
+/* ===== Comment System ===== */
+
+/* ── Gutter ────────────────────────────────────────────────────── */
+.comment-gutter {
+  width: 16px;
+}
+.comment-gutter .cm-gutterElement {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.comment-gutter-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  color: var(--accent);
+  opacity: 0.45;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.comment-gutter-dot:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+.comment-gutter-dot svg {
+  display: block;
+}
+
+/* ── Anchor highlights (range marks in editor) ─────────────────── */
+.comment-range {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.comment-range-active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ── Margin column (right-side comment strip) ──────────────────── */
+.comment-margin {
+  width: 200px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-secondary);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.comment-margin-header {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.comment-margin-title {
+  font-size: calc(var(--ui-font-size, 13px) - 2px);
+  font-weight: 600;
+  color: var(--fg-secondary);
+}
+.comment-margin-count {
+  font-size: calc(var(--ui-font-size, 13px) - 3px);
+  color: var(--fg-muted);
+}
+
+/* ── Margin cards ──────────────────────────────────────────────── */
+.comment-card {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.comment-card:hover {
+  background: var(--bg-hover);
+}
+.comment-card-active {
+  border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-secondary));
+}
+.comment-card-author {
+  font-size: calc(var(--ui-font-size, 13px) - 3px);
+  color: var(--fg-muted);
+  margin-bottom: 2px;
+}
+.comment-card-text {
+  font-size: calc(var(--ui-font-size, 13px) - 2px);
+  color: var(--fg-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.comment-card-meta {
+  font-size: calc(var(--ui-font-size, 13px) - 4px);
+  color: var(--fg-muted);
+  margin-top: 3px;
+}
+.comment-card-resolved {
+  opacity: 0.5;
+}
+
+/* ── Floating panel ────────────────────────────────────────────── */
+.comment-panel {
+  position: absolute;
+  z-index: 100;
+  background: var(--bg-secondary);
+  border: 1px solid color-mix(in srgb, var(--fg-muted) 30%, var(--border));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1);
+  max-height: 50%;
+  overflow-y: auto;
+}
+.comment-panel-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: calc(var(--ui-font-size, 13px) - 2px);
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.comment-panel-thread {
+  padding: 8px 12px;
+}
+.comment-panel-reply {
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.comment-panel-reply:last-child {
+  border-bottom: none;
+}
+.comment-panel-reply-author {
+  font-size: calc(var(--ui-font-size, 13px) - 3px);
+  font-weight: 500;
+  color: var(--fg-secondary);
+  margin-bottom: 2px;
+}
+.comment-panel-reply-text {
+  font-size: calc(var(--ui-font-size, 13px) - 1px);
+  color: var(--fg-primary);
+  line-height: 1.5;
+}
+.comment-panel-reply-time {
+  font-size: calc(var(--ui-font-size, 13px) - 4px);
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+.comment-panel-input {
+  flex: 1;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+  font-size: calc(var(--ui-font-size, 13px) - 1px);
+  padding: 4px 8px;
+  resize: none;
+  outline: none;
+}
+.comment-panel-input:focus {
+  border-color: var(--accent);
+}
+
+/* ── Mini diff card (proposed edits in comment replies) ────────── */
+.comment-diff-card {
+  margin: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: calc(var(--editor-font-size, 14px) - 2px);
+  line-height: 1.5;
+}
+.comment-diff-old {
+  padding: 4px 8px;
+  background: rgba(247, 118, 142, 0.08);
+  text-decoration: line-through;
+  color: var(--error);
+}
+.comment-diff-new {
+  padding: 4px 8px;
+  background: rgba(158, 206, 106, 0.08);
+  color: var(--success);
+}
+.comment-diff-actions {
+  padding: 4px 8px;
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  background: var(--bg-secondary);
+}
+
+/* ── Resolve button (bottom of panel) ──────────────────────────── */
+.comment-resolve-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(var(--ui-font-size, 13px) - 2px);
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.comment-resolve-btn:hover {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+.comment-resolve-btn-resolved {
+  color: var(--success);
+}
+.comment-resolve-btn-resolved:hover {
+  color: var(--fg-muted);
+  background: var(--bg-hover);
+}
+
+/* ── Submit footer ──────────────────────────────────────────────── */
+.comment-margin-footer {
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+}
+.comment-submit-full {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ── Toggle resolved button ────────────────────────────────────── */
+.comment-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.comment-toggle-btn:hover {
+  color: var(--fg-secondary);
+  background: var(--bg-hover);
+}
+.comment-toggle-btn-on {
+  color: var(--accent);
+}
+.comment-toggle-btn-on:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* ── Add comment button ────────────────────────────────────────── */
+.comment-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px 2px 5px;
+  height: 24px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  font-size: calc(var(--ui-font-size, 13px) - 3px);
+  font-weight: 500;
+  border: 1px solid var(--border);
+  cursor: default;
+  opacity: 0.4;
+  transition: all 0.15s ease;
+}
+.comment-add-btn-active {
+  opacity: 1;
+  cursor: pointer;
+  color: var(--fg-secondary);
+}
+.comment-add-btn-active:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────── */
+.comment-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(var(--ui-font-size, 13px) - 2px);
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.comment-btn-primary:hover {
+  opacity: 0.9;
+}
+.comment-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(var(--ui-font-size, 13px) - 2px);
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.comment-btn-secondary:hover {
+  background: var(--bg-hover);
+}
+.comment-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  color: var(--error);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: calc(var(--ui-font-size, 13px) - 2px);
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.comment-btn-danger:hover {
+  background: rgba(247, 118, 142, 0.1);
+}

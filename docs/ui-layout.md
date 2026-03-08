@@ -13,9 +13,9 @@ Two states based on whether a workspace is open:
 │ Left │R │    PaneContainer          │R │   Right        │
 │ Side │e │    (recursive editor      │e │   Panel        │
 │ bar  │s │     panes with tabs,      │s │   (Outline,    │
-│      │i │     incl. chat tabs)      │i │    Tasks,      │
-│Explr │z │                           │z │    Terminal,   │
-│ Refs │e │    [ReviewBar per pane]   │e │    Backlinks)  │
+│      │i │     incl. chat tabs)      │i │    Terminal,   │
+│Explr │z │                           │z │    Backlinks)  │
+│ Refs │e │    [ReviewBar per pane]   │e │                │
 │      │  │                           │  │                │
 │      │  ├───────────────────────────┤  │                │
 │      │  │ BottomPanel (terminals)   │  │                │
@@ -79,19 +79,19 @@ No sidebars, no footer. Header is always visible (hamburger menu works in both s
 | `src/components/editor/ReviewBar.vue` | Pending edits banner (text files) |
 | `src/components/editor/DocxReviewBar.vue` | Pending edits banner (DOCX files) |
 | `src/components/editor/NotebookReviewBar.vue` | Pending edits banner (notebooks) |
-| `src/components/editor/EditorContextMenu.vue` | Right-click: Ask AI, Add AI Task, clipboard, spell suggestions |
+| `src/components/editor/EditorContextMenu.vue` | Right-click: Ask AI, Add Comment, clipboard, spell suggestions |
 | `src/components/editor/DocxContextMenu.vue` | Right-click context menu for DOCX editor |
 | **Right panel** | |
-| `src/components/right/RightPanel.vue` | Right sidebar: Outline / Tasks / Terminal / Backlinks tabs |
+| `src/components/right/RightPanel.vue` | Right sidebar: Outline / Terminal / Backlinks tabs |
 | `src/components/layout/BottomPanel.vue` | Bottom panel: multi-tab terminals (primary terminal location), language REPLs |
 | `src/components/sidebar/OutlinePanel.vue` | Document outline (headings for .md/.tex/.docx/.ipynb), rendered in RightPanel |
-| `src/components/right/ChatMessage.vue` | Message renderer (shared by ChatPanel and TaskThread) |
+| `src/components/right/ChatMessage.vue` | Message renderer (shared by ChatPanel) |
 | `src/utils/chatMarkdown.js` | Shared markdown pipeline: `renderMarkdown()`, `TOOL_LABELS`, `getToolContext()`, `getToolIcon()` |
 | `src/components/right/ChatInput.vue` | Chat input with @file refs, model picker, context chips (used by ChatPanel) |
 | `src/components/right/FileRefPopover.vue` | @mention file search list |
 | `src/components/right/Terminal.vue` | Terminal instance (xterm.js) |
-| `src/components/right/TaskThreads.vue` | Task list / active thread detail |
-| `src/components/right/TaskThread.vue` | Individual task thread conversation |
+| `src/components/comments/CommentMargin.vue` | 200px editor side panel with comment cards |
+| `src/components/comments/CommentPanel.vue` | Floating overlay for comment details |
 | `src/components/right/Backlinks.vue` | Files linking to active file |
 | **Modals** | |
 | `src/components/VersionHistory.vue` | Git history modal |
@@ -112,7 +112,7 @@ Two storage mechanisms: **localStorage** for global UI preferences, **`.shoulder
 | Right sidebar open/closed | localStorage | `rightSidebarOpen` |
 | Left sidebar width | localStorage | `leftSidebarWidth` |
 | Right sidebar width | localStorage | `rightSidebarWidth` |
-| Right panel active tab (outline/tasks/terminal/backlinks) | localStorage | `rightPanelTab` |
+| Right panel active tab (outline/terminal/backlinks) | localStorage | `rightPanelTab` |
 | Bottom panel open/closed | localStorage | `bottomPanelOpen` |
 | Bottom panel height | localStorage | `bottomPanelHeight` |
 | Explorer/Refs collapse states | localStorage | `explorerCollapsed`, `refsCollapsed` |
@@ -124,7 +124,7 @@ Two storage mechanisms: **localStorage** for global UI preferences, **`.shoulder
 | Last model selections | localStorage | `lastModelId`, `ghostModelId` |
 | Recent files (per workspace) | localStorage | `recentFiles:{workspacePath}` |
 | Chat sessions | `.shoulders/chats/{id}.json` | Full message history |
-| Task threads | `.shoulders/tasks.json` | All threads + messages |
+| Document comments | `.shoulders/comments.json` | All comments + replies |
 | Last workspace | localStorage | `lastWorkspace` |
 
 ### Not Persisted (session-only)
@@ -143,7 +143,7 @@ The layout is coordinated across multiple stores and components:
 
 - **`workspace` store** — sidebar open/closed, sidebar widths, bottom panel state. Reads from localStorage on init.
 - **`editor` store** — pane tree, active pane, recent files. Reads from `.shoulders/editor-state.json` on workspace open.
-- **`RightPanel.vue`** — right panel active tab (outline/tasks/terminal/backlinks). Reads from localStorage on mount, writes on tab switch.
+- **`RightPanel.vue`** — right panel active tab (outline/terminal/backlinks). Reads from localStorage on mount, writes on tab switch.
 - **`BottomPanel.vue`** — bottom terminal panel. Lazy-initialized on first open. Terminal processes preserved via `v-show`.
 - **`LeftSidebar.vue`** — explorer/refs collapse states, panel heights. Reads from localStorage on mount.
 - **`App.vue`** — orchestrates startup: opens workspace → loads stores → restores editor state. Orchestrates shutdown: saves editor state → cleans up stores.
@@ -228,10 +228,9 @@ Plus the capability `"core:window:allow-start-dragging"` in `capabilities/defaul
 - Width: `workspace.rightSidebarWidth` (default 360px, min 200px, max 80% of window)
 - Double-click resize handle: snaps to 50% window width (or back to previous width)
 - `rightSidebarPreSnapWidth` remembers the width before snap for toggling back
-- **Four tabs**: Outline, Tasks, Terminal, Backlinks (Backlinks only shown when active file has backlinks)
+- **Three tabs**: Outline, Terminal, Backlinks (Backlinks only shown when active file has backlinks)
 - Active tab persisted in localStorage (`rightPanelTab`)
 - **Outline**: Document headings (`.md`/`.tex`/`.docx`/`.ipynb`), click to navigate. Tracks a `documentTab` computed that falls back to last non-chat tab when a chat is focused. Uses `OutlinePanel` from `src/components/sidebar/`.
-- **Tasks**: Task thread list + active thread detail. See [ai-system.md](ai-system.md).
 - **Terminal**: Multi-tab xterm.js terminals with drag-reorder, rename, language REPL support (R/Python/Julia). Terminal processes preserved via `v-show`. Note: the right panel still has a Terminal tab, but the primary terminal experience is now in the **BottomPanel** (see below).
 - **Backlinks**: Files linking to the active document via `[[wiki links]]`.
 
@@ -364,7 +363,7 @@ Position is calculated from `getBoundingClientRect()` on the anchor element when
 
 Teleported to `<body>`. Shown on right-click in TextEditor. Viewport-clamped (same pattern as `DocxContextMenu.vue`).
 
-**With selection:** Ask AI (`Cmd+Shift+L`), Add Task (`Cmd+Shift+C`), separator, Cut, Copy, Paste.
+**With selection:** Ask AI, Add Comment (`Cmd+Shift+L`), separator, Cut, Copy, Paste.
 **Without selection:** Paste, Select All.
 
 "Ask AI" calls `editorStore.openChatBeside({ selection })` with the captured text + ~200 chars before/after context. `openChatBeside` routes to `lastChatPaneId` (the last pane the user viewed that had a chat or newtab), falling back to any visible chat/newtab pane, or splitting to create a new one. NewTab panes are replaced by the chat.

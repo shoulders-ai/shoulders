@@ -46,6 +46,7 @@ pub struct FileEntry {
     pub path: String,
     pub is_dir: bool,
     pub children: Option<Vec<FileEntry>>,
+    pub modified: Option<u64>,
 }
 
 pub struct WatcherState {
@@ -84,11 +85,22 @@ fn build_file_tree(dir: &Path) -> Result<Vec<FileEntry>, String> {
             None
         };
 
+        let modified = if !is_dir {
+            fs::metadata(&path)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+        } else {
+            None
+        };
+
         entries.push(FileEntry {
             name,
             path: path.to_string_lossy().to_string(),
             is_dir,
             children,
+            modified,
         });
     }
 

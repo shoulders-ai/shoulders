@@ -15,6 +15,10 @@
           <span class="key">{{ mod }} N</span>
           <span class="lbl">new file</span>
         </button>
+        <button class="row" @click="splitPane">
+          <span class="key">{{ mod }} J</span>
+          <span class="lbl">split pane</span>
+        </button>
       </div>
     </div>
   </div>
@@ -34,6 +38,7 @@ const mod = isMac ? '⌘' : 'Ctrl+'
 function openFile() { window.dispatchEvent(new CustomEvent('app:focus-search')) }
 function newTab()   { editorStore.openNewTab(props.paneId) }
 function newFile()  { window.dispatchEvent(new CustomEvent('app:new-file')) }
+function splitPane() { editorStore.openNewTabBeside() }
 </script>
 
 <style scoped>
@@ -101,7 +106,7 @@ function newFile()  { window.dispatchEvent(new CustomEvent('app:new-file')) }
 .lbl {
   font-size: 12.5px;
   letter-spacing: 0.035em;
-  width: 10ch;
+  width: 11ch;
   text-align: left;
   padding-left: 10px;
 }

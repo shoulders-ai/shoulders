@@ -108,7 +108,7 @@ import { useWorkspaceStore } from './stores/workspace'
 import { useFilesStore } from './stores/files'
 import { useEditorStore } from './stores/editor'
 import { useReviewsStore } from './stores/reviews'
-import { useTasksStore } from './stores/tasks'
+import { useCommentsStore } from './stores/comments'
 import { useLinksStore } from './stores/links'
 import { useChatStore } from './stores/chat'
 import { useReferencesStore } from './stores/references'
@@ -119,7 +119,7 @@ import { useToastStore } from './stores/toast'
 import { gitAdd, gitCommit, gitStatus } from './services/git'
 import { checkForUpdate, downloadUpdate, installAndRestart, isAutoCheckEnabled } from './services/appUpdater'
 import { isMod } from './platform'
-import { isChatTab } from './utils/fileTypes'
+import { isChatTab, isNewTab, getViewerType } from './utils/fileTypes'
 
 import Header from './components/layout/Header.vue'
 import Footer from './components/layout/Footer.vue'
@@ -138,7 +138,7 @@ const workspace = useWorkspaceStore()
 const filesStore = useFilesStore()
 const editorStore = useEditorStore()
 const reviews = useReviewsStore()
-const tasks = useTasksStore()
+const commentsStore = useCommentsStore()
 const linksStore = useLinksStore()
 const chatStore = useChatStore()
 const referencesStore = useReferencesStore()
@@ -261,7 +261,7 @@ async function openWorkspace(path) {
     reviews.startWatching()
     linksStore.fullScan()
     chatStore.loadSessions()
-    tasks.loadThreads()
+    commentsStore.loadComments()
     referencesStore.loadLibrary()
     typstStore.loadSettings()
   } catch (e) {
@@ -305,13 +305,21 @@ function handleKeydown(e) {
     return
   }
 
-  // Cmd+N: New file, or new chat if active tab is a chat
+  // Cmd+N: Context-aware — new instance of whatever you're currently doing
   if (isMod(e) && e.key === 'n') {
     e.preventDefault()
-    if (editorStore.activeTab && isChatTab(editorStore.activeTab)) {
+    const tab = editorStore.activeTab
+    if (tab && isChatTab(tab)) {
+      // In a chat → new chat
       editorStore.openChat({ paneId: editorStore.activePaneId })
+    } else if (tab && !isNewTab(tab)) {
+      // In a file → new file of same type
+      const dot = tab.lastIndexOf('.')
+      const ext = dot > 0 ? tab.substring(dot) : '.md'
+      leftSidebarRef.value?.createNewFile(ext)
     } else {
-      leftSidebarRef.value?.createNewMarkdown()
+      // NewTab or no tab → new markdown
+      leftSidebarRef.value?.createNewFile('.md')
     }
     return
   }
@@ -375,59 +383,32 @@ function handleKeydown(e) {
     return
   }
 
-  // Cmd+Shift+C: Add task
-  if (isMod(e) && e.shiftKey && (e.key === 'C' || e.key === 'c' || e.code === 'KeyC')) {
-    e.preventDefault()
-    startTask()
-    return
-  }
-
-  // Cmd+Shift+L: Open AI Chat (with optional selection capture)
-  // Chat now lives in the tab system — dispatch events for the chat-as-tab system to handle
+  // Cmd+Shift+L: Add comment on selection
   if (isMod(e) && e.shiftKey && (e.key === 'L' || e.key === 'l' || e.code === 'KeyL')) {
     e.preventDefault()
-    // Capture selection from active editor if present
-    let selection = null
+
     const pane = editorStore.activePane
-    if (pane && pane.activeTab) {
-      if (pane.activeTab.endsWith('.docx')) {
-        // DOCX: read from SuperDoc's ProseMirror state
-        const sd = editorStore.getAnySuperdoc(pane.activeTab)
-        if (sd?.activeEditor) {
-          const { from, to, empty } = sd.activeEditor.state.selection
-          if (!empty) {
-            const doc = sd.activeEditor.state.doc
-            const text = doc.textBetween(from, to, '\n', ' ')
-            const beforeStart = Math.max(1, from - 200)
-            const afterEnd = Math.min(doc.content.size, to + 200)
-            selection = {
-              file: pane.activeTab,
-              text,
-              contextBefore: from > 1 ? doc.textBetween(beforeStart, from, '\n', ' ') : '',
-              contextAfter: to < doc.content.size ? doc.textBetween(to, afterEnd, '\n', ' ') : '',
-            }
-          }
-        }
-      } else {
-        // CodeMirror: read from EditorView state
-        const view = editorStore.getEditorView(pane.id, pane.activeTab)
-        if (view) {
-          const sel = view.state.selection.main
-          if (sel.from !== sel.to) {
-            const text = view.state.sliceDoc(sel.from, sel.to)
-            const beforeStart = Math.max(0, sel.from - 200)
-            const afterEnd = Math.min(view.state.doc.length, sel.to + 200)
-            selection = {
-              file: pane.activeTab,
-              text,
-              contextBefore: view.state.sliceDoc(beforeStart, sel.from),
-              contextAfter: view.state.sliceDoc(sel.to, afterEnd),
-            }
-          }
-        }
-      }
+    if (!pane || !pane.activeTab) return
+
+    // Only for text files
+    const vt = getViewerType(pane.activeTab)
+    if (vt !== 'text') return
+
+    // Get the editor view and check for selection
+    const view = editorStore.getEditorView(pane.id, pane.activeTab)
+    if (!view) return
+    const sel = view.state.selection.main
+    if (sel.from === sel.to) return // no selection
+
+    // Auto-show margin
+    if (!commentsStore.isMarginVisible(pane.activeTab)) {
+      commentsStore.toggleMargin(pane.activeTab)
     }
-    editorStore.openChatBeside({ selection })
+
+    // Dispatch event for EditorPane to handle
+    window.dispatchEvent(new CustomEvent('comment-create', {
+      detail: { paneId: pane.id }
+    }))
     return
   }
 
@@ -494,7 +475,7 @@ function handleAltZ(e) {
 }
 
 function handleFocusSearch() { headerRef.value?.focusSearch() }
-function handleNewFile() { leftSidebarRef.value?.createNewMarkdown() }
+function handleNewFile() { leftSidebarRef.value?.createNewFile('.md') }
 
 // Refresh file tree when window regains focus (catches files added via Finder etc.)
 let lastFocusRefresh = 0
@@ -511,7 +492,6 @@ onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   document.addEventListener('keydown', handleAltZ, true)
   document.addEventListener('visibilitychange', handleVisibilityChange)
-  window.addEventListener('open-tasks', handleOpenTasks)
   window.addEventListener('chat-prefill', handleChatPrefill)
   window.addEventListener('app:focus-search', handleFocusSearch)
   window.addEventListener('app:new-file', handleNewFile)
@@ -521,7 +501,6 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('keydown', handleAltZ, true)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
-  window.removeEventListener('open-tasks', handleOpenTasks)
   window.removeEventListener('chat-prefill', handleChatPrefill)
   window.removeEventListener('app:focus-search', handleFocusSearch)
   window.removeEventListener('app:new-file', handleNewFile)
@@ -642,65 +621,5 @@ function openVersionHistory(entry) {
   versionHistoryVisible.value = true
 }
 
-// Task system
-function startTask() {
-  const pane = editorStore.activePane
-  if (!pane || !pane.activeTab) return
-
-  // Notebook path: delegate to NotebookEditor via event
-  if (pane.activeTab.endsWith('.ipynb')) {
-    window.dispatchEvent(new CustomEvent('notebook-cell-task', {
-      detail: { path: pane.activeTab },
-    }))
-    if (!workspace.rightSidebarOpen) workspace.rightSidebarOpen = true
-    return
-  }
-
-  // DOCX path: use SuperDoc editor
-  if (pane.activeTab.endsWith('.docx')) {
-    const sd = editorStore.getAnySuperdoc(pane.activeTab)
-    if (!sd?.activeEditor) return
-    const { from, to, empty } = sd.activeEditor.state.selection
-    if (empty) { footerRef.value?.showSaveMessage('Select text first'); return }
-    const selectedText = sd.activeEditor.state.doc.textBetween(from, to, '\n', ' ')
-    const docSize = sd.activeEditor.state.doc.content.size
-    const contextBefore = sd.activeEditor.state.doc.textBetween(Math.max(0, from - 5000), from, '\n', ' ')
-    const contextAfter = sd.activeEditor.state.doc.textBetween(to, Math.min(docSize, to + 1000), '\n', ' ')
-    const threadId = tasks.createThread(pane.activeTab, { from, to }, selectedText, null, null, { contextBefore, contextAfter })
-    if (!workspace.rightSidebarOpen) workspace.rightSidebarOpen = true
-    setTimeout(() => rightPanelRef.value?.focusTasks(threadId), 100)
-    return
-  }
-
-  // CodeMirror path
-  const view = editorStore.getEditorView(pane.id, pane.activeTab)
-  if (!view) return
-
-  const sel = view.state.selection.main
-  if (sel.from === sel.to) {
-    footerRef.value?.showSaveMessage('Select text first to add a task')
-    return
-  }
-
-  const selectedText = view.state.sliceDoc(sel.from, sel.to)
-  const docText = view.state.doc.toString()
-  const contextBefore = docText.slice(Math.max(0, sel.from - 5000), sel.from)
-  const contextAfter = docText.slice(sel.to, sel.to + 1000)
-  const threadId = tasks.createThread(pane.activeTab, { from: sel.from, to: sel.to }, selectedText, null, null, { contextBefore, contextAfter })
-
-  // Open right sidebar to tasks tab
-  if (!workspace.rightSidebarOpen) workspace.rightSidebarOpen = true
-  setTimeout(() => {
-    rightPanelRef.value?.focusTasks(threadId)
-  }, 100)
-}
-
-function handleOpenTasks(event) {
-  const threadId = event.detail?.threadId
-  if (!workspace.rightSidebarOpen) workspace.rightSidebarOpen = true
-  setTimeout(() => {
-    rightPanelRef.value?.focusTasks(threadId)
-  }, 100)
-}
 
 </script>

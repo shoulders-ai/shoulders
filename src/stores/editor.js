@@ -27,7 +27,7 @@ export const useEditorStore = defineStore('editor', {
     dirtyFiles: new Set(),
     // Editor view instances (not persisted)
     editorViews: {},
-    // SuperDoc instances: key = `${paneId}:${path}` -> { superdoc, taskBridge }
+    // SuperDoc instances: key = `${paneId}:${path}` -> { superdoc, aiActions }
     superdocInstances: {},
     // Cursor offset in the active editor (for outline highlight)
     cursorOffset: 0,
@@ -639,8 +639,8 @@ export const useEditorStore = defineStore('editor', {
       return this.editorViews[`${paneId}:${path}`]
     },
 
-    registerSuperdoc(paneId, path, superdoc, taskBridge, aiActions) {
-      this.superdocInstances[`${paneId}:${path}`] = { superdoc, taskBridge, aiActions }
+    registerSuperdoc(paneId, path, superdoc, _reserved, aiActions) {
+      this.superdocInstances[`${paneId}:${path}`] = { superdoc, aiActions }
     },
 
     unregisterSuperdoc(paneId, path) {
@@ -654,13 +654,6 @@ export const useEditorStore = defineStore('editor', {
     getAnySuperdoc(path) {
       for (const key in this.superdocInstances) {
         if (key.endsWith(`:${path}`)) return this.superdocInstances[key].superdoc
-      }
-      return null
-    },
-
-    getDocxTaskBridge(path) {
-      for (const key in this.superdocInstances) {
-        if (key.endsWith(`:${path}`)) return this.superdocInstances[key].taskBridge
       }
       return null
     },

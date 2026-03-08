@@ -17,7 +17,7 @@ For the reusable SQLite infrastructure pattern, see [sqlite-infrastructure.md](s
 | `src/services/tokenUsage.js` | Pricing tables, `calculateCost(usage, modelId, billingProvider?)` — applies 1.2× markup when `billingProvider = 'shoulders'` |
 | **Call Sites** | |
 | `src/stores/chat.js` | Records after each streaming response (tool_use + done paths) |
-| `src/stores/tasks.js` | Full usage accumulation pipeline, mirrors chat.js |
+| (removed — tasks.js replaced by comments.js, which has no streaming/usage) |
 | `src/editor/ghostSuggestion.js` | Records after each ghost suggestion API call |
 | `src/editor/docxGhost.js` | Records after each DOCX ghost suggestion API call |
 | `src/services/refAi.js` | Records after each reference parsing/extraction call |
@@ -34,11 +34,11 @@ For the reusable SQLite infrastructure pattern, see [sqlite-infrastructure.md](s
   Call Sites                   Frontend Store              Rust / SQLite
   ──────────                   ──────────────              ─────────────
   chat.js        ──┐
-  tasks.js       ──┤           ┌──────────┐          ┌──────────────────┐
-  ghostSuggest.  ──┼──record()─▶ usage.js ├─invoke()─▶ usage_db.rs     │
-  docxGhost.js   ──┤           │ (Pinia)  │◀─invoke()─│                 │
-  refAi.js       ──┤           └────┬─────┘          │ ~/.shoulders/   │
-  docxProvider   ──┘                │                 │   usage.db      │
+  ghostSuggest.  ──┼──record()─▶┌──────────┐          ┌──────────────────┐
+  docxGhost.js   ──┤            │ usage.js ├─invoke()─▶ usage_db.rs     │
+  refAi.js       ──┤            │ (Pinia)  │◀─invoke()─│                 │
+  docxProvider   ──┘            └────┬─────┘          │ ~/.shoulders/   │
+                                     │                 │   usage.db      │
                               reactive getters        └──────────────────┘
                            ┌────────┴────────┐
                            ▼                 ▼
@@ -59,7 +59,7 @@ CREATE TABLE usage_calls (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   timestamp TEXT NOT NULL,           -- ISO 8601
   workspace TEXT,                    -- workspace path (for per-project filtering)
-  feature TEXT NOT NULL,             -- chat | ghost | tasks | references | docx
+  feature TEXT NOT NULL,             -- chat | ghost | references | docx
   provider TEXT NOT NULL,            -- anthropic | openai | google | shoulders
   model TEXT NOT NULL,               -- full model ID as sent to API
   input_tokens INTEGER DEFAULT 0,
@@ -67,7 +67,7 @@ CREATE TABLE usage_calls (
   cache_read INTEGER DEFAULT 0,
   cache_write INTEGER DEFAULT 0,
   cost REAL DEFAULT 0,               -- estimated USD
-  session_id TEXT                    -- chat session or task thread ID
+  session_id TEXT                    -- chat session ID
 );
 
 CREATE TABLE usage_settings (
@@ -123,7 +123,7 @@ Sonnet and Gemini Pro have higher rates for prompts >200K tokens. `resolveModelP
 
 ## How Recording Works
 
-### Streaming calls (chat, tasks, canvas, docx streaming)
+### Streaming calls (chat, canvas, docx streaming)
 
 ```
 AI SDK streamText() / ToolLoopAgent begins
@@ -157,8 +157,7 @@ usageStore.record({ usage, feature, provider: access.provider, modelId })
 
 | Feature | Source | Model |
 |---|---|---|
-| `chat` | Chat sessions | User-selected |
-| `tasks` | Task threads | User-selected |
+| `chat` | Chat sessions (including comment-submitted requests) | User-selected |
 | `ghost` | Ghost suggestions (markdown + DOCX) | claude-haiku-4-5 |
 | `canvas` | Canvas node AI generation | User-selected |
 | `references` | Reference parsing, PDF metadata extraction | Cheapest available |
@@ -233,7 +232,7 @@ See [billing.md](billing.md) for full display rules. Key points:
 
 ## Per-Message Usage Persistence
 
-Chat and task messages include a `usage` field in their serialization:
+Chat messages include a `usage` field in their serialization:
 
 ```json
 {

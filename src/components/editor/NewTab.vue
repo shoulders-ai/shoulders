@@ -21,7 +21,7 @@
          The top of the block never moves when switching tabs (content grows down).
          No jiggle. No magic pixels. -->
     <div class="flex-1 overflow-y-auto min-h-0" ref="itemListRef">
-      <div class="w-full mx-auto pb-10" style="max-width: min(80ch, 90%); padding-top: max(3rem, 25vh);">
+      <div class="w-full mx-auto pb-10" style="max-width: min(80ch, 90%); padding-top: clamp(1rem, 20vh, 8rem);">
 
         <!-- Tab labels — pl-3 aligns with item text (› in gutter) -->
         <div class="flex gap-5 mb-6 pl-5">
@@ -37,27 +37,32 @@
           >{{ tab.label }}</button>
         </div>
 
-        <button
-          v-for="(item, i) in currentItems"
-          :key="activeTabId + i"
-          class="newtab-item flex items-center gap-2 w-full border-none bg-transparent text-left py-1 cursor-pointer transition-colors duration-75"
-          :class="item.group && item.group !== currentItems[i - 1]?.group && i > 0 ? 'mt-6' : ''"
-          :style="{ color: selectedIdx === i ? 'var(--fg-primary)' : (item.muted ? 'var(--fg-muted)' : 'var(--fg-secondary)') }"
-          @click="activate(item)"
-          @mouseenter="selectedIdx = i"
-        >
-          <span
-            class="w-3 shrink-0 leading-none select-none"
-            style="font-size: 14px;"
-            :style="{ color: selectedIdx === i ? 'var(--fg-muted)' : 'transparent' }"
-          >›</span>
-          <span class="flex-1 text-[13px] truncate min-w-0">{{ item.label }}</span>
-          <span
-            v-if="item.meta"
-            class="text-[11px] shrink-0 whitespace-nowrap mx-4"
+        <template v-for="(item, i) in currentItems" :key="activeTabId + '-' + i">
+          <div
+            v-if="item.groupHeader"
+            class="text-[9px] font-semibold tracking-[0.08em] uppercase pl-5 pb-0.5"
+            :class="i > 0 ? 'mt-4' : ''"
             style="color: var(--fg-muted);"
-          >{{ item.meta }}</span>
-        </button>
+          >{{ item.groupHeader }}</div>
+          <button
+            class="newtab-item flex items-center gap-2 w-full border-none bg-transparent text-left py-1 cursor-pointer transition-colors duration-75"
+            :style="{ color: selectedIdx === i ? 'var(--fg-primary)' : (item.muted ? 'var(--fg-muted)' : 'var(--fg-secondary)') }"
+            @click="activate(item)"
+            @mouseenter="selectedIdx = i"
+          >
+            <span
+              class="w-3 shrink-0 leading-none select-none"
+              style="font-size: 14px;"
+              :style="{ color: selectedIdx === i ? 'var(--fg-muted)' : 'transparent' }"
+            >›</span>
+            <span class="flex-1 text-[13px] truncate min-w-0">{{ item.label }}</span>
+            <span
+              v-if="item.meta"
+              class="text-[11px] shrink-0 whitespace-nowrap mx-4"
+              style="color: var(--fg-muted);"
+            >{{ item.meta }}</span>
+          </button>
+        </template>
 
       </div>
     </div>
@@ -110,19 +115,19 @@ const chatsLimit      = ref(10)
 // ─── Tab definitions ───────────────────────────────────────────────
 
 const TABS = [
-  { id: 'quick',     label: 'Quick' },
-  { id: 'recent',    label: 'Recent' },
-  { id: 'new',       label: 'New' },
+  { id: 'quick',     label: 'Start' },
+  { id: 'recent',    label: 'Files' },
+  { id: 'new',       label: 'Create' },
   { id: 'chats',     label: 'Chats' },
   { id: 'suggested', label: 'Suggested' },
 ]
 
 const fileTypes = [
-  { ext: '.md',    label: 'Markdown document' },
-  { ext: '.tex',   label: 'LaTeX document' },
+  { ext: '.md',    label: 'Markdown' },
+  { ext: '.tex',   label: 'LaTeX' },
   { ext: '.docx',  label: 'Word document' },
   { ext: '.ipynb', label: 'Jupyter notebook' },
-  { ext: '.py',    label: 'Code' },
+  { ext: '.py',    label: 'Python' },
 ]
 
 // ─── Data computeds ────────────────────────────────────────────────
@@ -186,19 +191,36 @@ const visibleTabs = computed(() =>
 
 const quickItems = computed(() => {
   const items = []
-  for (const f of allRecentFiles.value.slice(0, 4)) {
+  const recentFiles = allRecentFiles.value.slice(0, 3)
+  for (let i = 0; i < recentFiles.length; i++) {
+    const f = recentFiles[i]
     items.push({
       label: fileName(f.path),
       meta: relativeTime(f.openedAt),
       group: 'recent',
+      groupHeader: i === 0 ? 'Recent files' : null,
       action: () => openFile(f.path),
     })
   }
-  items.push({ label: 'Markdown document', group: 'new', action: () => createNewFile('.md') })
-  for (const a of quickActions.value.slice(0, 2)) {
-    items.push({ label: a.label + ' →', group: 'suggested', action: () => sendQuickAction(a) })
+  items.push({
+    label: 'Markdown',
+    meta: '.md',
+    group: 'new',
+    groupHeader: 'Create',
+    action: () => createNewFile('.md'),
+  })
+  const suggestions = quickActions.value.slice(0, 2)
+  for (let i = 0; i < suggestions.length; i++) {
+    const a = suggestions[i]
+    items.push({
+      label: a.label,
+      group: 'suggested',
+      groupHeader: i === 0 ? 'Suggested' : null,
+      muted: true,
+      action: () => sendQuickAction(a),
+    })
   }
-  return items.slice(0, 7)
+  return items
 })
 
 // ─── Current tab items ─────────────────────────────────────────────
@@ -216,6 +238,7 @@ const currentItems = computed(() => {
     case 'new':
       return fileTypes.map(ft => ({
         label: ft.label,
+        meta: ft.ext,
         action: () => createNewFile(ft.ext),
       }))
     case 'chats': {
@@ -236,7 +259,8 @@ const currentItems = computed(() => {
     }
     case 'suggested':
       return quickActions.value.map(a => ({
-        label: a.label + ' →',
+        label: a.label,
+        muted: true,
         action: () => sendQuickAction(a),
       }))
     default:

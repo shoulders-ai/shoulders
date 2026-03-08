@@ -341,9 +341,7 @@ fn markdown_to_typst(markdown: &str) -> String {
                 if in_code_block {
                     code_buf.push_str(&text);
                 } else {
-                    // Escape $ signs in non-math text — Typst treats $ as math delimiter
-                    let escaped = text.replace('$', "\\$");
-                    output.push_str(&escaped);
+                    output.push_str(&escape_typst_markup(&text));
                 }
             }
             Event::Code(code) => {
@@ -362,8 +360,8 @@ fn markdown_to_typst(markdown: &str) -> String {
                 output.push_str(" $\n");
             }
             Event::Html(html) => {
-                // Pass through as raw Typst comment
-                output.push_str(&format!("// HTML: {}\n", html.trim()));
+                // Block comment safely contains multi-line HTML
+                output.push_str(&format!("/* HTML: {} */\n", html.trim()));
             }
             Event::SoftBreak => {
                 output.push('\n');
@@ -388,7 +386,8 @@ fn markdown_to_typst(markdown: &str) -> String {
         }
     }
 
-    output
+    // Restore citation placeholders: \x01 → @ (see preprocess_citations)
+    output.replace('\x01', "@")
 }
 
 /// Pre-process raw markdown to convert Pandoc citations to Typst citations
@@ -454,7 +453,11 @@ fn preprocess_citations(markdown: &str) -> String {
                     if !keys.is_empty() {
                         for (j, key) in keys.iter().enumerate() {
                             if j > 0 { result.push(' '); }
-                            result.push('@');
+                            // Use \x01 placeholder instead of @ so that
+                            // escape_typst_markup can safely escape all other @
+                            // signs without breaking intentional citations.
+                            // Restored to @ at the end of markdown_to_typst().
+                            result.push('\x01');
                             result.push_str(key);
                         }
                     } else {
@@ -486,6 +489,33 @@ fn preprocess_citations(markdown: &str) -> String {
 
 fn escape_typst_string(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Escape all characters that have special meaning in Typst markup mode.
+/// Applied to plain text content from pulldown-cmark — NOT code blocks, NOT string literals.
+/// The \x01 placeholder (used for intentional citations) is left untouched.
+fn escape_typst_markup(text: &str) -> String {
+    let mut result = String::with_capacity(text.len() + text.len() / 8);
+    for ch in text.chars() {
+        match ch {
+            '\\' => result.push_str("\\\\"),
+            '#' => result.push_str("\\#"),
+            '$' => result.push_str("\\$"),
+            '@' => result.push_str("\\@"),
+            '~' => result.push_str("\\~"),
+            '*' => result.push_str("\\*"),
+            '_' => result.push_str("\\_"),
+            '`' => result.push_str("\\`"),
+            '[' => result.push_str("\\["),
+            ']' => result.push_str("\\]"),
+            '{' => result.push_str("\\{"),
+            '}' => result.push_str("\\}"),
+            '<' => result.push_str("\\<"),
+            '>' => result.push_str("\\>"),
+            _ => result.push(ch),
+        }
+    }
+    result
 }
 
 /// Wrap converted content in a Typst template.

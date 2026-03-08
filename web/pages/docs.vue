@@ -50,7 +50,7 @@
             <DocsAiSetup v-else-if="activeId === 'ai-setup'" />
             <DocsInlineSuggestions v-else-if="activeId === 'inline-suggestions'" />
             <DocsAiChat v-else-if="activeId === 'ai-chat'" />
-            <DocsAiTasks v-else-if="activeId === 'ai-tasks'" />
+            <DocsAiComments v-else-if="activeId === 'ai-comments'" />
             <DocsAiTools v-else-if="activeId === 'ai-tools'" />
             <DocsCodeAndNotebooks v-else-if="activeId === 'code'" />
             <DocsNavigationSettings v-else-if="activeId === 'navigation'" />
@@ -95,7 +95,7 @@ const sidebarGroups = [
       { id: 'ai-setup', title: 'Setup' },
       { id: 'inline-suggestions', title: 'Inline Suggestions' },
       { id: 'ai-chat', title: 'AI Chat' },
-      { id: 'ai-tasks', title: 'AI Tasks' },
+      { id: 'ai-comments', title: 'Document Comments' },
       { id: 'ai-tools', title: 'Tools & Review' },
     ]
   },

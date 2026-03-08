@@ -29,10 +29,6 @@
           <td><kbd>Cmd/Ctrl</kbd>+<kbd>J</kbd></td>
         </tr>
         <tr>
-          <td>Focus AI chat</td>
-          <td><kbd>Cmd/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td>
-        </tr>
-        <tr>
           <td>Filter file tree</td>
           <td><kbd>Cmd/Ctrl</kbd>+<kbd>F</kbd> <span class="text-stone-400 text-xs">(sidebar focused)</span></td>
         </tr>
@@ -53,8 +49,12 @@
           <td><kbd>Cmd/Ctrl</kbd>+<kbd>S</kbd></td>
         </tr>
         <tr>
-          <td>New file</td>
+          <td>New (same type as current)</td>
           <td><kbd>Cmd/Ctrl</kbd>+<kbd>N</kbd></td>
+        </tr>
+        <tr>
+          <td>New tab (Start page)</td>
+          <td><kbd>Cmd/Ctrl</kbd>+<kbd>T</kbd></td>
         </tr>
         <tr>
           <td>Close tab</td>
@@ -145,12 +145,8 @@
           <td><kbd>Esc</kbd>, <kbd>Left</kbd>, or click elsewhere</td>
         </tr>
         <tr>
-          <td>Send selection to chat</td>
-          <td><kbd>Cmd/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td>
-        </tr>
-        <tr>
           <td>Add comment on selection</td>
-          <td><kbd>Cmd/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td>
+          <td><kbd>Cmd/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td>
         </tr>
       </tbody>
     </table>

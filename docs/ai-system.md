@@ -4,7 +4,7 @@ Four AI features, all built on the [AI SDK](https://ai-sdk.dev/docs):
 
 1. **AI Chat** — multi-provider streaming chat with tool execution
 2. **Ghost Suggestions** — inline completions triggered by `++`
-3. **Task Threads** — spatially-anchored multi-turn AI on selected text
+3. **Document Comments** — margin annotations that bridge to AI chat for batch revision
 4. **Reference AI** — citation parsing and PDF metadata extraction
 
 All proxied through Rust to avoid CORS (`chat.rs` for streaming, `proxy_api_call` for non-streaming). All gated by the monthly budget — see [usage-system.md](usage-system.md).
@@ -42,14 +42,14 @@ zod                   — Schema validation for tool inputSchema
 | `services/tauriFetch.js` | `fetch()` wrapper routing through Rust `chat_stream` — CORS bypass for AI SDK |
 | `services/apiClient.js` | Key resolution (`resolveApiAccess`), Shoulders proxy URL, billing route |
 | `services/chatModels.js` | Context window sizes, thinking config detection |
-| `services/systemPrompt.js` | Shared base system prompt for chat, tasks, ghost |
+| `services/systemPrompt.js` | Shared base system prompt for chat and ghost |
 | `services/workspaceMeta.js` | `<workspace-meta>` block (open tabs, git diff) |
 | `services/tokenUsage.js` | Per-model pricing, cost calculation |
 | `src-tauri/src/chat.rs` | Rust streaming proxy: tokio + reqwest + Tauri events |
 | **Chat** | |
 | `stores/chat.js` | Chat sessions, `Chat` composable instances, persistence |
 | `services/chatTransport.js` | `ToolLoopAgent` + `DirectChatTransport` factory |
-| `services/chatTools.js` | 27 tools defined with AI SDK `tool()` + zod schemas |
+| `services/chatTools.js` | 28 tools defined with AI SDK `tool()` + zod schemas (incl. comment tools) |
 | `components/right/ChatSession.vue` | Per-session message list |
 | `components/right/ChatMessage.vue` | Message renderer (parts-based: text, reasoning, tool calls) |
 | `components/right/ToolCallLine.vue` | Compact tool call display with status indicators |
@@ -58,9 +58,11 @@ zod                   — Schema validation for tool inputSchema
 | `services/ai.js` | `getGhostSuggestions()` — `generateText()` with `suggest_completions` tool |
 | `editor/ghostSuggestion.js` | `++` trigger, state field, inline widgets |
 | `editor/docxGhost.js` | SuperDoc ghost (ProseMirror plugin) |
-| **Tasks** | |
-| `stores/tasks.js` | Task threads: Chat composable (mirrors chat.js), multi-turn, propose_edit |
-| `editor/tasks.js` | Gutter dots, range highlights, position mapping |
+| **Comments** | |
+| `stores/comments.js` | Document comments: pure CRUD data store, persistence |
+| `editor/comments.js` | Gutter markers, anchor highlights, position mapping |
+| `components/comments/CommentMargin.vue` | 200px side panel with compact comment cards |
+| `components/comments/CommentPanel.vue` | Floating overlay for viewing/editing comments |
 | **Reference AI** | |
 | `services/refAi.js` | Citation parsing + PDF metadata extraction via `generateText()` |
 
@@ -203,7 +205,7 @@ Tool part states: `input-streaming` → `input-available` → `output-available`
 
 ### Tool definitions (`chatTools.js`)
 
-27 tools defined with AI SDK `tool()` and zod schemas:
+28 tools defined with AI SDK `tool()` and zod schemas:
 
 ```js
 import { tool } from 'ai'
@@ -258,13 +260,11 @@ Model selection: `resolveApiAccess({ strategy: 'ghost' })` tries Haiku → Gemin
 
 ---
 
-## Task Threads
+## Document Comments
 
-Task threads use the same `Chat` composable pattern as chat sessions. A `taskChatInstances` Map (outside Pinia, same as `chatInstances` in `chat.js`) holds one `Chat` instance per thread. Each Chat uses `createChatTransport()` with `extraTools: { propose_edit }` and `maxSteps: 10`. Full workspace tool capabilities plus `propose_edit`.
+See **[comments-system.md](comments-system.md)** for full documentation (architecture, data model, store API, editor extension, UI components, gotchas).
 
-Edit application status is tracked separately in an `editStatuses` ref (`toolCallId → { status, error? }`) — SDK-owned UIMessage parts must not be mutated.
-
-Surrounding context (5000 chars before + 1000 chars after selection) is captured at thread creation and injected into the system prompt. Legacy `tasks.json` (flat `{ content, toolCalls }` messages) is migrated to UIMessage `parts[]` format on load via `migrateTaskMessages()`.
+Summary: Margin annotations anchored to text ranges. Pure data store (no Chat composable / AI streaming). AI interacts via three chat tools (`add_comment`, `reply_to_comment`, `resolve_comment`). Margin visibility is per-file (toggle in tab bar).
 
 ---
 
@@ -328,4 +328,4 @@ The fetch wrapper in `aiSdk.js` adds three routing headers:
 - **Chat instances outside Pinia**: The `Map<sessionId, Chat>` is non-reactive. Use `_chatVersion` counter trick for computed consumers.
 - **Tool part state mutation**: AI SDK mutates `part.state` in place. Vue doesn't detect this. Use `:key="part.toolCallId + '-' + part.state"` on `ToolCallLine` to force re-render.
 - **Cross-provider model switching**: Reasoning/thinking parts are provider-specific (Anthropic signatures, Google thoughtSignature, OpenAI itemId). Switching mid-conversation crashes. Errors are surfaced in chat UI but no sanitization yet. Fix: strip reasoning from previous exchanges in `chatTransport.js` at send time, keep current exchange intact. No SDK utility exists. ([#2](https://github.com/shoulders-ai/shoulders/issues/2))
-- **Invalid tool call JSON kills the session**: When a model produces malformed JSON arguments, the SDK leaves an `input-available` tool part with no paired result — subsequent sends return HTTP 400. Fix in `chat.js`/`tasks.js` `onError`: pop the broken message, push a synthetic `output-error` part (`input: {}`, not `undefined` — required by `validateUIMessages`). SDK generates a valid `tool-call`+`tool-result` pair; session recovers and model sees the error. See gotchas.md for full details.
+- **Invalid tool call JSON kills the session**: When a model produces malformed JSON arguments, the SDK leaves an `input-available` tool part with no paired result — subsequent sends return HTTP 400. Fix in `chat.js` `onError`: pop the broken message, push a synthetic `output-error` part (`input: {}`, not `undefined` — required by `validateUIMessages`). SDK generates a valid `tool-call`+`tool-result` pair; session recovers and model sees the error. See gotchas.md for full details.

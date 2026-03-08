@@ -79,8 +79,9 @@ export const TOOL_LABELS = {
   web_search: 'Web search',
   search_papers: 'Search papers',
   fetch_url: 'Fetch URL',
-  add_task: 'Task',
-  read_tasks: 'Read tasks',
+  add_comment: 'Comment',
+  reply_to_comment: 'Reply',
+  resolve_comment: 'Resolve',
   rename_file: 'Rename',
   move_file: 'Move',
   duplicate_file: 'Duplicate',
@@ -150,10 +151,12 @@ export function getToolContext(name, input) {
       return input.input ? input.input.slice(0, 30) : ''
     case 'fetch_url':
       return typeof input.urls === 'string' ? input.urls.split('/').pop() || '' : ''
-    case 'add_task':
-      return input.target_text ? input.target_text.slice(0, 30) + '...' : ''
-    case 'read_tasks':
-      return input.file_path ? input.file_path.split('/').pop() : ''
+    case 'add_comment':
+      return input.anchor_text ? input.anchor_text.slice(0, 30) + '...' : ''
+    case 'reply_to_comment':
+      return input.comment_id ? input.comment_id.substring(0, 12) + '...' : ''
+    case 'resolve_comment':
+      return input.comment_id ? input.comment_id.substring(0, 12) + '...' : ''
     case 'read_notebook':
     case 'edit_cell':
     case 'run_cell':
@@ -175,7 +178,7 @@ const CLICKABLE_FILE_TOOLS = new Set([
   'read_notebook', 'edit_cell', 'run_cell', 'run_all_cells',
   'add_cell', 'delete_cell',
 ])
-const CLICKABLE_FILEPATH_TOOLS = new Set(['add_task', 'read_tasks'])
+const CLICKABLE_FILEPATH_TOOLS = new Set(['add_comment'])
 
 /**
  * Extract the file path from a tool input, if the tool is file-related.
@@ -222,6 +225,11 @@ export function getToolIcon(name) {
     case 'cite_reference':
     case 'edit_reference':
       return 'book'
+    case 'add_comment':
+    case 'reply_to_comment':
+      return 'message'
+    case 'resolve_comment':
+      return 'check'
     default:
       return 'file'
   }

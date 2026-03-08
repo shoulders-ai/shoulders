@@ -11,7 +11,7 @@ Seven Pinia stores. All defined using the Options API pattern (`defineStore('nam
 | `src/stores/editor.js` | `editor` | Pane tree, tab management, editor views |
 | `src/stores/chat.js` | `chat` | AI chat sessions, streaming, persistence |
 | `src/stores/reviews.js` | `reviews` | Edit review queue |
-| `src/stores/tasks.js` | `tasks` | AI task threads |
+| `src/stores/comments.js` | `comments` | Document comments |
 | `src/stores/links.js` | `links` | Wiki link index, backlinks, rename propagation |
 | `src/stores/utils.js` | (not a store) | `nanoid()` helper |
 
@@ -196,7 +196,7 @@ Seven Pinia stores. All defined using the Options API pattern (`defineStore('nam
 - `loadAllSessionsMeta()` — full disk scan of chats dir for lightweight index
 
 ### Extracted Services (called by store)
-- `chatTools.js` → `getToolDefinitions(workspace)` (filters disabled tools), `executeSingleTool(name, input, workspace)` (guards disabled), `TOOL_CATEGORIES`, `EXTERNAL_TOOLS`, `TASK_TOOL_NAMES`
+- `chatTools.js` → `getToolDefinitions(workspace)` (filters disabled tools), `executeSingleTool(name, input, workspace)` (guards disabled), `TOOL_CATEGORIES`, `EXTERNAL_TOOLS`, `COMMENT_TOOL_NAMES`
 - `chatTransport.js` → `createChatTransport(configFn)` — `ToolLoopAgent` + `DirectChatTransport` factory
 - `aiSdk.js` → `createModel(access, customFetch)`, `buildProviderOptions()`, `convertSdkUsage()`
 - `chatModels.js` → `getContextWindow(modelId, workspace)`, `getThinkingConfig()`
@@ -228,43 +228,27 @@ Seven Pinia stores. All defined using the Options API pattern (`defineStore('nam
 - `acceptAll()` - Accepts all pending edits
 - `toggleDirectMode()` - Creates/deletes `.shoulders/.direct-mode` flag file
 
-## Store: tasks
+## Store: comments
 
-**Dependencies**: workspace (API keys, models config, system prompt), files (fileContents cache), editor (openFile), reviews (pendingEdits, direct mode), aiSdk + chatModels (reused services)
+**Dependencies**: workspace (for .shoulders path), files (fileContents cache), editor (activeTab)
 
 ### State
 | Field | Type | Default | Purpose |
 |---|---|---|---|
-| `threads` | `ref(array)` | `[]` | Task thread objects (composition API) |
-| `activeThreadId` | `ref(string\|null)` | `null` | Currently displayed thread in the right panel |
-| `editStatuses` | `ref(object)` | `{}` | `toolCallId → { status: 'applied'\|'error', error? }` — propose_edit application state |
+| `comments` | `ref(array)` | `[]` | Comment objects (composition API) |
 
-Chat instances live outside Pinia in `taskChatInstances` Map (same pattern as `chatInstances` in `chat.js`).
-
-### Getters
-- `threadsForFile(filePath)` — Filter threads for a specific file (used by TextEditor.vue for CM sync)
-- `threadsForCell(filePath, cellId)` — Filter non-resolved threads for a notebook cell
-- `activeThread` — Find thread by activeThreadId
-- `streamingCount` — Count of threads with status `'streaming'`
+Pure data store — no Chat instances, no AI streaming. AI interaction happens through chat tools (`add_comment`, `reply_to_comment`, `resolve_comment` in `chatTools.js`).
 
 ### Key Actions
-- `createThread(fileId, range, selectedText, modelId?)` — Creates thread, sets active, returns ID
-- `sendMessage(threadId, { text, fileRefs })` — Gets/creates Chat instance, sends via `chat.sendMessage()`
-- `abortThread(threadId)` — Calls `chat.stop()` on the Chat instance
-- `resolveThread(threadId)` — Sets status to `'resolved'`, clears active, saves. Gutter dot/underline hidden.
-- `removeThread(threadId)` — Stops Chat, removes from `taskChatInstances`, splices from array, saves
-- `setActiveThread(threadId)` — Sets activeThreadId; lazily creates Chat instance if thread has saved messages
-- `updateRange(threadId, from, to)` — Updates text range (called by CM position mapping on doc changes)
-- `applyProposedEdit(threadId, toolCallId)` — Finds old/new strings from Chat messages → read → replace → write → update filesStore cache → record pending edit → update `editStatuses`. Routes to text/DOCX/notebook variant.
-- `getTaskChatInstance(threadId)` — Returns Chat instance (reactive via `_chatVersion`)
-- `getThreadMessages(threadId)` — Returns messages from Chat instance or saved messages
-- `getEditStatus(toolCallId)` — Returns edit application status for a propose_edit tool call
-- `loadThreads()` — Reads `.shoulders/tasks.json`, migrates legacy messages via `migrateTaskMessages()`. Chat instances created lazily.
-- `saveThreads()` — Gets messages from Chat instances, cleans parts via `cleanPartsForStorage()`, persists `editStatuses`.
-
-### Internal
-- `_buildTaskConfig(thread)` — Async: resolves API access, builds system prompt (base + task context + workspace meta), returns config with `extraTools: { propose_edit }` and `maxSteps: 10`
-- `getOrCreateTaskChat(thread)` — Creates Chat instance with `createChatTransport()`, watches status transitions to update `thread.status` for gutter dot reactivity
+- `addComment(fileId, range, selectedText, text)` — Creates comment anchored to text range
+- `replyToComment(commentId, text)` — Adds a reply to an existing comment
+- `resolveComment(commentId)` — Marks comment as resolved
+- `deleteComment(commentId)` — Removes comment permanently
+- `updateRange(commentId, from, to)` — Updates anchor position (called by CM position mapping on doc changes)
+- `commentsForFile(filePath)` — Filter comments for a specific file
+- `submitToChat()` — Collects all unresolved comments, formats as structured context with file ref, sends to chat
+- `loadComments()` — Reads `.shoulders/comments.json`
+- `saveComments()` — Persists all comments to `.shoulders/comments.json`
 
 ## Store: links
 
@@ -296,16 +280,13 @@ Full documentation: [wiki-links.md](wiki-links.md)
 
 ## Cross-Store Interactions
 
-1. **App.vue** uses all 7 stores. Orchestrates startup (incl. `chatStore.loadSessions()`, `tasks.loadThreads()`), keyboard shortcuts (`Cmd+Shift+L` → chat, `Cmd+Shift+C` → task), task creation.
-2. **TextEditor.vue** uses files (content), editor (view registration), workspace (softWrap), reviews (pending edits → merge view), tasks (threadsForFile → CM sync, updateRange), links (wiki link extension).
+1. **App.vue** uses all stores. Orchestrates startup (incl. `chatStore.loadSessions()`, `comments.loadComments()`), keyboard shortcuts (`Cmd+Shift+L` → add comment).
+2. **TextEditor.vue** uses files (content), editor (view registration), workspace (softWrap), reviews (pending edits → merge view), comments (commentsForFile → CM sync, updateRange), links (wiki link extension).
 3. **FileTree.vue** uses files (tree), editor (openFile), workspace (path).
 4. **FileTreeItem.vue** uses files (expand), editor (activeTab), reviews (filesWithEdits badge).
 5. **Footer.vue** uses workspace (softWrap toggle), reviews (pending count, direct mode toggle).
-6. **RightPanel.vue** uses tasks (streamingCount), links (backlink count), editor (activeTab), workspace (rightSidebarOpen).
+6. **RightPanel.vue** uses links (backlink count), editor (activeTab), workspace (rightSidebarOpen).
 7. **ChatInput.vue** uses workspace (modelsConfig, apiKeys), editor (activePane selection context).
-8. **TaskInput.vue** uses workspace (modelsConfig, apiKeys) for model picker.
-9. **TaskThread.vue** uses tasks (sendMessage, abortThread, applyProposedEdit, resolveThread, removeThread), editor (openFile, getEditorView for navigate-to-selection).
-10. **chatTools.js** (service) uses reviews (directMode, pendingEdits), files (fileContents cache), editor (openFile). Critical: updates `filesStore.fileContents` before recording pending edits.
-11. **tasks.js** (store) uses workspace (API keys, system prompt), files (fileContents cache), editor (openFile), reviews (pendingEdits, directMode). Same race-condition-aware edit recording as chatTools.js.
-12. **files.js** calls into links store: `saveFile()` → `updateFile()`, `renamePath()` → `handleRename()`.
+8. **chatTools.js** (service) uses reviews (directMode, pendingEdits), files (fileContents cache), editor (openFile), comments (addComment, replyToComment, resolveComment). Critical: updates `filesStore.fileContents` before recording pending edits.
+9. **files.js** calls into links store: `saveFile()` → `updateFile()`, `renamePath()` → `handleRename()`.
 13. **OutlinePanel.vue** uses links (`structuredHeadingsForFile`), editor (`activeTab`, `cursorOffset`, `getEditorView`, `getAnySuperdoc`), files (`fileContents`).

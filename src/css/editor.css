@@ -68,17 +68,6 @@
   40% { transform: translateY(-3px); opacity: 0.9; }
 }
 
-/* Task processing spinner */
-.task-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 1.5px solid var(--warning);
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
 /* @codemirror/merge inline diff styling */
 .cm-mergeView .cm-changedLine {
   background: rgba(158, 206, 106, 0.06) !important;
@@ -177,93 +166,6 @@
 .review-bar-reject:hover {
   background: rgba(247, 118, 142, 0.22);
   border-color: rgba(247, 118, 142, 0.35);
-}
-
-/* Task markers */
-.task-gutter {
-  width: 12px;
-}
-.task-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin: 3px 2px;
-  cursor: pointer;
-}
-.task-idle {
-  background: var(--accent);
-  opacity: 0.6;
-}
-.task-streaming {
-  background: var(--accent);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-.task-error {
-  background: var(--error);
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.task-range {
-  border-bottom: 2px dotted var(--accent);
-  border-bottom-style: dotted;
-}
-.task-range-idle {
-  border-bottom-color: var(--accent);
-  opacity: 0.6;
-}
-.task-range-streaming {
-  border-bottom-color: var(--accent);
-  background: rgba(122, 162, 247, 0.06);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-.task-range-error {
-  border-bottom-color: var(--error);
-  background: rgba(247, 118, 142, 0.05);
-}
-
-/* DOCX AI task indicators (floating overlay dots) */
-.docx-task-gutter {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 50;
-}
-.docx-task-dot {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: transform 0.15s, opacity 0.15s;
-}
-.docx-task-idle {
-  background: var(--accent);
-  opacity: 0.6;
-}
-.docx-task-idle:hover {
-  opacity: 1;
-  transform: scale(1.3);
-}
-.docx-task-streaming {
-  background: var(--accent);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-.docx-task-error {
-  background: var(--error);
-}
-.docx-task-active {
-  opacity: 1;
-  box-shadow: 0 0 0 3px rgba(122, 162, 247, 0.3);
-  transform: scale(1.3);
-}
-.docx-task-approximate {
-  opacity: 0.35;
-  border: 1px dashed var(--accent);
-  background: transparent;
 }
 
 /* Wiki links */

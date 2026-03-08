@@ -74,7 +74,7 @@ import { useToastStore } from '../../stores/toast'
 const props = defineProps({
   // UIMessage tool part (new format)
   part: { type: Object, default: null },
-  // Legacy tool call object (old format) — used by TaskThread
+  // Legacy tool call object (old format)
   tc: { type: Object, default: null },
 })
 

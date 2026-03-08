@@ -35,9 +35,9 @@
           }"
           @click="$emit('select', file)"
           @mouseenter="selectedIdx = filteredModels.length + i">
-          <span class="truncate flex-1">{{ file.name }}</span>
-          <span class="ui-text-sm truncate max-w-[120px]" style="color: var(--fg-muted);">
-            {{ relativePath(file.path) }}
+          <span class="truncate shrink-0" style="max-width: 50%;">{{ file.name }}</span>
+          <span class="ui-text-sm truncate" style="color: var(--fg-muted);">
+            {{ folderPath(file.path) }}
           </span>
         </div>
       </template>
@@ -92,6 +92,12 @@ const totalItems = computed(() => filteredModels.value.length + filteredFiles.va
 function relativePath(fullPath) {
   if (!workspace.path) return fullPath
   return fullPath.replace(workspace.path + '/', '')
+}
+
+function folderPath(fullPath) {
+  const rel = relativePath(fullPath)
+  const lastSlash = rel.lastIndexOf('/')
+  return lastSlash >= 0 ? rel.substring(0, lastSlash) : ''
 }
 
 function selectNext() {

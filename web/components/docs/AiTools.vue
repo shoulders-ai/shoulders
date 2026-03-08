@@ -26,7 +26,7 @@
         </tr>
         <tr>
           <td>Feedback</td>
-          <td>Add comments, read comments, create proposals</td>
+          <td>Add comment, reply to comment, resolve comment, create proposal</td>
         </tr>
         <tr>
           <td>Notebooks</td>
@@ -47,7 +47,7 @@
 
     <h2>Reviewing AI changes</h2>
     <p>
-      When the AI modifies a file — through the chat, a comment thread proposal, or an external
+      When the AI modifies a file — through the chat, a comment-driven revision, or an external
       tool like Claude Code — the change is applied to disk immediately but also recorded for
       review. The change appears as an inline diff in the editor:
     </p>

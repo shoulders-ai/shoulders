@@ -1,12 +1,12 @@
 # Notebook System
 
-Jupyter notebook (.ipynb) editing with kernel execution, AI tool integration, cell tasks, and edit review.
+Jupyter notebook (.ipynb) editing with kernel execution, AI tool integration, and edit review.
 
 ## Relevant Files
 
 | File | Role |
 |---|---|
-| `src/components/editor/NotebookEditor.vue` | Main notebook component: cell list, toolbar, kernel lifecycle, auto-save, cell tasks, review integration |
+| `src/components/editor/NotebookEditor.vue` | Main notebook component: cell list, toolbar, kernel lifecycle, auto-save, review integration |
 | `src/components/editor/NotebookCell.vue` | Single cell: CodeMirror editor, toolbar, run/delete/move/toggle, ghost suggestions, merge view for reviews |
 | `src/components/editor/CellOutput.vue` | Output renderer: stream, display_data, execute_result, error, ANSI colors, images, HTML, LaTeX |
 | `src/components/editor/NotebookReviewBar.vue` | "N cell changes" bar with Accept All / Reject All |
@@ -176,7 +176,6 @@ Debounced at 1.5s (`scheduleSave()`). When pending reviews exist, uses **surgica
 For AI tool integration (window custom events):
 - `run-notebook-cell` → `runCell()` → emits `cell-execution-complete`
 - `run-all-notebook-cells` → `runAllCells()` → emits `all-cells-execution-complete`
-- `notebook-cell-task` → creates task thread on active cell
 - `notebook-scroll-to-cell` → scrolls to cell by ID
 - `notebook-pending-edit` → review system notification
 - `notebook-review-resolved` → reloads notebook from disk
@@ -194,7 +193,7 @@ Watches `filesStore.fileContents[filePath]` for external changes (e.g., AI direc
 | `active` | Boolean | Currently selected cell |
 | `running` | Boolean | Cell is executing |
 | `language` | String | Notebook language (for syntax highlighting) |
-| `taskCount` | Number | Number of task threads on this cell |
+
 | `pendingEdit` | Object | Pending edit_cell review (has `old_source`, `new_source`) |
 | `pendingDelete` | Boolean | Cell marked for deletion (pending review) |
 | `pendingAdd` | Boolean | Phantom cell from add_cell review |
@@ -222,9 +221,6 @@ When `pendingEdit` is set:
 - `.cell-pending-add` — green border, subtle green background
 - `.cell-pending-delete` — red border, dimmed opacity
 - `.cell-pending-edit` — warning border, subtle yellow background
-
-### Task Indicator
-Inline in `.cell-toolbar-left`, between exec count and type badge. Shows speech bubble icon + count. Click opens task thread in right panel.
 
 ## CellOutput Component
 
@@ -278,7 +274,7 @@ NotebookDeleteCell: { tool, file_path, cell_id, cell_index, cell_source, cell_ty
 ## Important Notes
 
 1. **Kernel spec resolution**: `kernel.json` often lists bare `python` which may not have ipykernel. `find_python_with_ipykernel()` probes many paths. See [gotchas.md](gotchas.md).
-2. **Cell IDs are stable UUIDs** from the .ipynb file. Tasks, reviews, and scroll-to-cell all use cell ID (not index).
+2. **Cell IDs are stable UUIDs** from the .ipynb file. Reviews and scroll-to-cell all use cell ID (not index).
 3. **Ghost suggestions work per-cell**. Each CodeMirror instance gets its own `ghostSuggestionExtension`. No multi-cell stitching needed.
 4. **`run_cell`/`run_all_cells` require the notebook to be open**. They dispatch window events that only `NotebookEditor` listens for. If the notebook isn't open, the tool times out after 60s / 5min.
 5. **Jupyter runtime dir is platform-specific**: macOS `~/Library/Jupyter/runtime`, Linux `$XDG_RUNTIME_DIR/jupyter`, Windows `%APPDATA%\jupyter\runtime`.

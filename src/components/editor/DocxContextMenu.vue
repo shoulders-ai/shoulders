@@ -52,12 +52,7 @@
 
         <div class="context-menu-separator"></div>
 
-        <!-- AI Tasks (only with selection) -->
-        <div class="docx-ctx-item" @click="addAITask" :class="{ 'docx-ctx-disabled': !hasSelection }">
-          <IconMessageDots :size="14" />
-          <span>AI Task</span>
-          <span class="docx-ctx-shortcut">&#x21E7;&#x2318;C</span>
-        </div>
+        <!-- Ask AI (only with selection) -->
         <div class="docx-ctx-item" @click="askAI" :class="{ 'docx-ctx-disabled': !hasSelection }">
           <IconSparkles :size="14" />
           <span>Ask AI</span>
@@ -99,9 +94,8 @@ import { ref, computed } from 'vue'
 import {
   IconCut, IconCopy, IconClipboard,
   IconBold, IconItalic, IconUnderline, IconClearFormatting,
-  IconMessage, IconMessageDots, IconSparkles, IconCheck, IconX, IconListNumbers, IconQuote,
+  IconMessage, IconSparkles, IconCheck, IconX, IconListNumbers, IconQuote,
 } from '@tabler/icons-vue'
-import { useTasksStore } from '../../stores/tasks'
 import { useEditorStore } from '../../stores/editor'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useReferencesStore } from '../../stores/references'
@@ -117,7 +111,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'add-comment'])
 
-const tasks = useTasksStore()
 const editorStore = useEditorStore()
 const workspace = useWorkspaceStore()
 const referencesStore = useReferencesStore()
@@ -203,28 +196,6 @@ function addNativeComment() {
   // The dialog calls ed.commands.addComment() — SuperDoc's public API —
   // which handles marks, store, events, and DOCX export. No sidebar needed.
   emit('add-comment', { savedSelection: sel, x: props.x, y: props.y })
-  emit('close')
-}
-
-function addAITask() {
-  const sel = props.savedSelection
-  const ed = getEditor()
-  if (!ed || !sel) { emit('close'); return }
-
-  restoreSelection(ed)
-
-  const selectedText = ed.state.doc.textBetween(sel.from, sel.to, '\n', ' ')
-  const docSize = ed.state.doc.content.size
-  const contextBefore = ed.state.doc.textBetween(Math.max(0, sel.from - 5000), sel.from, '\n', ' ')
-  const contextAfter = ed.state.doc.textBetween(sel.to, Math.min(docSize, sel.to + 1000), '\n', ' ')
-  const threadId = tasks.createThread(props.filePath, { from: sel.from, to: sel.to }, selectedText, null, null, { contextBefore, contextAfter })
-
-  // Open right sidebar to tasks
-  if (!workspace.rightSidebarOpen) workspace.rightSidebarOpen = true
-  setTimeout(() => {
-    window.dispatchEvent(new CustomEvent('open-tasks', { detail: { threadId } }))
-  }, 100)
-
   emit('close')
 }
 

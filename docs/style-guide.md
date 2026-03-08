@@ -152,7 +152,7 @@ Complex UI elements live in dedicated CSS files rather than scoped component sty
 **`src/css/editor.css`** — CodeMirror widget styles:
 - Ghost text (`.ghost-text`, `.ghost-badge`, `.ghost-spinner`)
 - Diff overlays (`.diff-deletion`, `.diff-insertion-widget`, `.diff-new-text`, `.diff-accept`, `.diff-reject`)
-- Task markers (`.task-gutter`, `.task-dot`, `.task-range`)
+- Comment markers (`.comment-gutter`, `.comment-dot`, `.comment-range`) — see `src/css/comments.css`
 - Wiki links (`.cm-wikilink`, `.cm-wikilink-broken`, `.cm-wikilink-bracket`, `.cm-wikilink-target`, `.cm-wikilink-display`, `.cm-wikilink-pipe`)
 
 **`src/css/components.css`** — Shared component styles:
@@ -177,7 +177,7 @@ These are in global stylesheets because they're used by CodeMirror widgets (whic
 - `SetupWizard.vue` — first-run wizard
 - `FileTreeItem.vue` — tree item hover/indent
 - `ChatMessage.vue` — message bubble layout
-- `TaskThread.vue` — task thread styling
+- `CommentCard.vue` — comment card styling
 - `ProposalCard.vue` — AI proposal card
 
 ## Scrollbar Styling
@@ -201,7 +201,7 @@ Text selection uses `var(--editor-selection)` — changes per theme.
 ## Animation
 
 - Ghost spinner: CSS `@keyframes spin` (360deg rotation, 1s linear infinite)
-- Task processing dot: CSS `@keyframes pulse` (opacity 1 → 0.4 → 1, 1.5s ease)
+- Comment indicator: CSS styling for margin comment markers
 - Save message: opacity transition (fades out after 2s)
 - Folder expand arrow: CSS transition on rotation (100ms)
 - Resize handles: background transition (150ms)

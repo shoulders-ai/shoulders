@@ -44,7 +44,7 @@ Rust PTY reader thread → app.emit("pty-output-{id}") → Terminal.vue listen �
 ### Pattern 3: Frontend → Rust → External API → Frontend
 AI features proxy through Rust to avoid CORS. Two variants:
 
-**Non-streaming (ghost suggestions, tasks):**
+**Non-streaming (ghost suggestions, reference AI):**
 ```
 ai.js → invoke('proxy_api_call', {url, headers, body}) → Rust reqwest → API → response text → JSON.parse
 ```
@@ -88,8 +88,7 @@ App.vue
 ├── ResizeHandle.vue (right sidebar)
 ├── RightPanel.vue
 │   ├── OutlinePanel.vue
-│   ├── TaskThreads.vue
-│   │   └── TaskThread.vue
+│   ├── (Comments live in editor margin, not right panel)
 │   ├── Terminal.vue (multiple, v-show toggled)
 │   └── Backlinks.vue
 ├── Footer.vue
@@ -98,22 +97,22 @@ App.vue
 
 ## State Architecture
 
-Six Pinia stores, with clear dependency direction:
+Pinia stores, with clear dependency direction:
 
 ```
 workspace ← files ← editor
     ↑          ↑
     ├── reviews (watches pending-edits.json via fs-change events)
-    ├── tasks (uses workspace for API key + system prompt)
-    └── chat (uses workspace for API keys/models, files for content cache, reviews for edit recording)
+    ├── comments (pure data store, uses workspace for .shoulders path)
+    └── chat (uses workspace for API keys/models, files for content cache, reviews for edit recording, comments for tool access)
 ```
 
 - **workspace** depends on nothing. Owns workspace path, API keys (multi-provider), models config.
 - **files** depends on workspace (for the path). Owns file tree and content cache.
 - **editor** depends on nothing at runtime. Owns pane tree and tab state.
 - **reviews** depends on workspace (for .shoulders path). Owns pending edit data.
-- **tasks** depends on workspace (indirectly via task agent service). Owns task threads.
-- **chat** depends on workspace (API keys, models), and its tool execution accesses files, reviews, and editor stores.
+- **comments** depends on workspace (for .shoulders path). Pure CRUD data store for document comments.
+- **chat** depends on workspace (API keys, models), and its tool execution accesses files, reviews, comments, and editor stores.
 
 No circular dependencies. Services are stateless: `chatTools.js`, `chatTransport.js`, `chatModels.js`, `aiSdk.js` are extracted from the chat store for readability.
 

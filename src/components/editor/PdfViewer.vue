@@ -50,9 +50,29 @@ function applyTheme() {
 function onIframeLoad() {
   const win = iframeRef.value?.contentWindow
   if (!win) return
-  // webviewerloaded fires once PDF.js has finished its initialization
-  // (including its own color-scheme application) — we set ours after
-  win.document.addEventListener('webviewerloaded', () => applyTheme(), { once: true })
+  // Apply theme immediately — pdf.js is fully initialized by @load time.
+  // (Can't rely on 'webviewerloaded': it fires to parent.document before @load.)
+  applyTheme()
+
+  // Forward clicks from the iframe so EditorPane's @mousedown handler fires
+  // (sets the active pane). Without this, clicking the PDF doesn't focus the pane.
+  // Also forward Cmd+W so the app closes the tab instead of the whole window.
+  try {
+    win.document.addEventListener('mousedown', () => {
+      iframeRef.value?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    win.document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
+        e.preventDefault()
+        document.dispatchEvent(new KeyboardEvent('keydown', {
+          key: e.key, code: e.code,
+          metaKey: e.metaKey, ctrlKey: e.ctrlKey,
+          shiftKey: e.shiftKey, altKey: e.altKey,
+          bubbles: true, cancelable: true,
+        }))
+      }
+    })
+  } catch (_) { /* cross-origin iframe — blob URLs should be same-origin */ }
 }
 
 // Re-apply when the user switches app theme while the viewer is open

@@ -3,7 +3,7 @@
     <!-- Header -->
     <div
       class="flex items-center h-7 shrink-0 px-2 gap-1 select-none"
-      :style="{ color: 'var(--fg-muted)', borderBottom: collapsed ? 'none' : '1px solid var(--border)' }"
+      :style="{ color: 'var(--fg-muted)', }"
     >
       <div class="flex items-center gap-1 cursor-pointer" @click="$emit('toggle-collapse')">
         <svg

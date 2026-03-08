@@ -251,11 +251,12 @@ export function convertSdkUsage(sdkUsage, providerMetadata, provider) {
 }
 
 /**
- * Strip providerMetadata from parts before persisting.
+ * Clean parts for persistence. Keeps providerMetadata — OpenAI Responses API
+ * needs itemId on reasoning parts to pair them with function_call items.
  */
 export function cleanPartsForStorage(parts) {
   if (!parts) return []
-  return parts.map(({ providerMetadata, ...rest }) => rest)
+  return parts.map(part => ({ ...part }))
 }
 
 

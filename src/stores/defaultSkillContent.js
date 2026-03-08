@@ -42,7 +42,7 @@ Desktop app (macOS, Windows, Linux) for researchers. Writing, references, and AI
 - Native DOCX editing — opens and saves directly, no import/export conversion.
 - Formatting toolbar: bold, italic, underline, headings (H1-H6), lists, tables, paragraph styles.
 - Tracked changes from Word are preserved; review bar to accept/reject.
-- AI features (ghost suggestions, tasks, chat read/edit) work on DOCX files.
+- AI features (ghost suggestions, chat read/edit) work on DOCX files.
 - DOCX has its own zoom control, independent from editor zoom.
 
 ### LaTeX (.tex)
@@ -115,7 +115,7 @@ The web_search, search_papers, and fetch_url tools require either an Exa API key
 - Silently stops when over monthly budget.
 
 ### AI Chat
-- Open right sidebar: Cmd+J. Focus chat input: Cmd+Shift+L (also sends selected text as context).
+- Open right sidebar: Cmd+J. Open chat as a tab via the "+" button or by submitting comments.
 - Multiple parallel sessions (tabs). Close to archive, reopen from history dropdown (clock icon).
 - **@file references:** type \`@\` in chat input to search and attach file content (truncated at 50KB, PDFs text-extracted).
 - **Model picker:** dropdown in chat input, switch mid-conversation.
@@ -123,15 +123,15 @@ The web_search, search_papers, and fetch_url tools require either an Exa API key
 - **Token budget:** badge shows usage (e.g., "2.1k"). Turns red near context limit. Older messages auto-trimmed (keeps start + recent).
 - Sessions persist across app restarts.
 
-### AI Tasks
-- Select text, press Cmd+Shift+C. Thread opens in right sidebar.
-- Multi-turn conversation anchored to the selection. Gutter dots indicate thread state (neutral/pulsing/red).
-- AI can propose edits (side-by-side diff with Apply button). Applied edits go through the review system.
-- Same tool access as chat. Resolve when done; delete to remove permanently.
-- Works on notebook cells too (anchored by cell, shows cell context).
+### Document Comments
+- Select text, press Cmd+Shift+L. Comment panel opens in the editor margin.
+- Type your annotation or instruction and press Enter to save, or Cmd+Enter to save and immediately submit to the AI chat.
+- Leave multiple comments across the document, then click "Submit N" in the comment margin to send all unresolved comments to the AI at once. The AI addresses them coherently in a single response.
+- The AI can also add comments proactively using the add_comment tool, reply to existing comments with reply_to_comment, and resolve them with resolve_comment.
+- Resolve comments when done; delete via the "..." menu. Toggle resolved comment visibility.
 
 ### Project Instructions (\`_instructions.md\`)
-- File at workspace root, included in every AI interaction (chat, tasks, suggestions).
+- File at workspace root, included in every AI interaction (chat, comments via submit, suggestions).
 - Use to set writing style, terminology, project context, domain-specific rules.
 - Changes take effect immediately, no restart needed.
 - HTML comments (\`<!-- ... -->\`) are stripped before injection (use as personal notes).
@@ -144,7 +144,7 @@ The web_search, search_papers, and fetch_url tools require either an Exa API key
 ### 27 tools in 5 categories
 - **Workspace (10):** read_file, write_file, edit_file, list_files, search_content, rename_file, move_file, duplicate_file, delete_file, run_command
 - **References (5):** search_references, get_reference, add_reference, cite_reference, edit_reference
-- **Feedback (3):** add_task, read_tasks, create_proposal
+- **Comments (4):** add_comment, reply_to_comment, resolve_comment, create_proposal
 - **Notebooks (6):** read_notebook, edit_cell, run_cell, run_all_cells, add_cell, delete_cell
 - **Web Research (3):** web_search, search_papers, fetch_url (external — need Exa key or Shoulders account)
 
@@ -166,7 +166,7 @@ Settings > Tools. Individually toggle any tool. Disabled tools are completely re
 - **Requirements:** Python/R/Julia runtime + \`ipykernel\` (\`pip install ipykernel\`). Check Settings > Environment for detection status and install buttons.
 - Toolbar: run cell, run all, restart kernel, interrupt, clear outputs. Kernel status indicator.
 - Cell outputs render inline: text, HTML, images, error tracebacks with ANSI colors.
-- Ghost suggestions (++) work in code cells. Tasks (Cmd+Shift+C) attach to cells.
+- Ghost suggestions (++) work in code cells.
 - AI chat tools can read, edit, run, add, and delete cells — edits go through review system.
 
 ---
@@ -205,7 +205,7 @@ Settings > Tools. Individually toggle any tool. Disabled tools are completely re
 ## Usage & Cost
 
 - Footer shows toggleable monthly AI cost total.
-- Settings > Usage: breakdown by feature (chat/suggestions/tasks), by model, 12-month trend chart.
+- Settings > Usage: breakdown by feature (chat/suggestions), by model, 12-month trend chart.
 - Optional soft budget (alert at threshold, never blocks usage).
 - Shoulders account: costs deducted per-request; manage balance at shoulde.rs/account.
 
@@ -217,7 +217,7 @@ Settings > Tools. Individually toggle any tool. Disabled tools are completely re
 |---|---|
 | \`~/.shoulders/keys.env\` | API keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, EXA_API_KEY) |
 | \`~/.shoulders/models.json\` | Model definitions and provider endpoints (global, all workspaces) |
-| \`.shoulders/\` | Private AI state (auto-created, gitignored): chats, tasks, system prompt, pending edits |
+| \`.shoulders/\` | Private AI state (auto-created, gitignored): chats, comments, system prompt, pending edits |
 | \`.shoulders/system.md\` | Base system prompt (editable, advanced) |
 | \`.project/\` | Shared project data (syncs via git): references, styles, skills, PDF settings |
 | \`.project/styles/\` | Custom CSL citation style files |
@@ -235,9 +235,10 @@ On Windows/Linux: Cmd → Ctrl, Option → Alt.
 | Settings | Cmd+, |
 | Toggle left sidebar | Cmd+B |
 | Toggle right sidebar | Cmd+J |
-| Focus AI chat | Cmd+Shift+L |
+| Add comment | Cmd+Shift+L |
 | Save + commit | Cmd+S |
-| New file | Cmd+N |
+| New (context-aware) | Cmd+N |
+| New tab (Start page) | Cmd+T |
 | Close tab | Cmd+W |
 | Switch tabs | Cmd+Opt+Left/Right |
 | Split vertical | Cmd+\\\\ |
@@ -248,7 +249,6 @@ On Windows/Linux: Cmd → Ctrl, Option → Alt.
 | Accept suggestion | Tab / Enter / Right |
 | Cycle suggestions | Up / Down |
 | Dismiss suggestion | Esc / Left |
-| Add task | Cmd+Shift+C |
 | Run code line | Cmd+Enter |
 | Run entire file | Shift+Cmd+Enter |
 | Zoom in / out | Cmd++ / Cmd+- |

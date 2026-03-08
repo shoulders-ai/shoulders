@@ -106,48 +106,74 @@ export const useChatStore = defineStore('chat', () => {
       },
 
       onError: (err) => {
-        console.error(`[chat] Error in session ${session.id}:`, err)
+        console.error('[chat] onError:', err?.message || err)
         session.updatedAt = new Date().toISOString()
 
-        // When a tool call's JSON arguments are invalid (e.g. model mixes XML
-        // into JSON), the AI SDK adds the assistant message with the failed tool
-        // part (state: input-available, no paired tool result) then fires onError.
-        // Subsequent sends with that history are rejected by the provider (HTTP
-        // 400 / MissingToolResultsError) because every tool-call needs a result.
+        // Two failure modes from invalid tool call JSON (e.g. model mixes XML
+        // into JSON arguments):
         //
-        // Fix: pop the broken message, then push a synthetic output-error part
-        // so the model sees what failed and can self-correct on the next turn.
-        // Verified against validateUIMessages schema and all three providers.
+        // 1. STUCK PART (immediate): SDK adds assistant message with tool part
+        //    stuck at input-available (no paired result). Next send fails with
+        //    HTTP 400 / MissingToolResultsError. Fix: pop message, push
+        //    synthetic output-error part.
+        //
+        // 2. POISONED INPUT (delayed): SDK handles the error gracefully —
+        //    emits output-error part with raw string as `input` (not a dict).
+        //    Stream completes successfully, onError does NOT fire. The poisoned
+        //    part gets persisted. On the NEXT send, provider rejects the
+        //    entire conversation: "tool_use.input: Input should be a valid
+        //    dictionary". onError fires now, but the broken part is in an
+        //    EARLIER message (not the last one).
+        //
+        // Fix for both: scan ALL messages for non-dict input values, then
+        // check the last message for stuck parts.
         try {
+          let recovered = false
           const msgs = chat.state.messagesRef.value
+
+          // Pass 1: fix poisoned input in ANY message.
+          // Part type is "tool-{name}" (e.g. "tool-reply_to_comment"), not "dynamic-tool".
+          // Input can be undefined (not just a string) when JSON parsing fails.
+          for (const msg of msgs) {
+            if (msg.role !== 'assistant' || !msg.parts) continue
+            for (const p of msg.parts) {
+              if (p.state !== 'output-error') continue
+              // SDK skips input validation for output-error when input is undefined
+              // (validate-ui-messages.ts line 424). convert-to-model-messages falls
+              // back: part.input ?? part.rawInput — both must be removed.
+              if (p.input !== undefined || p.rawInput !== undefined) {
+                delete p.input
+                delete p.rawInput
+                recovered = true
+              }
+            }
+          }
+
+          // Pass 2: fix stuck parts in the last message (no paired result)
           if (msgs.length > 0) {
             const last = msgs[msgs.length - 1]
             if (last.role === 'assistant') {
               const brokenPart = last.parts?.find(p => {
-                if (p.type !== 'dynamic-tool') return false
-                // Stuck without execution (original case)
-                if (p.state === 'input-available' || p.state === 'input-streaming') return true
-                // SDK handled the error but input is not a valid dict — will poison API calls
-                if (p.input !== undefined && (typeof p.input !== 'object' || p.input === null || Array.isArray(p.input))) return true
-                return false
+                if (p.state !== 'input-available' && p.state !== 'input-streaming') return false
+                return true
               })
               if (brokenPart) {
-                const { toolCallId, toolName } = brokenPart
+                const { toolCallId, toolName, type } = brokenPart
                 const errMsg = err?.message || String(err)
                 chat.state.popMessage()
                 chat.state.pushMessage({
                   id: `msg-${nanoid()}`,
                   role: 'assistant',
                   parts: [{
-                    type: 'dynamic-tool',
+                    type: type || 'dynamic-tool',
                     toolCallId,
                     toolName,
                     state: 'output-error',
-                    input: {}, // {} not undefined — validateUIMessages requires input: z.unknown()
                     errorText: `Tool call failed: ${errMsg}. Ensure all arguments use valid JSON — do not use XML or <tag> syntax inside JSON string values.`,
                   }],
                   createdAt: new Date().toISOString(),
                 })
+                recovered = true
               }
             }
           }
@@ -458,7 +484,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     // Build message text + multimodal files
-    const { text: messageText, files } = _buildMessageTextAndFiles({ text, fileRefs, context })
+    const { text: messageText, files } = await _buildMessageTextAndFiles({ text, fileRefs, context })
 
     import('../services/telemetry').then(({ events }) => events.chatSend(session.modelId || 'unknown'))
     // Capture count before send so we can identify the new user message afterward
@@ -492,7 +518,7 @@ export const useChatStore = defineStore('chat', () => {
     chat.stop()
   }
 
-  function _buildMessageTextAndFiles({ text, fileRefs, context }) {
+  async function _buildMessageTextAndFiles({ text, fileRefs, context }) {
     const textParts = []
     const files = [] // FileUIPart[]
 
@@ -508,8 +534,26 @@ export const useChatStore = defineStore('chat', () => {
             filename: ref.path.split('/').pop(),
           })
         } else if (ref.content) {
-          // Text: embed as XML ref (existing behavior)
-          textParts.push(`<file-ref path="${ref.path}">\n${ref.content}\n</file-ref>`)
+          // Text: embed as XML ref
+          let content = ref.content
+          // Auto-append comments if the file has active comments and they're not already included
+          if (!content.includes('<document-comments>')) {
+            try {
+              const { useCommentsStore } = await import('./comments')
+              const commentsStore = useCommentsStore()
+              const unresolved = commentsStore.unresolvedForFile(ref.path)
+              if (unresolved.length) {
+                let block = '\n\n<document-comments>\n'
+                for (const c of unresolved) {
+                  const lineNum = content.substring(0, c.range.from).split('\n').length
+                  block += `  <comment id="${c.id}" line="${lineNum}" author="${c.author}">${c.text}</comment>\n`
+                }
+                block += '</document-comments>'
+                content += block
+              }
+            } catch {}
+          }
+          textParts.push(`<file-ref path="${ref.path}">\n${content}\n</file-ref>`)
         }
       }
     }

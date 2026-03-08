@@ -23,6 +23,12 @@ function startDrag(e) {
   const startX = e.clientX
   const startY = e.clientY
 
+  // Prevent iframes from capturing mouse events during drag
+  const style = document.createElement('style')
+  style.id = 'resize-drag-iframe-block'
+  style.textContent = 'iframe { pointer-events: none !important; }'
+  document.head.appendChild(style)
+
   function onMouseMove(e) {
     const dx = e.clientX - startX
     const dy = e.clientY - startY
@@ -35,6 +41,7 @@ function startDrag(e) {
     document.removeEventListener('mouseup', onMouseUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
+    document.getElementById('resize-drag-iframe-block')?.remove()
   }
 
   document.addEventListener('mousemove', onMouseMove)

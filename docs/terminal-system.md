@@ -127,7 +127,7 @@ The bottom panel sits below the PaneContainer in the center column. It is the **
 - Language REPL events (`create-language-terminal`, `focus-language-terminal`, `send-to-repl`) open/focus terminals here
 
 ### Right Panel (`RightPanel.vue`) — Secondary
-The right panel retains a Terminal tab alongside Outline, Tasks, and Backlinks. It also supports multi-tab terminals with the same language REPL event listeners.
+The right panel retains a Terminal tab alongside Outline and Backlinks. It also supports multi-tab terminals with the same language REPL event listeners.
 
 ### Tab Management (shared pattern)
 - `terminals` reactive array: `[{ id: number, label: string }]`

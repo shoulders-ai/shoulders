@@ -162,7 +162,7 @@ When AI tools write files, the merge view compares against `filesStore.fileConte
 ### `mapPos` assoc values are backwards from intuition
 `ChangeSet.mapPos(pos, assoc)` with `assoc=1` moves the position **past** insertions at that point, and `assoc=-1` keeps it **before**. For mark decoration ranges, the convention is `from` uses `-1` (grow outward) and `to` uses `1` (grow outward). Swapping these causes the range to **collapse or invert** when a change spans it, and `Decoration.mark().range(from, to)` throws `RangeError: Mark decorations may not be empty`.
 
-The `taskField` StateField in `tasks.js` had these reversed, which cascaded into: dispatches crashing silently (editor not updating), merge view not appearing, and reject buttons throwing.
+The `commentField` StateField in `comments.js` had these reversed, which cascaded into: dispatches crashing silently (editor not updating), merge view not appearing, and reject buttons throwing.
 
 **Fix:** Always use `mapPos(from, -1)` and `mapPos(to, 1)` for mark ranges. Add a `Math.min`/`Math.max` safety clamp and filter out `from >= to` before creating `Decoration.mark()`.
 
@@ -177,10 +177,12 @@ Any `ViewPlugin.update()` handler that guards on `update.docChanged` will miss a
 
 When a model produces malformed JSON in tool call arguments (e.g. mixes XML `<parameter>` tags into a JSON string), `JSON.parse` fails and the SDK sets `input` to the raw malformed string (not a dict). Two failure modes:
 
-1. **Part stuck at `input-available`** — no paired tool result, subsequent sends fail with HTTP 400 (`MissingToolResultsError`).
-2. **Part at `output-error` with non-dict `input`** — the SDK handles the error internally, but `input` is still the raw string. The API rejects with `tool_use.input: Input should be a valid dictionary`.
+1. **Part stuck at `input-available`** (immediate) — no paired tool result, subsequent sends fail with HTTP 400 (`MissingToolResultsError`). The `onError` handler detects the stuck part in the last message, pops it, and pushes a synthetic `output-error` part.
+2. **Poisoned `input` in earlier message** (delayed) — the SDK handles the error gracefully: emits `output-error` part with raw string as `input`, stream completes without error (`onError` does NOT fire). The poisoned part gets persisted. On the **next** send, the provider rejects the entire conversation: `tool_use.input: Input should be a valid dictionary`. `onError` fires now, but the broken part is in an **earlier** message (e.g. `messages.5`), not the last one.
 
-**Fix (in `chat.js` and `tasks.js` `onError`):** Detect broken parts by checking BOTH stuck states AND non-dict `input` values. Pop the broken assistant message, push a synthetic `output-error` part with `input: {}`.
+**Fix (in `chat.js` `onError`, two passes):**
+- **Pass 1:** Scan **all** assistant messages for `dynamic-tool` parts with non-dict `input`. Mutate `input` to `{}` in place. This fixes case 2 regardless of where the poisoned part sits in the history.
+- **Pass 2:** Check the last message for stuck parts (`input-available`/`input-streaming`). Pop and replace with synthetic `output-error`. This fixes case 1.
 
 Key constraints verified against the SDK source:
 - Check `p.type === 'dynamic-tool'` (not `p.type?.startsWith('tool-')` — `dynamic-tool` is the actual stored type; `tool-{name}` is render-time only)
@@ -198,14 +200,14 @@ A module-level `currentGeneration` counter is incremented on each trigger. When 
 `gitDiffSummary()` tries `git diff` first. If empty (everything committed), falls back to `git diff HEAD~1`. This handles the auto-commit-every-5-minutes workflow where there are rarely uncommitted changes.
 
 ### Full-document swap destroys all position-tracked annotations
-When `TextEditor.vue`'s `fileContents` watcher dispatches `{ from: 0, to: doc.length, insert: newContent }`, CodeMirror's `mapPos` maps every tracked position to either `0` (bias -1) or `newContent.length` (bias +1). This expands every task range to cover the entire document and corrupts the store when `handleDocChanged()` writes the broken ranges back.
+When `TextEditor.vue`'s `fileContents` watcher dispatches `{ from: 0, to: doc.length, insert: newContent }`, CodeMirror's `mapPos` maps every tracked position to either `0` (bias -1) or `newContent.length` (bias +1). This expands every comment range to cover the entire document and corrupts the store when `handleDocChanged()` writes the broken ranges back.
 
 **Fix:** Use `computeMinimalChange()` from `src/utils/textDiff.js` to find the common prefix/suffix and dispatch only the changed span. This lets `mapPos` correctly shift annotations around the actual edit. Applied in `TextEditor.vue` and `NotebookCell.vue`.
 
 ### `EditorView.domEventHandlers` only covers the content area
-`domEventHandlers` registers on `.cm-content`, not on `.cm-gutters`. Click handlers for gutter markers (like task dots) will never fire through this API. This can be masked if a decoration covers the full document — clicks near the gutter land on the content area highlight instead.
+`domEventHandlers` registers on `.cm-content`, not on `.cm-gutters`. Click handlers for gutter markers (like comment dots) will never fire through this API. This can be masked if a decoration covers the full document — clicks near the gutter land on the content area highlight instead.
 
-**Fix:** Use the `domEventHandlers` option inside the `gutter()` config. Note the different signature: `(view: EditorView, line: BlockInfo, event: Event) => boolean` (vs `(event, view)` for `EditorView.domEventHandlers`). See `tasks.js` task gutter.
+**Fix:** Use the `domEventHandlers` option inside the `gutter()` config. Note the different signature: `(view: EditorView, line: BlockInfo, event: Event) => boolean` (vs `(event, view)` for `EditorView.domEventHandlers`). See `comments.js` comment gutter.
 
 ---
 
@@ -286,7 +288,7 @@ Popover buttons near text inputs use `@mousedown.prevent` so clicking them doesn
 ### Custom window events for decoupled components
 When components can't share a direct parent-child relationship (editor gutter → right panel, citation click → reference detail), communication uses `window.dispatchEvent(new CustomEvent(...))`.
 
-Events in use: `open-tasks`, `open-reference-detail`, `ref-drag-over`, `ref-drag-leave`, `ref-file-drop`, `filetree-drag-start` (detail: `{ paths }`), `filetree-drag-end`, `docx-save-now`, `docx-content-changed` (on wrapperEl, not window), `notebook-cell-task`, `notebook-scroll-to-cell`.
+Events in use: `open-reference-detail`, `ref-drag-over`, `ref-drag-leave`, `ref-file-drop`, `filetree-drag-start` (detail: `{ paths }`), `filetree-drag-end`, `docx-save-now`, `docx-content-changed` (on wrapperEl, not window), `notebook-scroll-to-cell`.
 
 ### `.shoulders/.direct-mode` is a flag file
 Its existence (not content) toggles direct mode. Checked by both the frontend (reviews store) and the Claude Code shell hook.
@@ -308,9 +310,6 @@ macOS uses `~/Library/Jupyter/runtime`, Linux uses `$XDG_RUNTIME_DIR/jupyter` (o
 ### Windows kernel support
 `kernel.rs` uses `get_home_dir()` (falls back to `USERPROFILE`), `#[cfg(unix)]`/`#[cfg(windows)]` for `libc::kill` vs `taskkill`, and conditional `libc` dependency (`[target.'cfg(unix)'.dependencies]` in Cargo.toml). Shell commands use `bash -c` on Unix, `cmd /C` on Windows (`fs_commands.rs`). PTY prompt env vars (`PS1`/`PROMPT`) only set on Unix.
 
-### Cell tasks anchor by cell ID, not character position
-Notebook cells don't have a flat document offset. Task threads on cells use `cellId` (the stable UUID from .ipynb) instead of `range.from`/`range.to`. Navigation dispatches `notebook-scroll-to-cell` instead of CodeMirror selection.
-
 ### Ghost suggestions work per-cell
 Each CodeMirror instance in `NotebookCell.vue` gets its own `ghostSuggestionExtension`. Context is automatically scoped to the cell's content — no multi-cell stitching needed.
 
@@ -331,9 +330,9 @@ SuperDoc's ProseMirror EditorView is at `position: fixed; left: -9999px; opacity
 ### "Jump to" / `scrollIntoView` doesn't work for DOCX
 PM `tr.scrollIntoView()` and `editor.commands.scrollIntoView()` only scroll the hidden view (x:-9999). The visible painted DOM has its own scroll container (the `overflow-auto` wrapper div). `presentationEditor.scrollToPosition()` exists but returns `false` in our embedded setup (viewport host resolution issue).
 
-**Fix:** Text-search `.superdoc-line` elements in the visible DOM for the target text, then call `line.scrollIntoView({ behavior: 'smooth', block: 'center' })`. Fallback: wait ~100ms for the painter to update the visible caret (`.presentation-editor__selection-caret`), then scroll the caret. See `TaskThread.vue:navigateDocx()` and `OutlinePanel.vue:navigateToHeading()`.
+**Fix:** Text-search `.superdoc-line` elements in the visible DOM for the target text, then call `line.scrollIntoView({ behavior: 'smooth', block: 'center' })`. Fallback: wait ~100ms for the painter to update the visible caret (`.presentation-editor__selection-caret`), then scroll the caret. See `OutlinePanel.vue:navigateToHeading()`.
 
-When navigating from another file (editor not yet mounted), brute-force retry 4 times at 0ms, 500ms, 1000ms, 1500ms. See `TaskThread.vue:navigateToSelection()`.
+When navigating from another file (editor not yet mounted), brute-force retry 4 times at 0ms, 500ms, 1000ms, 1500ms.
 
 ### No auto-scroll while typing in DOCX
 SuperDoc has no built-in "keep caret visible" mechanism. Unlike CodeMirror, the layout engine doesn't auto-scroll when the cursor moves past the viewport edge.
@@ -346,7 +345,7 @@ Changing paragraph style (e.g. Normal → Heading 1), font, color, or other attr
 **Fix:** `editorStore.docxUpdateCount` is a reactive counter bumped on every DOCX editor `update` event (including attribute-only changes). Use `void editorStore.docxUpdateCount` as the reactive trigger instead of `filesStore.fileContents[path]` when you need to react to any document change, not just text changes. See `OutlinePanel.vue:headings` computed.
 
 ### DOCX gutter indicators must be floating overlays
-No CM-style `gutter()` API exists for the painted DOM. Task dots use `DocxTaskIndicators.vue` — a floating overlay positioned by text-searching `.superdoc-line` elements for the thread's `selectedText`. Same sibling-overlay pattern as ghost loading dots. Fallback to `range.from / docSize` ratio when text not found.
+No CM-style `gutter()` API exists for the painted DOM. Indicators use floating overlays positioned by text-searching `.superdoc-line` elements for the anchor text. Same sibling-overlay pattern as ghost loading dots. Fallback to `range.from / docSize` ratio when text not found.
 
 ### SuperDoc is NOT TipTap
 Zero `@tiptap` dependencies. Import extensions from `superdoc/super-editor`, not `@tiptap/core`. Method is `addPmPlugins()` not `addProseMirrorPlugins()`. Config key is `editorExtensions` not `extensions`.
@@ -369,7 +368,7 @@ Injecting `<span>` elements as siblings of SuperDoc's leaf text runs (`[data-pm-
 - SuperDoc's invisible editing surface sits on top of the painted layer — `e.target` on click is the surface, never the injected element. `document.elementsFromPoint()` can find buried elements but is unreliable
 - `pointer-events: auto` + `z-index: 200000` on overlays still gets intercepted by SuperDoc's capture-phase handlers
 
-**Verdict:** Only use for non-interactive indicators (task dots). For clickable inline elements, use the link mark approach.
+**Verdict:** Only use for non-interactive indicators (comment markers). For clickable inline elements, use the link mark approach.
 
 ### Link mark is the only reliable inline clickable element
 SuperDoc's `link` is a PM Mark (not a Node). The layout engine renders it natively as `<a class="superdoc-link">` in the painted DOM. Clicks dispatch `superdoc-link-click` CustomEvent with `href`, `clientX`, `clientY` in `e.detail`. This is the ONLY inline element that gets reliable click handling through SuperDoc's dual-layer architecture.

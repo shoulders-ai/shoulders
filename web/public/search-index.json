@@ -133,60 +133,60 @@
     "url": "/docs?section=ai-setup"
   },
   {
-    "id": "ai-tasks-0",
-    "section": "ai-tasks",
-    "title": "Tasks",
-    "content": "AI-powered task threads anchored to specific text selections.",
-    "url": "/docs?section=ai-tasks"
+    "id": "ai-comments-0",
+    "section": "ai-comments",
+    "title": "Document Comments",
+    "content": "Annotate your documents with comments, then submit them to the AI for revision.",
+    "url": "/docs?section=ai-comments"
   },
   {
-    "id": "ai-tasks-1",
-    "section": "ai-tasks",
-    "title": "Creating a task",
-    "content": "Select text in the editor and press Cmd/Ctrl+Shift+C. A task panel opens in the right sidebar with the selected text as context. Type your question or instruction and send. Tasks are useful for localised questions: \"clarify this paragraph,\" \"strengthen this argument,\" \"rewrite this for a general audience,\" or \"check whether this claim is supported by the cited reference.\"",
-    "url": "/docs?section=ai-tasks"
+    "id": "ai-comments-1",
+    "section": "ai-comments",
+    "title": "Adding a comment",
+    "content": "Select text in the editor and press Cmd/Ctrl+Shift+L. A comment input appears in the margin next to the selected text. Type your annotation or instruction. Enter saves the comment. Cmd/Ctrl+Enter saves and immediately submits to the AI chat.",
+    "url": "/docs?section=ai-comments"
   },
   {
-    "id": "ai-tasks-2",
-    "section": "ai-tasks",
-    "title": "Conversation",
-    "content": "Each task thread supports multi-turn conversation. The AI sees the selected text as its primary context and can also use research tools — reading other files, searching your workspace, or looking up references — to gather additional information before responding.",
-    "url": "/docs?section=ai-tasks"
+    "id": "ai-comments-2",
+    "section": "ai-comments",
+    "title": "Comment margin",
+    "content": "A 200px side panel appears alongside the editor, showing compact cards for each comment anchored to its position in the document. When you have unresolved comments, a Submit N button appears at the top of the margin.",
+    "url": "/docs?section=ai-comments"
   },
   {
-    "id": "ai-tasks-3",
-    "section": "ai-tasks",
-    "title": "Proposed edits",
-    "content": "The AI can propose changes to the selected text. Proposals show the old and new text side by side with an \"Apply\" button. Applying a proposal inserts the change into your document as an inline diff — you can accept or reject it, just like any other AI edit.",
-    "url": "/docs?section=ai-tasks"
+    "id": "ai-comments-3",
+    "section": "ai-comments",
+    "title": "Batch workflow",
+    "content": "Leave multiple comments across the document, then click Submit N in the comment margin. The AI receives all comments together and addresses them coherently in a single pass, making edits that are consistent with each other.",
+    "url": "/docs?section=ai-comments"
   },
   {
-    "id": "ai-tasks-4",
-    "section": "ai-tasks",
-    "title": "Gutter indicators",
-    "content": "Colored dots appear in the editor margin next to lines that have task threads: Neutral — thread is idle. Pulsing — AI is generating a response. Red — an error occurred. The task text range is underlined in the editor. Ranges update automatically as the document is edited.",
-    "url": "/docs?section=ai-tasks"
+    "id": "ai-comments-4",
+    "section": "ai-comments",
+    "title": "AI replies",
+    "content": "The AI can reply to your comments using the reply_to_comment tool. Replies appear nested under the original comment in the margin. When the AI proposes an edit in response to a comment, the change goes through the standard review system.",
+    "url": "/docs?section=ai-comments"
   },
   {
-    "id": "ai-tasks-5",
-    "section": "ai-tasks",
-    "title": "Resolving and navigating",
-    "content": "When a thread has served its purpose, mark it as resolved. Resolved threads move to the bottom of the list and are grayed out. You can also delete threads entirely. Click \"Jump to\" in a thread to scroll the editor to the anchored selection. This is useful when you have several threads across a long document.",
-    "url": "/docs?section=ai-tasks"
+    "id": "ai-comments-5",
+    "section": "ai-comments",
+    "title": "Resolving and deleting",
+    "content": "When a comment has been addressed, mark it as resolved. Resolved comments are hidden by default but can be shown with the Show resolved toggle. To remove a comment permanently, use the menu on the comment card and select Delete.",
+    "url": "/docs?section=ai-comments"
   },
   {
-    "id": "ai-tasks-6",
-    "section": "ai-tasks",
-    "title": "Notebook cell tasks",
-    "content": "In Jupyter notebooks, task threads can be attached to specific cells. The AI receives cell-specific context (source code, cell type, outputs, language) and can propose edits directly to cell source. A badge on the cell indicates the number of active threads.",
-    "url": "/docs?section=ai-tasks"
+    "id": "ai-comments-6",
+    "section": "ai-comments",
+    "title": "AI as reviewer",
+    "content": "The AI can proactively add comments to your document using the add_comment tool. Ask it to review this section or leave comments on my draft and it will create margin annotations just like a human reviewer would.",
+    "url": "/docs?section=ai-comments"
   },
   {
-    "id": "ai-tasks-7",
-    "section": "ai-tasks",
+    "id": "ai-comments-7",
+    "section": "ai-comments",
     "title": "Persistence",
-    "content": "All task threads are saved to .shoulders/tasks.json and persist across app restarts.",
-    "url": "/docs?section=ai-tasks"
+    "content": "All comments are saved to .shoulders/comments.json and persist across app restarts.",
+    "url": "/docs?section=ai-comments"
   },
   {
     "id": "ai-tools-0",
@@ -395,7 +395,7 @@
     "id": "shortcuts-2",
     "section": "shortcuts",
     "title": "Files & tabs",
-    "content": "Save and commit Cmd/Ctrl+S New file Cmd/Ctrl+N Close tab Cmd/Ctrl+W Switch tab left Cmd/Ctrl+Option/Alt+Left Switch tab right Cmd/Ctrl+Option/Alt+Right Split vertically Cmd/Ctrl+\\ Split horizontally Cmd/Ctrl+Shift+\\",
+    "content": "Save and commit Cmd/Ctrl+S New (same type as current) Cmd/Ctrl+N New tab (Start page) Cmd/Ctrl+T Close tab Cmd/Ctrl+W Switch tab left Cmd/Ctrl+Option/Alt+Left Switch tab right Cmd/Ctrl+Option/Alt+Right Split vertically Cmd/Ctrl+\\ Split horizontally Cmd/Ctrl+Shift+\\",
     "url": "/docs?section=shortcuts"
   },
   {

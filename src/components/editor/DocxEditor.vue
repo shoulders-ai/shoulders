@@ -18,13 +18,6 @@
           <span v-for="i in 3" :key="i" class="ghost-dot" :style="{ animationDelay: (i - 1) * 160 + 'ms' }"></span>
         </span>
       </div>
-      <!-- AI task thread indicators (dots in the margin) -->
-      <DocxTaskIndicators
-        v-if="editorReady"
-        :filePath="filePath"
-        :wrapperEl="wrapperEl"
-        :superdoc="superdocRef"
-      />
       <!-- Citations use the native link mark — no overlays needed -->
     </div>
 
@@ -85,19 +78,15 @@ import { invoke } from '@tauri-apps/api/core'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useEditorStore } from '../../stores/editor'
 import { useFilesStore } from '../../stores/files'
-import { useTasksStore } from '../../stores/tasks'
 import { useReferencesStore } from '../../stores/references'
 import { base64ToFile, blobToBase64, base64ToUint8Array } from '../../utils/docxBridge'
 import { createDocxAIProvider } from '../../services/docxProvider'
 import { createDocxGhostExtension, ghostPluginKey } from '../../editor/docxGhost'
-import { createDocxTaskPositionsExtension } from '../../editor/docxTaskPositions'
 import { createHeadingNormalizeExtension } from '../../editor/docxHeadingNormalize'
 import { prescanDocxForZotero, postProcessCitationsOrdered, getCitationMeta, setCitationMeta, loadCitationMeta, persistCitationMeta, isCitationHref, citationIdFromHref, reformatAllCitations, removeCitationLink, insertNewCitation, getAllCitedKeys, hasBibliography, insertBibliography, refreshBibliography, createCitationMarkGuardExtension } from '../../services/docxCitationImporter'
-import { DocxTaskBridge } from '../../editor/docxTasks'
 import { extractDocumentText } from '../../services/docxContext'
 import DocxToolbar from './DocxToolbar.vue'
 import DocxContextMenu from './DocxContextMenu.vue'
-import DocxTaskIndicators from './DocxTaskIndicators.vue'
 import CitationPalette from './CitationPalette.vue'
 
 const props = defineProps({
@@ -110,7 +99,6 @@ const emit = defineEmits(['cursor-change', 'editor-stats'])
 const workspace = useWorkspaceStore()
 const editorStore = useEditorStore()
 const filesStore = useFilesStore()
-const tasksStore = useTasksStore()
 const referencesStore = useReferencesStore()
 
 const rootEl = ref(null)
@@ -151,7 +139,6 @@ const editorId = `sd-editor-${uid}`
 
 let superdoc = null
 let aiActions = null
-let taskBridge = null
 let saveTimeout = null
 let lastSaveTime = 0
 let isSaving = false // Guards against recursive save loops during strip/restore
@@ -389,26 +376,13 @@ onMounted(async () => {
     // Reset heading → Normal on Enter (SuperDoc otherwise continues the heading style)
     const headingNormalizeExt = createHeadingNormalizeExtension()
 
-    // Comment positions extension (maps thread ranges through edits)
-    const commentPosExt = createDocxTaskPositionsExtension({
-      getThreads: () => tasksStore.threadsForFile(props.filePath),
-      onPositionsUpdated: () => {
-        // Update store ranges + signal indicator recalc
-        const threads = tasksStore.threadsForFile(props.filePath)
-        for (const t of threads) {
-          tasksStore.updateRange(t.id, t.range.from, t.range.to)
-        }
-        wrapperEl.value?.dispatchEvent(new CustomEvent('docx-content-changed'))
-      },
-    })
-
     superdoc = new SuperDoc({
       selector: `#${editorId}`,
       document: file,
       documentMode: 'editing',
       disableContextMenu: true,
       user: { name: 'User', email: 'user@local' },
-      editorExtensions: [ghostExt, commentPosExt, citationGuardExt, headingNormalizeExt],
+      editorExtensions: [ghostExt, citationGuardExt, headingNormalizeExt],
     })
     // markRaw prevents Vue from deep-proxying the SuperDoc instance.
     // SuperDoc uses #private class fields which break through Proxy wrappers.
@@ -448,9 +422,6 @@ onMounted(async () => {
       wrapperEl.value?.addEventListener('superdoc-link-click', handleCiteLinkClick, true)
       wrapperEl.value?.addEventListener('click', handleCiteLinkNav, true)
 
-      // Create comment bridge (maps our AI threads ↔ SuperDoc comment highlights)
-      taskBridge = new DocxTaskBridge(superdoc, props.filePath)
-
       // Initialize AIActions for literalReplace (documented API for find-and-replace)
       try {
         const { AIActions } = await import('@superdoc-dev/ai')
@@ -469,8 +440,8 @@ onMounted(async () => {
         console.warn('AIActions initialization failed:', e)
       }
 
-      // Register with bridge + AIActions
-      editorStore.registerSuperdoc(props.paneId, props.filePath, superdoc, taskBridge, aiActions)
+      // Register with AIActions
+      editorStore.registerSuperdoc(props.paneId, props.filePath, superdoc, null, aiActions)
     })
 
     // Also check if activeEditor is already set (small docs may init synchronously)
@@ -502,10 +473,6 @@ onUnmounted(() => {
   window.removeEventListener('docx-insert-citation', handleInsertCitationEvent)
   window.removeEventListener('docx-insert-bibliography', handleInsertBibliographyEvent)
   editorStore.unregisterSuperdoc(props.paneId, props.filePath)
-  if (taskBridge) {
-    taskBridge.destroy()
-    taskBridge = null
-  }
   if (superdoc) {
     superdoc.destroy()
     superdoc = null

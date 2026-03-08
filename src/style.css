@@ -5,6 +5,7 @@
 @import './css/handsontable.css';
 @import './css/superdoc.css';
 @import './css/xterm.css';
+@import './css/comments.css';
 
 @tailwind base;
 @tailwind components;
