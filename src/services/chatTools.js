@@ -935,8 +935,6 @@ export function getAiTools(workspace) {
         }).optional().describe('Optional: propose a specific text edit as part of your reply'),
       }),
       execute: async (args) => {
-        console.log('[reply_to_comment] raw args:', JSON.stringify(args))
-
         const { comment_id, text, proposed_edit } = args
         const { useCommentsStore } = await import('../stores/comments')
         const commentsStore = useCommentsStore()

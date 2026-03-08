@@ -106,8 +106,7 @@ export const useChatStore = defineStore('chat', () => {
       },
 
       onError: (err) => {
-        const lastMsg = chat.state.messagesRef.value[chat.state.messagesRef.value.length - 1]
-        console.error(`[chat] onError:`, err?.message || err, '\nlast msg role:', lastMsg?.role, '\nlast msg parts:', JSON.stringify(lastMsg?.parts?.map(p => ({ type: p.type, state: p.state, inputType: typeof p.input, toolName: p.toolName }))))
+        console.error('[chat] onError:', err?.message || err)
         session.updatedAt = new Date().toISOString()
 
         // Two failure modes from invalid tool call JSON (e.g. model mixes XML

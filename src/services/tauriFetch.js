@@ -191,13 +191,6 @@ export function createTauriFetch() {
 
     // 4. Start the stream via Rust (ALL listeners are ready now)
     try {
-      // DEBUG: save request JSON to disk for inspection
-      try {
-        const debugPath = '/Users/waqr/Desktop/hugin-munin/dev-debug-request.json'
-        await invoke('write_file', { path: debugPath, content: body })
-        console.log('[tauriFetch] Saved request body to dev-debug-request.json')
-      } catch (e) { console.warn('[tauriFetch] Could not save debug JSON:', e) }
-
       console.log('[tauriFetch] Starting stream:', { sessionId, url: url.toString(), method: options.method || 'POST' })
       await invoke('chat_stream', {
         sessionId,
