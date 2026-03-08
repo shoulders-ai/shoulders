@@ -1,6 +1,7 @@
 import { useEditorStore } from '../stores/editor'
 import { useFilesStore } from '../stores/files'
 import { gitDiffSummary, gitBranch } from './git'
+import { isChatTab, isNewTab } from '../utils/fileTypes'
 
 /**
  * Builds a compact <workspace-meta> block from editor + git state.
@@ -12,8 +13,8 @@ export async function buildWorkspaceMeta(workspacePath) {
   const editorStore = useEditorStore()
   const parts = []
 
-  // Open tabs (relative paths)
-  const openFiles = [...editorStore.allOpenFiles]
+  // Open tabs (relative paths, excluding chat/newtab virtual tabs)
+  const openFiles = [...editorStore.allOpenFiles].filter(f => !isChatTab(f) && !isNewTab(f))
   if (openFiles.length > 0) {
     const relative = openFiles.map(f => f.startsWith(workspacePath)
       ? f.slice(workspacePath.length + 1)
@@ -21,8 +22,12 @@ export async function buildWorkspaceMeta(workspacePath) {
     parts.push(`Open tabs: ${relative.join(', ')}`)
   }
 
-  // Active tab
-  const activeTab = editorStore.activeTab
+  // Active tab — if chat/newtab is focused, fall back to the nearest file pane
+  let activeTab = editorStore.activeTab
+  if (activeTab && (isChatTab(activeTab) || isNewTab(activeTab))) {
+    const filePane = editorStore._findNonChatPane()
+    activeTab = filePane?.activeTab || null
+  }
   if (activeTab) {
     const rel = activeTab.startsWith(workspacePath)
       ? activeTab.slice(workspacePath.length + 1)

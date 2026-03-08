@@ -64,6 +64,32 @@ export function createTauriFetch() {
       body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body)
     }
 
+    // Fix poisoned tool_use.input in the final request body.
+    // Invalid tool call JSON (XML in args) creates output-error parts where input
+    // is undefined/missing. The SDK validator requires input to be undefined (skips
+    // schema check), but Anthropic/OpenAI/Google require input to be a dict.
+    // Fix here — after SDK validation, before the request leaves the app.
+    if (body) {
+      try {
+        const parsed = JSON.parse(body)
+        if (parsed.messages) {
+          let fixed = false
+          for (const msg of parsed.messages) {
+            const content = msg.content
+            if (!Array.isArray(content)) continue
+            for (const part of content) {
+              if (part.type === 'tool_use' && (typeof part.input !== 'object' || part.input === null || part.input === undefined)) {
+                console.warn('[tauriFetch] Fixing tool_use.input:', part.name, 'was:', typeof part.input)
+                part.input = {}
+                fixed = true
+              }
+            }
+          }
+          if (fixed) body = JSON.stringify(parsed)
+        }
+      } catch { /* ignore */ }
+    }
+
     // Inject Anthropic prompt caching for direct API calls (desktop with own API key)
     // Shoulders proxy users get this server-side; direct users need it here
     if (body && url.toString().includes('api.anthropic.com')) {
@@ -165,6 +191,13 @@ export function createTauriFetch() {
 
     // 4. Start the stream via Rust (ALL listeners are ready now)
     try {
+      // DEBUG: save request JSON to disk for inspection
+      try {
+        const debugPath = '/Users/waqr/Desktop/hugin-munin/dev-debug-request.json'
+        await invoke('write_file', { path: debugPath, content: body })
+        console.log('[tauriFetch] Saved request body to dev-debug-request.json')
+      } catch (e) { console.warn('[tauriFetch] Could not save debug JSON:', e) }
+
       console.log('[tauriFetch] Starting stream:', { sessionId, url: url.toString(), method: options.method || 'POST' })
       await invoke('chat_stream', {
         sessionId,
