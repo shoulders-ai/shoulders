@@ -136,6 +136,31 @@ export const deckViews = sqliteTable('deck_views', {
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 })
 
+export const workspaces = sqliteTable('workspaces', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  ownerId: text('owner_id').notNull().references(() => users.id),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at'),
+})
+
+export const workspaceMembers = sqliteTable('workspace_members', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  role: text('role').notNull(), // 'admin', 'editor', 'viewer'
+  joinedAt: integer('joined_at').notNull(),
+})
+
+export const workspaceInvites = sqliteTable('workspace_invites', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.id),
+  token: text('token').notNull().unique(),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at'), // nullable, null = never expires
+})
+
 export const pageViews = sqliteTable('page_views', {
   id: text('id').primaryKey(),
   path: text('path').notNull(),

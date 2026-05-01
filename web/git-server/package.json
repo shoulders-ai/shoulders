@@ -1,0 +1,13 @@
+{
+  "name": "shoulders-git-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "jose": "^6.0.0"
+  }
+}

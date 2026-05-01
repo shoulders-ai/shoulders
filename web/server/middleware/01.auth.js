@@ -16,6 +16,7 @@ const PROTECTED_PREFIXES = [
   '/api/v1/stripe/portal',
   '/api/v1/stripe/credits',
   '/api/v1/stripe/recharge-settings',
+  '/api/v1/workspaces',
 ]
 
 export default defineEventHandler(async (event) => {

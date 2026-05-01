@@ -1,0 +1,15 @@
+[Unit]
+Description=Shoulders Git HTTP Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/shoulders/web/git-server
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+EnvironmentFile=/home/ubuntu/shoulders/web/.env
+
+[Install]
+WantedBy=multi-user.target

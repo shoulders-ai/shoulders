@@ -1,0 +1,11 @@
+shoulde.rs {
+	# Git HTTP backend — proxied to shoulders-git-server on :3001
+	handle /git/* {
+		reverse_proxy localhost:3001
+	}
+
+	# Everything else — Nuxt app on :3000
+	handle {
+		reverse_proxy localhost:3000
+	}
+}

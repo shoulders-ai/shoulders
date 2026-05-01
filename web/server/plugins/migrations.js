@@ -238,6 +238,38 @@ export default defineNitroPlugin(() => {
     try { sqlite.exec(stmt) } catch {}
   }
 
+  // Team workspaces tables (idempotent)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      owner_id TEXT NOT NULL REFERENCES users(id),
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS workspace_members (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      role TEXT NOT NULL,
+      joined_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace ON workspace_members(workspace_id);
+    CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON workspace_members(user_id);
+
+    CREATE TABLE IF NOT EXISTS workspace_invites (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+      token TEXT NOT NULL UNIQUE,
+      created_by TEXT NOT NULL REFERENCES users(id),
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_workspace_invites_token ON workspace_invites(token);
+    CREATE INDEX IF NOT EXISTS idx_workspace_invites_workspace ON workspace_invites(workspace_id);
+  `)
+
   // Seed existing deck shares (idempotent)
   const seedShares = [
     ['seed_fe6kc', 'fe6kc-ch160-yw8c', 'deck-antler', 'faerber',       '2026-02-16T10:17:44.567Z'],
