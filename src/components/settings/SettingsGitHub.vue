@@ -1,9 +1,21 @@
 <template>
   <div>
-    <h3 class="settings-section-title">GitHub</h3>
+    <h3 class="settings-section-title">{{ isTeamWorkspace ? 'Team Sync' : 'GitHub' }}</h3>
+
+    <!-- Team workspace state -->
+    <template v-if="isTeamWorkspace">
+      <div class="gh-section">
+        <div class="gh-repo-card">
+          <div class="gh-repo-info">
+            <span class="gh-repo-name">{{ workspace.teamMeta?.name || 'Team Workspace' }}</span>
+            <span class="gh-repo-url" style="opacity: 0.5;">Syncing every 10 seconds</span>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- Connected state -->
-    <template v-if="workspace.githubUser">
+    <template v-else-if="workspace.githubUser">
       <div class="gh-connected">
         <img v-if="workspace.githubUser.avatarUrl" :src="workspace.githubUser.avatarUrl" class="gh-avatar" />
         <div class="gh-user-info">
@@ -143,6 +155,7 @@ import { ref, computed } from 'vue'
 import { useWorkspaceStore } from '../../stores/workspace'
 
 const workspace = useWorkspaceStore()
+const isTeamWorkspace = computed(() => !!workspace.teamMeta)
 
 const loading = ref(false)
 const error = ref('')

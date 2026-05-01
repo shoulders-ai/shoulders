@@ -310,15 +310,7 @@ async function createTeamWorkspace() {
         await setupTeamRemote(selected, result.gitUrl)
         await configureTeamGitUser(selected, workspace.shouldersAuth)
 
-        await gitAdd(selected)
-        try { await gitCommit(selected, 'Initial commit') } catch {}
-
-        const { gitPush, gitBranch } = await import('../services/git')
-        const branch = await gitBranch(selected)
-        if (branch) {
-          await gitPush(selected, 'origin', branch, token)
-        }
-
+        // Write team.json BEFORE push so workspace opens as team even if push fails
         await saveTeamMeta(selected, {
           workspaceId: result.id,
           gitUrl: result.gitUrl,
@@ -327,6 +319,17 @@ async function createTeamWorkspace() {
         })
         serverOk = true
         inviteToken = result.inviteToken
+
+        // Initial commit + push (best effort — sync will retry)
+        await gitAdd(selected)
+        try { await gitCommit(selected, 'Initial commit') } catch {}
+        try {
+          const { gitPush, gitBranch } = await import('../services/git')
+          const branch = await gitBranch(selected)
+          if (branch) await gitPush(selected, 'origin', branch, token)
+        } catch (e) {
+          console.warn('[team] Initial push failed, sync will retry:', e)
+        }
       } catch (e) {
         console.error('[team] Server registration failed:', e)
         toastStore.show(
