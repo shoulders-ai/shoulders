@@ -19,7 +19,7 @@
         @open-folder="pickWorkspace"
         @open-workspace="openWorkspace"
         @clone="handleCloneFromHeader"
-        @create-team="showLauncherForTeam('create')"
+        @create-team="teamCreateDialogVisible = true"
         @join-team="teamJoinDialogVisible = true"
       />
 
@@ -85,6 +85,14 @@
     <!-- Snapshot Dialog (Cmd+S save naming) -->
     <SnapshotDialog :visible="snapshotDialogVisible" @resolve="handleSnapshotResolve" />
 
+    <!-- Team Create Dialog (inline from workspace switcher) -->
+    <TeamCreateDialog
+      :visible="teamCreateDialogVisible"
+      @close="teamCreateDialogVisible = false"
+      @open-workspace="openWorkspace"
+      @team-created="handleTeamCreated"
+    />
+
     <!-- Team Invite Dialog (shown after creating a team workspace) -->
     <TeamInviteDialog
       :visible="teamInviteDialogVisible"
@@ -141,6 +149,7 @@ import BottomPanel from './components/layout/BottomPanel.vue'
 import SearchDialog from './components/layout/SearchDialog.vue'
 import SnapshotDialog from './components/layout/SnapshotDialog.vue'
 import PopoutEditor from './components/editor/PopoutEditor.vue'
+import TeamCreateDialog from './components/TeamCreateDialog.vue'
 import TeamInviteDialog from './components/TeamInviteDialog.vue'
 import TeamJoinDialog from './components/TeamJoinDialog.vue'
 
@@ -177,9 +186,10 @@ const snapshotDialogVisible = ref(false)
 
 const rightSidebarPreSnapWidth = ref(null)
 const pendingClone = ref(false)
-const pendingTeamAction = ref(null) // 'create' | null (join uses dialog now)
+const pendingTeamAction = ref(null)
 const teamInviteDialogVisible = ref(false)
 const teamInviteToken = ref('')
+const teamCreateDialogVisible = ref(false)
 const teamJoinDialogVisible = ref(false)
 let sidebarWidthSaveTimer = null
 
@@ -280,13 +290,6 @@ async function pickWorkspace() {
 
 async function handleCloneFromHeader() {
   pendingClone.value = true
-  if (workspace.isOpen) {
-    await closeWorkspace()
-  }
-}
-
-async function showLauncherForTeam(action) {
-  pendingTeamAction.value = action
   if (workspace.isOpen) {
     await closeWorkspace()
   }
