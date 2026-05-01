@@ -46,6 +46,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: 'You are already a member of this workspace' })
   }
 
+  const config = useRuntimeConfig()
+
   // Get workspace details
   const workspace = db.select().from(workspaces)
     .where(eq(workspaces.id, invite.workspaceId))
@@ -68,6 +70,6 @@ export default defineEventHandler(async (event) => {
   return {
     id: workspace.id,
     name: workspace.name,
-    gitUrl: `https://shoulde.rs/git/${workspace.id}.git`,
+    gitUrl: `${config.gitServerUrl}/git/${workspace.id}.git`,
   }
 })

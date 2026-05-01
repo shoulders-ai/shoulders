@@ -16,6 +16,7 @@ export default defineNuxtConfig({
     zApiKey: '',
     resendApiKey: '',
     baseUrl: 'http://localhost:3000',
+    gitServerUrl: 'http://localhost:3099',
     githubRepo: 'user/shoulders',
     githubClientId: '',
     githubClientSecret: '',

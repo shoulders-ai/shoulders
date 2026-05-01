@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
   }
 
+  const config = useRuntimeConfig()
   const { name } = await readBody(event)
 
   if (!name || typeof name !== 'string' || !name.trim()) {
@@ -77,7 +78,7 @@ export default defineEventHandler(async (event) => {
   return {
     id: workspaceId,
     name: name.trim(),
-    gitUrl: `https://shoulde.rs/git/${workspaceId}.git`,
+    gitUrl: `${config.gitServerUrl}/git/${workspaceId}.git`,
     inviteToken,
   }
 })
