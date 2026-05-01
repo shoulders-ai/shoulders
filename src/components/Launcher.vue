@@ -290,52 +290,50 @@ async function createTeamWorkspace() {
       await invoke('write_file', { path: gitignorePath, content: gitignoreContent })
     }
 
-    // If logged in to Shoulders, register on server and set up remote
+    // Register on server + set up sync
     let serverOk = false
     let inviteToken = null
-    if (workspace.shouldersAuth?.token) {
+
+    if (!workspace.shouldersAuth?.token) {
+      toastStore.show('Workspace created locally. Log in to enable team sync.', { type: 'warning' })
+    } else {
       try {
         const freshOk = await workspace.ensureFreshToken()
-        if (freshOk === true && workspace.shouldersAuth?.token) {
-          const token = workspace.shouldersAuth.token
-          const name = selected.split('/').pop() || 'workspace'
-          const result = await apiCreateTeamWorkspace(name, token)
-
-          await setupTeamRemote(selected, result.gitUrl)
-          await configureTeamGitUser(selected, workspace.shouldersAuth)
-
-          await gitAdd(selected)
-          try {
-            await gitCommit(selected, 'Initial commit')
-          } catch { /* may already have a commit */ }
-
-          const { gitPush, gitBranch } = await import('../services/git')
-          const branch = await gitBranch(selected)
-          if (branch) {
-            await gitPush(selected, 'origin', branch, token)
-          }
-
-          await saveTeamMeta(selected, {
-            workspaceId: result.id,
-            gitUrl: result.gitUrl,
-            inviteToken: result.inviteToken,
-            name: result.name,
-          })
-          serverOk = true
-          inviteToken = result.inviteToken
+        if (!freshOk || !workspace.shouldersAuth?.token) {
+          throw new Error('Authentication expired. Please log in again.')
         }
+
+        const token = workspace.shouldersAuth.token
+        const name = selected.split('/').pop() || 'workspace'
+        const result = await apiCreateTeamWorkspace(name, token)
+
+        await setupTeamRemote(selected, result.gitUrl)
+        await configureTeamGitUser(selected, workspace.shouldersAuth)
+
+        await gitAdd(selected)
+        try { await gitCommit(selected, 'Initial commit') } catch {}
+
+        const { gitPush, gitBranch } = await import('../services/git')
+        const branch = await gitBranch(selected)
+        if (branch) {
+          await gitPush(selected, 'origin', branch, token)
+        }
+
+        await saveTeamMeta(selected, {
+          workspaceId: result.id,
+          gitUrl: result.gitUrl,
+          inviteToken: result.inviteToken,
+          name: result.name,
+        })
+        serverOk = true
+        inviteToken = result.inviteToken
       } catch (e) {
-        console.warn('[team] Server registration failed, workspace created locally:', e)
+        console.error('[team] Server registration failed:', e)
         toastStore.show(
-          'Workspace created locally. Team sync will be available when the server is reachable.',
-          { type: 'warning' }
+          `Team workspace setup failed: ${String(e).replace(/^Error:\s*/i, '')}`,
+          { type: 'error' }
         )
       }
-    } else {
-      toastStore.show(
-        'Workspace created locally. Log in to enable team sync.',
-        { type: 'warning' }
-      )
     }
 
     emit('open-workspace', selected)
@@ -344,6 +342,7 @@ async function createTeamWorkspace() {
     }
   } catch (e) {
     console.error('Failed to create team workspace:', e)
+    toastStore.show(`Failed to create workspace: ${e.message || e}`, { type: 'error' })
   }
 }
 
