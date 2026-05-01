@@ -5,7 +5,10 @@ import { randomBytes } from 'crypto'
 import { execSync } from 'child_process'
 import { existsSync, mkdirSync } from 'fs'
 
-const REPO_ROOT = process.env.GIT_REPO_ROOT || '/data/repos'
+function getRepoRoot() {
+  const config = useRuntimeConfig()
+  return process.env.GIT_REPO_ROOT || config.gitRepoRoot || '/data/repos'
+}
 
 function generateInviteToken() {
   return randomBytes(3).toString('hex') // 6-char hex code like "a7f3x2"
@@ -34,9 +37,10 @@ export default defineEventHandler(async (event) => {
   const inviteToken = generateInviteToken()
 
   // Create bare git repo on disk
-  const repoPath = `${REPO_ROOT}/${workspaceId}.git`
-  if (!existsSync(REPO_ROOT)) {
-    mkdirSync(REPO_ROOT, { recursive: true })
+  const repoRoot = getRepoRoot()
+  const repoPath = `${repoRoot}/${workspaceId}.git`
+  if (!existsSync(repoRoot)) {
+    mkdirSync(repoRoot, { recursive: true })
   }
   try {
     execSync(`git init --bare "${repoPath}"`, { stdio: 'pipe' })
