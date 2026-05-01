@@ -131,12 +131,18 @@ import {
 
 const props = defineProps({
   autoClone: { type: Boolean, default: false },
+  autoTeamAction: { type: String, default: null },
 })
 
 const emit = defineEmits(['open-folder', 'open-workspace'])
 
 watch(() => props.autoClone, (val) => {
   if (val) showClone.value = true
+})
+
+watch(() => props.autoTeamAction, (val) => {
+  if (val === 'create') createTeamWorkspace()
+  else if (val === 'join') showJoin.value = true
 })
 
 const workspace = useWorkspaceStore()

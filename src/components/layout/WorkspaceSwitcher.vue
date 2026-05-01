@@ -51,6 +51,15 @@
           Clone Repository...
         </div>
         <div class="switcher-separator"></div>
+        <div class="switcher-action" @click="$emit('create-team')">
+          <IconUsers :size="14" :stroke-width="1.5" />
+          Create Team Workspace...
+        </div>
+        <div class="switcher-action" @click="$emit('join-team')">
+          <IconUserPlus :size="14" :stroke-width="1.5" />
+          Join Team Workspace...
+        </div>
+        <div class="switcher-separator"></div>
         <div class="switcher-action" @click="$emit('open-settings')">
           <IconSettings :size="14" :stroke-width="1.5" />
           Settings...
@@ -68,6 +77,7 @@ import { modKey } from '../../platform'
 import {
   IconSearch, IconFolder, IconFolderOpen,
   IconGitBranch, IconX, IconSettings,
+  IconUsers, IconUserPlus,
 } from '@tabler/icons-vue'
 
 const props = defineProps({
@@ -77,7 +87,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'close', 'open-folder', 'open-workspace',
-  'open-settings', 'clone',
+  'open-settings', 'clone', 'create-team', 'join-team',
 ])
 
 const workspace = useWorkspaceStore()

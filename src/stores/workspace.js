@@ -101,9 +101,6 @@ export const useWorkspaceStore = defineStore('workspace', {
       // Initialize .project directory (public project data)
       await this.initProjectDir()
 
-      // Initialize _private/ directory (personal files in team workspaces)
-      await this.initPrivateDir()
-
       // Install Claude Code edit interception hooks in this workspace
       await this.installEditHooks()
 
@@ -135,9 +132,11 @@ export const useWorkspaceStore = defineStore('workspace', {
       // Start git auto-commit
       this.startAutoCommit()
 
-      // Initialize GitHub sync (skipped if team workspace)
+      // Initialize team sync or GitHub sync
       await this.initTeamSync()
-      if (!this.teamMeta) {
+      if (this.teamMeta) {
+        await this.initPrivateDir()
+      } else {
         this.initGitHub()
       }
 

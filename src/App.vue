@@ -7,6 +7,7 @@
     <Launcher
       v-else-if="!workspace.isOpen"
       :auto-clone="pendingClone"
+      :auto-team-action="pendingTeamAction"
       @open-folder="pickWorkspace"
       @open-workspace="openWorkspace"
     />
@@ -17,6 +18,8 @@
         @open-folder="pickWorkspace"
         @open-workspace="openWorkspace"
         @clone="handleCloneFromHeader"
+        @create-team="showLauncherForTeam('create')"
+        @join-team="showLauncherForTeam('join')"
       />
 
       <!-- Content row -->
@@ -157,6 +160,7 @@ const snapshotDialogVisible = ref(false)
 
 const rightSidebarPreSnapWidth = ref(null)
 const pendingClone = ref(false)
+const pendingTeamAction = ref(null) // 'create' | 'join' | null
 let sidebarWidthSaveTimer = null
 
 let unlistenPopoutClosed = null
@@ -256,6 +260,13 @@ async function pickWorkspace() {
 
 async function handleCloneFromHeader() {
   pendingClone.value = true
+  if (workspace.isOpen) {
+    await closeWorkspace()
+  }
+}
+
+async function showLauncherForTeam(action) {
+  pendingTeamAction.value = action
   if (workspace.isOpen) {
     await closeWorkspace()
   }

@@ -74,6 +74,8 @@
     @open-workspace="(p) => $emit('open-workspace', p)"
     @open-settings="workspace.openSettings()"
     @clone="$emit('clone')"
+    @create-team="$emit('create-team')"
+    @join-team="$emit('join-team')"
   />
 </template>
 
@@ -87,7 +89,7 @@ import ProjectSwitcherButton from '../shared/ProjectSwitcherButton.vue'
 import SidebarToggleButton from '../shared/SidebarToggleButton.vue'
 import WorkspaceSwitcher from './WorkspaceSwitcher.vue'
 
-defineEmits(['open-folder', 'open-workspace', 'clone'])
+defineEmits(['open-folder', 'open-workspace', 'clone', 'create-team', 'join-team'])
 
 const workspace = useWorkspaceStore()
 const projectBtnRef = ref(null)

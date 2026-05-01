@@ -16,17 +16,18 @@
         />
       </div>
 
-      <!-- Resize handle: explorer <-> private (when both expanded) -->
+      <!-- Resize handle: explorer <-> private (when both expanded, team workspaces only) -->
       <div
-        v-if="showHandleExplorerPrivate"
+        v-if="isTeamWorkspace && showHandleExplorerPrivate"
         class="relative h-0.5 shrink-0 cursor-row-resize bg-transparent"
         @mousedown="startResizePrivate"
       >
         <div class="absolute left-0 right-0 top-0.5 -translate-y-1/2 h-4 w-full z-10"></div>
       </div>
 
-      <!-- Private section -->
+      <!-- Private section (team workspaces only) -->
       <div
+        v-if="isTeamWorkspace"
         class="overflow-hidden relative border-t border-line"
         :style="privateStyle"
       >
@@ -36,7 +37,7 @@
         />
       </div>
 
-      <!-- Resize handle: above refs (when refs + at least one panel above is expanded) -->
+      <!-- Resize handle: above refs -->
       <div
         v-if="showHandleAboveRefs"
         class="relative h-0.5 shrink-0 cursor-row-resize bg-transparent"
@@ -72,6 +73,8 @@ const emit = defineEmits(['version-history'])
 const workspace = useWorkspaceStore()
 const containerEl = ref(null)
 const fileTreeRef = ref(null)
+
+const isTeamWorkspace = computed(() => !!workspace.teamMeta)
 
 // --- Collapse states ---
 const explorerCollapsed = ref(false)
@@ -113,7 +116,7 @@ function toggleRefs() {
 const expandedCount = computed(() => {
   let n = 0
   if (!explorerCollapsed.value) n++
-  if (!privateCollapsed.value) n++
+  if (isTeamWorkspace.value && !privateCollapsed.value) n++
   if (!refsCollapsed.value) n++
   return n
 })
@@ -138,12 +141,16 @@ const refsStyle = computed(() => {
 
 // --- Resize handle visibility ---
 const showHandleExplorerPrivate = computed(() =>
-  !explorerCollapsed.value && !privateCollapsed.value
+  isTeamWorkspace.value && !explorerCollapsed.value && !privateCollapsed.value
 )
 
-const showHandleAboveRefs = computed(() =>
-  !refsCollapsed.value && (!explorerCollapsed.value || !privateCollapsed.value)
-)
+const showHandleAboveRefs = computed(() => {
+  if (!refsCollapsed.value) {
+    if (isTeamWorkspace.value) return !explorerCollapsed.value || !privateCollapsed.value
+    return !explorerCollapsed.value
+  }
+  return false
+})
 
 // --- Resize logic ---
 function startResizePrivate(event) {
