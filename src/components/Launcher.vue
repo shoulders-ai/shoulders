@@ -23,6 +23,10 @@
           <IconUsers :size="16" :stroke-width="1.5" />
           Create Team Workspace
         </button>
+        <button class="launcher-btn secondary" @click="showJoin = true">
+          <IconUserPlus :size="16" :stroke-width="1.5" />
+          Join Team Workspace
+        </button>
       </div>
 
       <!-- No-recents hint -->
@@ -52,6 +56,30 @@
           <button class="launcher-btn-text" @click="cancelClone" :disabled="cloning">Cancel</button>
         </div>
         <div v-if="cloneError" class="launcher-error">{{ cloneError }}</div>
+      </div>
+
+      <!-- Join team inline form -->
+      <div v-if="showJoin" class="launcher-clone-form">
+        <input
+          ref="joinInputRef"
+          v-model="joinToken"
+          class="launcher-input"
+          placeholder="Paste invite token or link"
+          spellcheck="false"
+          @keydown.enter="doJoin"
+          @keydown.escape="cancelJoin"
+        />
+        <div class="launcher-clone-actions">
+          <button
+            class="launcher-btn primary small"
+            :disabled="!joinToken.trim() || joining"
+            @click="doJoin"
+          >
+            {{ joining ? 'Joining...' : 'Join' }}
+          </button>
+          <button class="launcher-btn-text" @click="cancelJoin" :disabled="joining">Cancel</button>
+        </div>
+        <div v-if="joinError" class="launcher-error">{{ joinError }}</div>
       </div>
 
       <!-- Recent Workspaces -->
@@ -91,8 +119,15 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useWorkspaceStore } from '../stores/workspace'
 import { modKey, isMac } from '../platform'
-import { IconUsers } from '@tabler/icons-vue'
-import { gitInit } from '../services/git'
+import { IconUsers, IconUserPlus } from '@tabler/icons-vue'
+import { gitInit, gitAdd, gitCommit } from '../services/git'
+import {
+  createTeamWorkspace as apiCreateTeamWorkspace,
+  joinTeamWorkspace as apiJoinTeamWorkspace,
+  setupTeamRemote,
+  configureTeamGitUser,
+  saveTeamMeta,
+} from '../services/teamSync'
 
 const props = defineProps({
   autoClone: { type: Boolean, default: false },
@@ -114,10 +149,24 @@ const cloning = ref(false)
 const cloneError = ref('')
 const urlInputRef = ref(null)
 
+// Join team state
+const showJoin = ref(false)
+const joinToken = ref('')
+const joining = ref(false)
+const joinError = ref('')
+const joinInputRef = ref(null)
+
 watch(showClone, (val) => {
   if (val) {
     cloneError.value = ''
     nextTick(() => urlInputRef.value?.focus())
+  }
+})
+
+watch(showJoin, (val) => {
+  if (val) {
+    joinError.value = ''
+    nextTick(() => joinInputRef.value?.focus())
   }
 })
 
@@ -217,15 +266,128 @@ async function createTeamWorkspace() {
       gitignoreContent = gitignoreContent.trimEnd() + '\n.shoulders/\n'
       changed = true
     }
-    // Clean up leading newline if file was empty
     gitignoreContent = gitignoreContent.replace(/^\n+/, '')
     if (changed || !await invoke('path_exists', { path: gitignorePath })) {
       await invoke('write_file', { path: gitignorePath, content: gitignoreContent })
     }
 
+    // If logged in to Shoulders, register on server and set up remote
+    if (workspace.shouldersAuth?.token) {
+      try {
+        const freshOk = await workspace.ensureFreshToken()
+        if (freshOk === true && workspace.shouldersAuth?.token) {
+          const token = workspace.shouldersAuth.token
+          const name = selected.split('/').pop() || 'workspace'
+          const result = await apiCreateTeamWorkspace(name, token)
+
+          // Set remote
+          await setupTeamRemote(selected, result.gitUrl)
+
+          // Configure git user
+          await configureTeamGitUser(selected, workspace.shouldersAuth)
+
+          // Initial commit + push
+          await gitAdd(selected)
+          try {
+            await gitCommit(selected, 'Initial commit')
+          } catch { /* may already have a commit */ }
+
+          const { gitPush, gitBranch } = await import('../services/git')
+          const branch = await gitBranch(selected)
+          if (branch) {
+            await gitPush(selected, 'origin', branch, token)
+          }
+
+          // Save team metadata
+          await saveTeamMeta(selected, {
+            workspaceId: result.id,
+            gitUrl: result.gitUrl,
+            inviteToken: result.inviteToken,
+            name: result.name,
+          })
+        }
+      } catch (e) {
+        console.warn('[team] Server registration failed, workspace created locally:', e)
+      }
+    }
+
     emit('open-workspace', selected)
   } catch (e) {
     console.error('Failed to create team workspace:', e)
+  }
+}
+
+function cancelJoin() {
+  showJoin.value = false
+  joinToken.value = ''
+  joinError.value = ''
+}
+
+function extractInviteToken(input) {
+  const trimmed = input.trim()
+  // Handle full URL: shoulde.rs/join/abc123 or https://shoulde.rs/join/abc123
+  const match = trimmed.match(/\/join\/([a-zA-Z0-9_-]+)/)
+  if (match) return match[1]
+  // Bare token
+  return trimmed
+}
+
+async function doJoin() {
+  const raw = joinToken.value.trim()
+  if (!raw || joining.value) return
+
+  if (!workspace.shouldersAuth?.token) {
+    joinError.value = 'Please log in to Shoulders first (Settings > Account).'
+    return
+  }
+
+  joining.value = true
+  joinError.value = ''
+
+  try {
+    const freshOk = await workspace.ensureFreshToken()
+    if (freshOk !== true || !workspace.shouldersAuth?.token) {
+      joinError.value = 'Authentication expired. Please log in again.'
+      return
+    }
+
+    const token = workspace.shouldersAuth.token
+    const invite = extractInviteToken(raw)
+    const result = await apiJoinTeamWorkspace(invite, token)
+
+    // Pick clone destination
+    const { homeDir } = await import('@tauri-apps/api/path')
+    const home = await homeDir()
+    const parentDir = await open({
+      directory: true,
+      multiple: false,
+      title: 'Clone team workspace into...',
+      defaultPath: home,
+    })
+    if (!parentDir) { joining.value = false; return }
+
+    const folderName = result.name || `team-${result.id}`
+    const targetPath = `${parentDir}/${folderName}`
+
+    // Clone using Shoulders JWT
+    await invoke('git_clone_authenticated', { url: result.gitUrl, targetPath, token })
+
+    // Save team metadata
+    await saveTeamMeta(targetPath, {
+      workspaceId: result.id,
+      gitUrl: result.gitUrl,
+      name: result.name,
+    })
+
+    // Configure git user
+    await configureTeamGitUser(targetPath, workspace.shouldersAuth)
+
+    cancelJoin()
+    emit('open-workspace', targetPath)
+  } catch (e) {
+    joinError.value = String(e).replace(/^Error:\s*/i, '')
+  } finally {
+    joining.value = false
   }
 }
 

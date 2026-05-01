@@ -68,6 +68,10 @@ export const useWorkspaceStore = defineStore('workspace', {
     zoteroSyncStatus: 'disconnected', // disconnected | idle | syncing | synced | error
     zoteroSyncError: null,
     zoteroLastSyncTime: null,
+    // Team workspace
+    teamMeta: null, // { workspaceId, gitUrl, inviteToken?, name } | null
+    teamSyncStatus: 'disconnected', // idle | syncing | synced | error | conflict | disconnected
+    teamSyncError: null,
     // Skills
     skillsManifest: null,  // Array<{ name, description, path }> | null
   }),
@@ -131,8 +135,11 @@ export const useWorkspaceStore = defineStore('workspace', {
       // Start git auto-commit
       this.startAutoCommit()
 
-      // Initialize GitHub sync
-      this.initGitHub()
+      // Initialize GitHub sync (skipped if team workspace)
+      await this.initTeamSync()
+      if (!this.teamMeta) {
+        this.initGitHub()
+      }
 
       // Persist last workspace + add to recents
       try {
@@ -173,6 +180,9 @@ export const useWorkspaceStore = defineStore('workspace', {
       this.apiKeys = {}
       this.modelsConfig = null
       this.skillsManifest = null
+      this.teamMeta = null
+      this.teamSyncStatus = 'disconnected'
+      this.teamSyncError = null
       localStorage.removeItem('lastWorkspace')
     },
 
@@ -1025,6 +1035,16 @@ exit 0
     },
 
     async autoSync() {
+      // Team workspaces use their own sync cycle (10s timer handles it)
+      if (this.teamMeta) {
+        const { syncTeamWorkspace } = await import('../services/teamSync')
+        const ok = await this.ensureFreshToken()
+        if (ok === true && this.shouldersAuth?.token) {
+          await syncTeamWorkspace(this.path, this.shouldersAuth.token)
+        }
+        return
+      }
+
       if (!this.path || !this.githubToken?.token) return
       const remote = await gitRemoteGetUrl(this.path)
       if (!remote) return
@@ -1247,9 +1267,48 @@ exit 0
       }
     },
 
+    // ── Team Sync ──
+
+    async initTeamSync() {
+      if (!this.path) return
+      const { loadTeamMeta, startTeamSync, teamSyncState } = await import('../services/teamSync')
+      const meta = await loadTeamMeta(this.path)
+      if (!meta) {
+        this.teamMeta = null
+        this.teamSyncStatus = 'disconnected'
+        return
+      }
+
+      this.teamMeta = meta
+      this.teamSyncStatus = 'idle'
+
+      const getToken = async () => {
+        const ok = await this.ensureFreshToken()
+        if (ok === true && this.shouldersAuth?.token) return this.shouldersAuth.token
+        return null
+      }
+
+      startTeamSync(this.path, getToken)
+
+      // Poll teamSyncState into store
+      this._teamSyncPoll = setInterval(() => {
+        this.teamSyncStatus = teamSyncState.status
+        this.teamSyncError = teamSyncState.error
+      }, 2000)
+    },
+
+    stopTeamSync() {
+      import('../services/teamSync').then(({ stopTeamSync }) => stopTeamSync())
+      if (this._teamSyncPoll) {
+        clearInterval(this._teamSyncPoll)
+        this._teamSyncPoll = null
+      }
+    },
+
     async cleanup() {
       this.stopAutoCommit()
       this.stopSyncTimer()
+      this.stopTeamSync()
       if (this._balanceInterval) {
         clearInterval(this._balanceInterval)
         this._balanceInterval = null
