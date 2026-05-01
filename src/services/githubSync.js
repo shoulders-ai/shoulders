@@ -385,6 +385,11 @@ export async function ensureGitignore(repoPath) {
       changed = true
     }
 
+    if (!content.includes('_private/')) {
+      content = content.trimEnd() + '\n_private/\n'
+      changed = true
+    }
+
     if (changed) {
       await invoke('write_file', { path: gitignorePath, content })
     }

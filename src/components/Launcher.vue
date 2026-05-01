@@ -19,6 +19,10 @@
         <button class="launcher-btn secondary" @click="showClone = true">
           Clone Repository
         </button>
+        <button class="launcher-btn secondary" @click="createTeamWorkspace">
+          <IconUsers :size="16" :stroke-width="1.5" />
+          Create Team Workspace
+        </button>
       </div>
 
       <!-- No-recents hint -->
@@ -87,6 +91,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useWorkspaceStore } from '../stores/workspace'
 import { modKey, isMac } from '../platform'
+import { IconUsers } from '@tabler/icons-vue'
+import { gitInit } from '../services/git'
 
 const props = defineProps({
   autoClone: { type: Boolean, default: false },
@@ -161,6 +167,65 @@ async function doClone() {
     cloneError.value = String(e).replace(/^Error:\s*/i, '')
   } finally {
     cloning.value = false
+  }
+}
+
+async function createTeamWorkspace() {
+  const { homeDir } = await import('@tauri-apps/api/path')
+  const home = await homeDir()
+  const selected = await open({
+    directory: true,
+    multiple: false,
+    title: 'Choose location for team workspace',
+    defaultPath: home,
+  })
+  if (!selected) return
+
+  try {
+    // Create the folder if it doesn't exist
+    const exists = await invoke('path_exists', { path: selected })
+    if (!exists) {
+      await invoke('create_dir', { path: selected })
+    }
+
+    // Initialize git repo
+    const gitExists = await invoke('path_exists', { path: `${selected}/.git` })
+    if (!gitExists) {
+      await gitInit(selected)
+    }
+
+    // Create _private/ folder
+    const privateDir = `${selected}/_private`
+    const privateExists = await invoke('path_exists', { path: privateDir })
+    if (!privateExists) {
+      await invoke('create_dir', { path: privateDir })
+    }
+
+    // Create .gitignore with _private/ and .shoulders/
+    const gitignorePath = `${selected}/.gitignore`
+    let gitignoreContent = ''
+    try {
+      gitignoreContent = await invoke('read_file', { path: gitignorePath })
+    } catch { /* file doesn't exist yet */ }
+
+    let changed = false
+    if (!gitignoreContent.includes('_private/')) {
+      gitignoreContent = gitignoreContent.trimEnd() + '\n_private/\n'
+      changed = true
+    }
+    if (!gitignoreContent.includes('.shoulders/')) {
+      gitignoreContent = gitignoreContent.trimEnd() + '\n.shoulders/\n'
+      changed = true
+    }
+    // Clean up leading newline if file was empty
+    gitignoreContent = gitignoreContent.replace(/^\n+/, '')
+    if (changed || !await invoke('path_exists', { path: gitignorePath })) {
+      await invoke('write_file', { path: gitignorePath, content: gitignoreContent })
+    }
+
+    emit('open-workspace', selected)
+  } catch (e) {
+    console.error('Failed to create team workspace:', e)
   }
 }
 
@@ -248,7 +313,9 @@ function removeRecent(path) {
 /* Action buttons */
 .launcher-actions {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
 }
 
 .launcher-btn {

@@ -11,6 +11,7 @@ const EMPTY_DOCX_BASE64 = 'UEsDBAoAAAAIAM9mUFze+2IhKAEAALIDAAATAAAAW0NvbnRlbnRfV
 export const useFilesStore = defineStore('files', {
   state: () => ({
     tree: [],
+    privateTree: [],
     expandedDirs: new Set(),
     activeFilePath: null,
     fileContents: {}, // cache: path → content
@@ -64,6 +65,21 @@ export const useFilesStore = defineStore('files', {
       } catch (e) {
         console.error('Failed to load file tree:', e)
         this.tree = []
+      }
+
+      await this.loadPrivateTree()
+    },
+
+    async loadPrivateTree() {
+      const workspace = useWorkspaceStore()
+      if (!workspace.privateDir) { this.privateTree = []; return }
+
+      try {
+        const exists = await invoke('path_exists', { path: workspace.privateDir })
+        if (!exists) { this.privateTree = []; return }
+        this.privateTree = await invoke('read_dir_recursive', { path: workspace.privateDir })
+      } catch (e) {
+        this.privateTree = []
       }
     },
 
@@ -131,6 +147,7 @@ export const useFilesStore = defineStore('files', {
       // Periodic poll as fallback — catches events the notify watcher may miss
       // Only updates this.tree when the tree actually changed (avoids unnecessary Vue re-renders)
       let lastTreeJson = JSON.stringify(this.tree)
+      let lastPrivateJson = JSON.stringify(this.privateTree)
       this._pollTimer = setInterval(async () => {
         const workspace = useWorkspaceStore()
         if (!workspace.path) return
@@ -142,6 +159,19 @@ export const useFilesStore = defineStore('files', {
             lastTreeJson = newJson
           }
         } catch (e) { /* workspace may have closed */ }
+        try {
+          if (workspace.privateDir) {
+            const privExists = await invoke('path_exists', { path: workspace.privateDir })
+            if (privExists) {
+              const newPrivTree = await invoke('read_dir_recursive', { path: workspace.privateDir })
+              const newPrivJson = JSON.stringify(newPrivTree)
+              if (newPrivJson !== lastPrivateJson) {
+                this.privateTree = newPrivTree
+                lastPrivateJson = newPrivJson
+              }
+            }
+          }
+        } catch (e) { /* ignore */ }
       }, 5000)
     },
 
@@ -479,6 +509,7 @@ export const useFilesStore = defineStore('files', {
         this._pollTimer = null
       }
       this.tree = []
+      this.privateTree = []
       this.expandedDirs = new Set()
       this.activeFilePath = null
       this.fileContents = {}

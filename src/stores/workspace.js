@@ -77,6 +77,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     shouldersDir: (state) => state.path ? `${state.path}/.shoulders` : null,
     projectDir: (state) => state.path ? `${state.path}/.project` : null,
     claudeDir: (state) => state.path ? `${state.path}/.claude` : null,
+    privateDir: (state) => state.path ? `${state.path}/_private` : null,
   },
 
   actions: {
@@ -95,6 +96,9 @@ export const useWorkspaceStore = defineStore('workspace', {
 
       // Initialize .project directory (public project data)
       await this.initProjectDir()
+
+      // Initialize _private/ directory (personal files in team workspaces)
+      await this.initPrivateDir()
 
       // Install Claude Code edit interception hooks in this workspace
       await this.installEditHooks()
@@ -370,6 +374,32 @@ When reviewing text:
           path: `${skillsDir}/workflow-builder/SKILL.md`,
           content: WORKFLOW_BUILDER_SKILL_CONTENT,
         })
+      }
+    },
+
+    async initPrivateDir() {
+      if (!this.path) return
+      const privateDir = `${this.path}/_private`
+
+      const exists = await invoke('path_exists', { path: privateDir })
+      if (!exists) {
+        await invoke('create_dir', { path: privateDir })
+      }
+
+      // Ensure _private/ is in .gitignore
+      const gitignorePath = `${this.path}/.gitignore`
+      try {
+        let content = ''
+        try {
+          content = await invoke('read_file', { path: gitignorePath })
+        } catch { /* file doesn't exist yet */ }
+
+        if (!content.includes('_private/')) {
+          content = content.trimEnd() + '\n_private/\n'
+          await invoke('write_file', { path: gitignorePath, content })
+        }
+      } catch (e) {
+        console.warn('Failed to update .gitignore for _private/:', e)
       }
     },
 

@@ -112,11 +112,11 @@ fn build_file_tree(dir: &Path) -> Result<Vec<FileEntry>, String> {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip hidden directories, node_modules, target, .DS_Store
+        // Skip hidden directories, node_modules, target, .DS_Store, _private
         if name.starts_with('.') && path.is_dir() {
             continue;
         }
-        if name == "node_modules" || name == "target" || name == ".DS_Store" {
+        if name == "node_modules" || name == "target" || name == ".DS_Store" || name == "_private" {
             continue;
         }
 
@@ -463,11 +463,11 @@ fn search_dir_contents(dir: &Path, query: &str, results: &mut Vec<SearchResult>,
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip hidden dirs, node_modules, target
+        // Skip hidden dirs, node_modules, target, _private
         if name.starts_with('.') && path.is_dir() {
             continue;
         }
-        if name == "node_modules" || name == "target" {
+        if name == "node_modules" || name == "target" || name == "_private" {
             continue;
         }
 
