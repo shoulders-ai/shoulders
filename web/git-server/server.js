@@ -24,7 +24,6 @@ let _db = null
 function getDb() {
   if (_db) return _db
   _db = new Database(DATABASE_PATH, { readonly: true })
-  _db.pragma('journal_mode = WAL')
   return _db
 }
 
