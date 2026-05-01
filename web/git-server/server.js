@@ -82,18 +82,27 @@ async function handleRequest(req, res) {
     return
   }
 
-  // --- Auth ---
+  // --- Auth (accepts Bearer token or Basic auth with token as password) ---
   const authHeader = req.headers['authorization']
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  let token = null
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7)
+  } else if (authHeader && authHeader.startsWith('Basic ')) {
+    // git2 sends Basic auth: base64("username:password") where password is the JWT
+    const decoded = Buffer.from(authHeader.slice(6), 'base64').toString()
+    const colonIdx = decoded.indexOf(':')
+    if (colonIdx !== -1) token = decoded.slice(colonIdx + 1)
+  }
+
+  if (!token) {
     res.writeHead(401, {
       'Content-Type': 'text/plain',
-      'WWW-Authenticate': 'Bearer realm="Shoulders Git"',
+      'WWW-Authenticate': 'Basic realm="Shoulders Git"',
     })
     res.end('Authentication required')
     return
   }
-
-  const token = authHeader.slice(7)
   const userId = await verifyJwt(token)
   if (!userId) {
     res.writeHead(401, { 'Content-Type': 'text/plain' })
