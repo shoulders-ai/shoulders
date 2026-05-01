@@ -19,11 +19,21 @@
         <button class="launcher-btn secondary" @click="showClone = true">
           Clone Repository
         </button>
-        <button class="launcher-btn secondary" @click="createTeamWorkspace">
+        <button
+          class="launcher-btn secondary"
+          :disabled="!isLoggedIn"
+          :title="!isLoggedIn ? 'Log in to create team workspaces' : undefined"
+          @click="createTeamWorkspace"
+        >
           <IconUsers :size="16" :stroke-width="1.5" />
           Create Team Workspace
         </button>
-        <button class="launcher-btn secondary" @click="showJoin = true">
+        <button
+          class="launcher-btn secondary"
+          :disabled="!isLoggedIn"
+          :title="!isLoggedIn ? 'Log in to join team workspaces' : undefined"
+          @click="showJoin = true"
+        >
           <IconUserPlus :size="16" :stroke-width="1.5" />
           Join Team Workspace
         </button>
@@ -120,6 +130,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { useWorkspaceStore } from '../stores/workspace'
 import { modKey, isMac } from '../platform'
 import { IconUsers, IconUserPlus } from '@tabler/icons-vue'
+import { useToastStore } from '../stores/toast'
 import { gitInit, gitAdd, gitCommit } from '../services/git'
 import {
   createTeamWorkspace as apiCreateTeamWorkspace,
@@ -134,7 +145,7 @@ const props = defineProps({
   autoTeamAction: { type: String, default: null },
 })
 
-const emit = defineEmits(['open-folder', 'open-workspace'])
+const emit = defineEmits(['open-folder', 'open-workspace', 'team-created'])
 
 watch(() => props.autoClone, (val) => {
   if (val) showClone.value = true
@@ -146,6 +157,8 @@ watch(() => props.autoTeamAction, (val) => {
 })
 
 const workspace = useWorkspaceStore()
+const toastStore = useToastStore()
+const isLoggedIn = computed(() => !!workspace.shouldersAuth?.token)
 const recents = computed(() => workspace.getRecentWorkspaces())
 
 // Clone state
@@ -278,6 +291,8 @@ async function createTeamWorkspace() {
     }
 
     // If logged in to Shoulders, register on server and set up remote
+    let serverOk = false
+    let inviteToken = null
     if (workspace.shouldersAuth?.token) {
       try {
         const freshOk = await workspace.ensureFreshToken()
@@ -286,13 +301,9 @@ async function createTeamWorkspace() {
           const name = selected.split('/').pop() || 'workspace'
           const result = await apiCreateTeamWorkspace(name, token)
 
-          // Set remote
           await setupTeamRemote(selected, result.gitUrl)
-
-          // Configure git user
           await configureTeamGitUser(selected, workspace.shouldersAuth)
 
-          // Initial commit + push
           await gitAdd(selected)
           try {
             await gitCommit(selected, 'Initial commit')
@@ -304,20 +315,33 @@ async function createTeamWorkspace() {
             await gitPush(selected, 'origin', branch, token)
           }
 
-          // Save team metadata
           await saveTeamMeta(selected, {
             workspaceId: result.id,
             gitUrl: result.gitUrl,
             inviteToken: result.inviteToken,
             name: result.name,
           })
+          serverOk = true
+          inviteToken = result.inviteToken
         }
       } catch (e) {
         console.warn('[team] Server registration failed, workspace created locally:', e)
+        toastStore.show(
+          'Workspace created locally. Team sync will be available when the server is reachable.',
+          { type: 'warning' }
+        )
       }
+    } else {
+      toastStore.show(
+        'Workspace created locally. Log in to enable team sync.',
+        { type: 'warning' }
+      )
     }
 
     emit('open-workspace', selected)
+    if (serverOk && inviteToken) {
+      emit('team-created', { inviteToken })
+    }
   } catch (e) {
     console.error('Failed to create team workspace:', e)
   }
@@ -521,9 +545,14 @@ function removeRecent(path) {
   border-color: rgb(var(--border));
 }
 
-.launcher-btn.secondary:hover {
+.launcher-btn.secondary:hover:not(:disabled) {
   border-color: rgb(var(--fg-muted));
   color: rgb(var(--fg-primary));
+}
+
+.launcher-btn.secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .launcher-btn.small {

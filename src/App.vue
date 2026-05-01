@@ -10,6 +10,7 @@
       :auto-team-action="pendingTeamAction"
       @open-folder="pickWorkspace"
       @open-workspace="openWorkspace"
+      @team-created="handleTeamCreated"
     />
 
     <!-- Workspace layout -->
@@ -19,7 +20,7 @@
         @open-workspace="openWorkspace"
         @clone="handleCloneFromHeader"
         @create-team="showLauncherForTeam('create')"
-        @join-team="showLauncherForTeam('join')"
+        @join-team="teamJoinDialogVisible = true"
       />
 
       <!-- Content row -->
@@ -84,6 +85,20 @@
     <!-- Snapshot Dialog (Cmd+S save naming) -->
     <SnapshotDialog :visible="snapshotDialogVisible" @resolve="handleSnapshotResolve" />
 
+    <!-- Team Invite Dialog (shown after creating a team workspace) -->
+    <TeamInviteDialog
+      :visible="teamInviteDialogVisible"
+      :invite-token="teamInviteToken"
+      @close="teamInviteDialogVisible = false"
+    />
+
+    <!-- Team Join Dialog (inline join from workspace switcher) -->
+    <TeamJoinDialog
+      :visible="teamJoinDialogVisible"
+      @close="teamJoinDialogVisible = false"
+      @open-workspace="openWorkspace"
+    />
+
     <!-- Toasts -->
     <ToastContainer />
   </div>
@@ -126,6 +141,8 @@ import BottomPanel from './components/layout/BottomPanel.vue'
 import SearchDialog from './components/layout/SearchDialog.vue'
 import SnapshotDialog from './components/layout/SnapshotDialog.vue'
 import PopoutEditor from './components/editor/PopoutEditor.vue'
+import TeamInviteDialog from './components/TeamInviteDialog.vue'
+import TeamJoinDialog from './components/TeamJoinDialog.vue'
 
 // Popout window detection (query params set by popout service)
 const _urlParams = new URLSearchParams(window.location.search)
@@ -160,7 +177,10 @@ const snapshotDialogVisible = ref(false)
 
 const rightSidebarPreSnapWidth = ref(null)
 const pendingClone = ref(false)
-const pendingTeamAction = ref(null) // 'create' | 'join' | null
+const pendingTeamAction = ref(null) // 'create' | null (join uses dialog now)
+const teamInviteDialogVisible = ref(false)
+const teamInviteToken = ref('')
+const teamJoinDialogVisible = ref(false)
 let sidebarWidthSaveTimer = null
 
 let unlistenPopoutClosed = null
@@ -270,6 +290,11 @@ async function showLauncherForTeam(action) {
   if (workspace.isOpen) {
     await closeWorkspace()
   }
+}
+
+function handleTeamCreated({ inviteToken }) {
+  teamInviteToken.value = inviteToken
+  teamInviteDialogVisible.value = true
 }
 
 async function openWorkspace(path) {

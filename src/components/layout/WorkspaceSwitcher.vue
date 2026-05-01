@@ -51,11 +51,21 @@
           Clone Repository...
         </div>
         <div class="switcher-separator"></div>
-        <div class="switcher-action" @click="$emit('create-team')">
+        <div
+          class="switcher-action"
+          :class="{ 'switcher-action-disabled': !isLoggedIn }"
+          :title="!isLoggedIn ? 'Log in to create team workspaces' : undefined"
+          @click="isLoggedIn && $emit('create-team')"
+        >
           <IconUsers :size="14" :stroke-width="1.5" />
           Create Team Workspace...
         </div>
-        <div class="switcher-action" @click="$emit('join-team')">
+        <div
+          class="switcher-action"
+          :class="{ 'switcher-action-disabled': !isLoggedIn }"
+          :title="!isLoggedIn ? 'Log in to join team workspaces' : undefined"
+          @click="isLoggedIn && $emit('join-team')"
+        >
           <IconUserPlus :size="14" :stroke-width="1.5" />
           Join Team Workspace...
         </div>
@@ -91,6 +101,7 @@ const emit = defineEmits([
 ])
 
 const workspace = useWorkspaceStore()
+const isLoggedIn = computed(() => !!workspace.shouldersAuth?.token)
 
 const dropdownRef = ref(null)
 const filterRef = ref(null)
@@ -339,9 +350,14 @@ onUnmounted(() => {
   font-size: 12px;
   color: rgb(var(--fg-secondary));
 }
-.switcher-action:hover {
+.switcher-action:hover:not(.switcher-action-disabled) {
   background: rgb(var(--bg-hover));
   color: rgb(var(--fg-primary));
+}
+.switcher-action-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: auto;
 }
 .switcher-action kbd {
   margin-left: auto;
