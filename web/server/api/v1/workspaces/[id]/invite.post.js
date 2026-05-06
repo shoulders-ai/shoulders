@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm'
 import { randomBytes } from 'crypto'
 
 function generateInviteToken() {
-  return randomBytes(3).toString('hex') // 6-char hex code
+  return randomBytes(12).toString('hex') // 24-char hex token
 }
 
 export default defineEventHandler(async (event) => {

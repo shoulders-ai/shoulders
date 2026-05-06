@@ -11,7 +11,7 @@ function getRepoRoot() {
 }
 
 function generateInviteToken() {
-  return randomBytes(3).toString('hex') // 6-char hex code like "a7f3x2"
+  return randomBytes(12).toString('hex') // 24-char hex token
 }
 
 export default defineEventHandler(async (event) => {

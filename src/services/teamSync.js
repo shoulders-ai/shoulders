@@ -39,7 +39,9 @@ async function authedApiCall(endpoint, { method = 'GET', body = null, token } = 
   })
 
   const parsed = JSON.parse(result)
-  if (parsed.error) throw new Error(parsed.error)
+  if (parsed.error || parsed.statusCode >= 400) {
+    throw new Error(parsed.statusMessage || parsed.message || 'Request failed')
+  }
   return parsed
 }
 
