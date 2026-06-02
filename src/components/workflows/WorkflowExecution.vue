@@ -365,6 +365,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { renderMarkdown } from '../../utils/chatMarkdown'
 import { useWorkflowsStore } from '../../stores/workflows'
 import { useWorkspaceStore } from '../../stores/workspace'
+import { resolveAbsPath } from '../../utils/paths'
 import ChatMessage from '../chat/ChatMessage.vue'
 import WorkflowFormRenderer from './WorkflowFormRenderer.vue'
 
@@ -571,7 +572,7 @@ async function handleFinishClick(event) {
     const workspace = (await import('../../stores/workspace')).useWorkspaceStore()
     const { useEditorStore } = await import('../../stores/editor')
     const editor = useEditorStore()
-    const absPath = text.startsWith('/') ? text : `${workspace.path}/${text}`
+    const absPath = resolveAbsPath(text, workspace.path)
     editor.openFile(absPath)
   }
 }

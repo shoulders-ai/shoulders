@@ -2,6 +2,7 @@ import { EditorView, Decoration, ViewPlugin, WidgetType, keymap } from '@codemir
 import { syntaxTree } from '@codemirror/language'
 import { RangeSetBuilder, StateField, Prec } from '@codemirror/state'
 import { invoke } from '@tauri-apps/api/core'
+import { toForwardSlash, isAbsolutePath } from '../utils/paths'
 
 // Module-level cache: absolute path → data URL (persists for editor session)
 const imageCache = new Map()
@@ -21,8 +22,8 @@ function isRemoteUrl(src) {
 function resolveImagePath(src, filePath) {
   if (isRemoteUrl(src)) return src
   // Decode URI encoding (e.g. spaces written as %20)
-  const decoded = decodeURIComponent(src)
-  if (decoded.startsWith('/')) return decoded
+  const decoded = toForwardSlash(decodeURIComponent(src))
+  if (isAbsolutePath(decoded)) return decoded
   // Resolve relative to the directory of the markdown file
   const dir = filePath.substring(0, filePath.lastIndexOf('/'))
   // Normalize: collapse . and .. segments

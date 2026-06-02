@@ -5,6 +5,7 @@ import { Chat } from '@ai-sdk/vue'
 import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import { nanoid } from './utils'
 import { useWorkspaceStore } from './workspace'
+import { resolveAbsPath } from '../utils/paths'
 import { resolveApiAccess } from '../services/apiClient'
 import { createModel } from '../services/aiSdk'
 import { generateText } from 'ai'
@@ -264,9 +265,7 @@ export const useChatStore = defineStore('chat', () => {
           if (name !== 'read_file') continue
           const partPath = part.input?.path
           if (!partPath) continue
-          const resolved = partPath.startsWith('/')
-            ? partPath
-            : workspace.path + '/' + partPath
+          const resolved = resolveAbsPath(partPath, workspace.path)
           if (resolved === filePath) {
             part.output = STUB
           }

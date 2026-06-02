@@ -18,6 +18,7 @@ import {
 import { Marked } from 'marked'
 import { invoke } from '@tauri-apps/api/core'
 import { formatInlineCitation, formatReferenceRich } from './citationFormatter'
+import { resolveAbsPath } from '../utils/paths'
 
 // ---------------------------------------------------------------------------
 // Marked instance — minimal config, no HTML rendering extensions needed
@@ -153,7 +154,7 @@ async function preloadImages(tokens, workspacePath) {
   const cache = {}
   const loads = [...paths].map(async (src) => {
     try {
-      const fullPath = src.startsWith('/') ? src : `${workspacePath}/${src}`
+      const fullPath = resolveAbsPath(src, workspacePath)
       const b64 = await invoke('read_file_base64', { path: fullPath })
       const binary = atob(b64)
       const data = new Uint8Array(binary.length)

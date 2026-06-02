@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
 import { useWorkspaceStore } from './workspace'
+import { resolveAbsPath } from '../utils/paths'
 
 // Default Quarto export settings (sidecar — NOT written to YAML)
 const DEFAULTS = {
@@ -105,9 +106,7 @@ export const useQuartoStore = defineStore('quarto', {
       if (settings.reference_doc) {
         const workspace = useWorkspaceStore()
         // Resolve relative path against workspace
-        const absPath = settings.reference_doc.startsWith('/')
-          ? settings.reference_doc
-          : `${workspace.path}/${settings.reference_doc}`
+        const absPath = resolveAbsPath(settings.reference_doc, workspace.path)
         meta.push(['reference-doc', absPath])
       }
 

@@ -8,6 +8,7 @@ import { nanoid } from "../stores/utils";
 import { extractDocumentText, extractBlockList } from "./docxContext";
 import { SHOULDERS_SEARCH_URL, SHOULDERS_PROXY_URL } from "./apiClient";
 import { isMultimodalImage, isPdf, getMimeType } from "../utils/fileTypes";
+import { resolveWorkspacePath } from "../utils/paths";
 import * as wordBridge from "./wordBridge";
 
 // External tools that transmit data to third-party services
@@ -166,55 +167,10 @@ function _buildTypographicRegex(str) {
 
 // ─── Path Security ──────────────────────────────────────────────────
 
-// Collapse "." / ".." segments while preserving the path root.
-// Roots: POSIX "/", Windows drive "C:", or UNC "//host". Returns a
-// forward-slash path (Windows fs APIs and the Rust backend accept these).
-function _canonicalize(path) {
-  // UNC: keep the leading "//" prefix.
-  if (path.startsWith("//")) {
-    const parts = path.slice(2).split("/");
-    const out = [];
-    for (const part of parts) {
-      if (part === "..") out.pop();
-      else if (part !== "." && part !== "") out.push(part);
-    }
-    return "//" + out.join("/");
-  }
-  const driveMatch = path.match(/^[a-zA-Z]:/);
-  const drive = driveMatch ? driveMatch[0] : "";
-  const parts = (drive ? path.slice(drive.length) : path).split("/");
-  const out = [];
-  for (const part of parts) {
-    if (part === "..") out.pop();
-    else if (part !== "." && part !== "") out.push(part);
-  }
-  return drive ? drive + "/" + out.join("/") : "/" + out.join("/");
-}
-
+// Resolve an AI-supplied path against the workspace root and confine it to the
+// workspace. Returns a forward-slash absolute path, or null if it escapes.
 function _resolvePath(p, workspace) {
-  if (!workspace.path) return null;
-
-  // Normalize separators to "/". Windows native paths use "\", but every
-  // Windows fs API (and Rust std::fs) also accepts "/", so we standardize.
-  const toSlash = (s) => s.replace(/\\/g, "/");
-  const base = _canonicalize(toSlash(workspace.path).replace(/\/+$/, ""));
-
-  if (!p) return base;
-
-  const cand = toSlash(p);
-  // Absolute = POSIX "/...", Windows drive "C:/...", or UNC "//host/...".
-  const isAbsolute = cand.startsWith("/") || /^[a-zA-Z]:\//.test(cand);
-  const canonicalized = _canonicalize(isAbsolute ? cand : base + "/" + cand);
-
-  // Windows paths are case-insensitive; detect via a drive-letter prefix.
-  const ci = /^[a-zA-Z]:/.test(base);
-  const a = ci ? canonicalized.toLowerCase() : canonicalized;
-  const b = ci ? base.toLowerCase() : base;
-
-  // Must be the workspace root itself or a path strictly within it
-  // (the trailing "/" guard stops "/proj" from matching "/proj-evil").
-  if (a !== b && !a.startsWith(b + "/")) return null;
-  return canonicalized;
+  return resolveWorkspacePath(p, workspace?.path);
 }
 
 const PATH_ERROR =

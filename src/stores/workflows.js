@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
 import { nanoid } from './utils'
 import { useWorkspaceStore } from './workspace'
+import { resolveAbsPath } from '../utils/paths'
 import sdkSource from '../../workflow-sdk/@shoulders/workflow/index.mjs?raw'
 
 // Module-level maps (outside Pinia, like chatInstances in chat.js)
@@ -481,7 +482,7 @@ export const useWorkflowsStore = defineStore('workflows', {
         if (msg.files?.length) {
           const parts = [{ type: 'text', text: msg.prompt }]
           for (const filePath of msg.files) {
-            const resolved = filePath.startsWith('/') ? filePath : `${workspace.path}/${filePath}`
+            const resolved = resolveAbsPath(filePath, workspace.path)
             const base64 = await invoke('read_file_base64', { path: resolved })
             const ext = resolved.split('.').pop().toLowerCase()
             if (ext === 'pdf') {
@@ -594,7 +595,7 @@ export const useWorkflowsStore = defineStore('workflows', {
         const workspace = useWorkspaceStore()
 
         // Resolve relative paths against workspace root
-        const resolvePath = (p) => p && !p.startsWith('/') ? `${workspace.path}/${p}` : p
+        const resolvePath = (p) => resolveAbsPath(p, workspace.path)
 
         switch (msg.type) {
           case 'workspace.readFile':

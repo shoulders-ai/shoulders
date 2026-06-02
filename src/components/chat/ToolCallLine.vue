@@ -70,6 +70,7 @@ import { TOOL_LABELS, getToolContext, getToolIcon, isSkillRead, getToolFilePath 
 import { useEditorStore } from '../../stores/editor'
 import { useWorkspaceStore } from '../../stores/workspace'
 import { useToastStore } from '../../stores/toast'
+import { resolveAbsPath } from '../../utils/paths'
 
 const props = defineProps({
   // UIMessage tool part (new format)
@@ -134,7 +135,7 @@ const filePath = computed(() => {
 async function openFile() {
   if (!filePath.value || !workspace.path) return
   const p = filePath.value
-  const absolute = p.startsWith('/') ? p : workspace.path + '/' + p
+  const absolute = resolveAbsPath(p, workspace.path)
   const exists = await invoke('path_exists', { path: absolute })
   if (exists) {
     editorStore.openFile(absolute)
