@@ -86,7 +86,13 @@ export const useWorkspaceStore = defineStore('workspace', {
 
   actions: {
     async openWorkspace(path) {
-      this.path = path
+      // Normalize Windows backslash paths to forward slashes so the entire JS
+      // layer shares one separator with the Rust file tree (which emits '/')
+      // and the chat tools' resolved paths. Guarded to Windows-shaped paths
+      // (drive letter or UNC) so POSIX paths are never altered.
+      this.path = (/^[a-zA-Z]:[\\/]/.test(path) || path.startsWith('\\\\'))
+        ? path.replace(/\\/g, '/')
+        : path
 
       // Resolve global config directory (~/.shoulders/)
       try { this.globalConfigDir = await invoke('get_global_config_dir') }

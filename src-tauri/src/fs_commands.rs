@@ -8,6 +8,21 @@ use std::process::Command;
 use std::sync::Mutex;
 use tauri::Emitter;
 
+/// Normalize OS path separators to forward slashes so the JS layer sees one
+/// canonical form on every platform. Windows accepts '/' in all fs APIs and
+/// libgit2 normalizes internally, so emitting '/' is safe — and it keeps the
+/// file tree, editor/review keys, the fs-watcher events, and the chat tools'
+/// resolved paths in agreement. Guarded on MAIN_SEPARATOR so a literal '\'
+/// inside a POSIX filename is never rewritten.
+fn norm_path(p: &Path) -> String {
+    let s = p.to_string_lossy();
+    if std::path::MAIN_SEPARATOR == '\\' {
+        s.replace('\\', "/")
+    } else {
+        s.into_owned()
+    }
+}
+
 pub const ALLOWED_HOSTS: &[&str] = &[
     "api.anthropic.com",
     "api.openai.com",
@@ -139,7 +154,7 @@ fn build_file_tree(dir: &Path) -> Result<Vec<FileEntry>, String> {
 
         entries.push(FileEntry {
             name,
-            path: path.to_string_lossy().to_string(),
+            path: norm_path(&path),
             is_dir,
             children,
             modified,
@@ -268,7 +283,7 @@ pub async fn watch_directory(
                     let paths: Vec<String> = event
                         .paths
                         .iter()
-                        .map(|p| p.to_string_lossy().to_string())
+                        .map(|p| norm_path(p))
                         .collect();
                     let _ = app_clone.emit(
                         "fs-change",
@@ -478,7 +493,7 @@ fn search_dir_contents(dir: &Path, query: &str, results: &mut Vec<SearchResult>,
                 for (i, line) in content.lines().enumerate() {
                     if line.to_lowercase().contains(query) {
                         results.push(SearchResult {
-                            path: path.to_string_lossy().to_string(),
+                            path: norm_path(&path),
                             name: name.clone(),
                             line: i + 1,
                             text: line.trim().to_string(),
@@ -568,7 +583,7 @@ pub async fn get_global_config_dir() -> Result<String, String> {
     if !dir.exists() {
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     }
-    Ok(dir.to_string_lossy().to_string())
+    Ok(norm_path(&dir))
 }
 
 fn is_searchable_text(name: &str) -> bool {
