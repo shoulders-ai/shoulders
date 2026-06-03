@@ -86,6 +86,45 @@ export async function saveTeamMeta(workspacePath, meta) {
   })
 }
 
+// ── User-friendly error messages ──
+
+export function friendlyTeamError(raw) {
+  const msg = String(raw).replace(/^Error:\s*/i, '')
+  const lower = msg.toLowerCase()
+
+  if (lower.includes('authentication') || lower.includes('401') || lower.includes('403') || lower.includes('credentials')) {
+    return 'Authentication failed. Please log in again (Settings › Account).'
+  }
+  if (lower.includes('invalid invite') || (lower.includes('404') && lower.includes('invite'))) {
+    return 'Invalid invite link. Check the link and try again.'
+  }
+  if (lower.includes('expired') || lower.includes('410')) {
+    return 'This invite has expired. Ask the workspace admin for a new one.'
+  }
+  if (lower.includes('already a member') || lower.includes('409')) {
+    return 'You are already a member of this workspace.'
+  }
+  if (lower.includes('not found') || lower.includes('404')) {
+    return 'Workspace not found. The link may be invalid.'
+  }
+  if (lower.includes('network') || lower.includes('dns') || lower.includes('resolve') || lower.includes('could not connect')) {
+    return 'Could not reach the server. Check your internet connection.'
+  }
+  if (lower.includes('already exists')) {
+    return 'A folder with that name already exists. Choose a different location.'
+  }
+  if (lower.includes('clone failed')) {
+    return 'Failed to download workspace files. Please try again.'
+  }
+  if (lower.includes('workspace name')) {
+    return msg
+  }
+  if (msg.length > 120) {
+    return 'Something went wrong. Please try again.'
+  }
+  return msg
+}
+
 // ── Error classification ──
 
 function classifyError(msg) {

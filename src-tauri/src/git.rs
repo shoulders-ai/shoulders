@@ -894,7 +894,7 @@ pub async fn git_clone_authenticated(
         if msg.contains("404") || msg.contains("not found") {
             "Repository not found. Check the URL and try again.".to_string()
         } else if msg.contains("authentication") || msg.contains("401") || msg.contains("403") {
-            "Authentication failed. Please reconnect your GitHub account.".to_string()
+            "Authentication failed. Please check your credentials and try again.".to_string()
         } else if msg.contains("already exists") {
             "A folder with that name already exists.".to_string()
         } else {

@@ -63,6 +63,7 @@ import {
   joinTeamWorkspace as apiJoinTeamWorkspace,
   saveTeamMeta,
   configureTeamGitUser,
+  friendlyTeamError,
 } from '../services/teamSync'
 
 const props = defineProps({
@@ -148,7 +149,7 @@ async function doJoin() {
       emit('close')
     }, 600)
   } catch (e) {
-    error.value = String(e).replace(/^Error:\s*/i, '')
+    error.value = friendlyTeamError(e)
   } finally {
     joining.value = false
   }

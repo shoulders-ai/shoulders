@@ -52,6 +52,7 @@ import {
   setupTeamRemote,
   configureTeamGitUser,
   saveTeamMeta,
+  friendlyTeamError,
 } from '../services/teamSync'
 
 const props = defineProps({
@@ -164,7 +165,7 @@ async function pickAndCreate() {
     emit('close')
   } catch (e) {
     console.error('[team] Create failed:', e)
-    error.value = String(e).replace(/^Error:\s*/i, '')
+    error.value = friendlyTeamError(e)
   } finally {
     creating.value = false
   }
