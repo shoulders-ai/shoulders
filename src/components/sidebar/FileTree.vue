@@ -68,6 +68,7 @@
     <div
       ref="treeContainer"
       class="flex-1 overflow-y-auto overflow-x-hidden py-1 outline-none"
+      data-explorer-panel
       tabindex="0"
       @contextmenu.prevent="showContextMenuOnEmpty"
       @keydown="handleTreeKeydown"
@@ -635,6 +636,15 @@ function openFilteredMatch() {
   }
 }
 
+// Private panel detection for cross-panel drag
+function isOverPrivatePanel(position) {
+  const panel = document.querySelector('[data-private-panel]')
+  if (!panel) return false
+  const rect = panel.getBoundingClientRect()
+  return position.x >= rect.left && position.x <= rect.right &&
+         position.y >= rect.top && position.y <= rect.bottom
+}
+
 // Internal drag handlers
 function onDragStart({ path, event }) {
   // If dragging a selected item, drag all selected; otherwise just this one
@@ -653,6 +663,8 @@ function onDragStart({ path, event }) {
 
   const canImport = hasImportableFiles(draggedPaths)
   let overRefZone = false
+  const isTeam = !!workspace.teamMeta
+  let overPrivatePanel = false
 
   function onMouseMove(ev) {
     dragGhostX.value = ev.clientX
@@ -668,6 +680,19 @@ function onDragStart({ path, event }) {
       } else if (!nowOverRef && overRefZone) {
         window.dispatchEvent(new CustomEvent('ref-drag-leave'))
         overRefZone = false
+      }
+    }
+
+    // Private panel detection (team workspaces only)
+    if (isTeam) {
+      const nowOverPrivate = isOverPrivatePanel({ x: ev.clientX, y: ev.clientY })
+      if (nowOverPrivate && !overPrivatePanel) {
+        window.dispatchEvent(new CustomEvent('private-drag-over'))
+        dragOverDir.value = null
+        overPrivatePanel = true
+      } else if (!nowOverPrivate && overPrivatePanel) {
+        window.dispatchEvent(new CustomEvent('private-drag-leave'))
+        overPrivatePanel = false
       }
     }
   }
@@ -687,6 +712,21 @@ function onDragStart({ path, event }) {
       return
     }
 
+    // Check if dropped on private panel (team workspaces) → copy to private
+    if (isTeam && overPrivatePanel && draggedPaths.length > 0) {
+      const copyPaths = [...draggedPaths]
+      dragGhostVisible.value = false
+      dragOverDir.value = null
+      draggedPaths = []
+      document.body.classList.remove('tab-dragging')
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+      window.dispatchEvent(new CustomEvent('private-drag-leave'))
+      window.dispatchEvent(new CustomEvent('private-file-drop', { detail: { paths: copyPaths } }))
+      window.dispatchEvent(new CustomEvent('filetree-drag-end'))
+      return
+    }
+
     const endPaths = [...draggedPaths]
     dragGhostVisible.value = false
     dragOverDir.value = null
@@ -694,6 +734,7 @@ function onDragStart({ path, event }) {
     document.body.classList.remove('tab-dragging')
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
+    if (overPrivatePanel) window.dispatchEvent(new CustomEvent('private-drag-leave'))
     window.dispatchEvent(new CustomEvent('filetree-drag-end', { detail: { paths: endPaths, x: ev.clientX, y: ev.clientY } }))
   }
   document.addEventListener('mousemove', onMouseMove)
@@ -755,11 +796,22 @@ onMounted(async () => {
       externalDragOver.value = false
       dragOverDir.value = null
       window.dispatchEvent(new CustomEvent('ref-drag-over'))
+      window.dispatchEvent(new CustomEvent('private-drag-leave'))
+      return
+    }
+
+    // Route to private panel if applicable
+    if (isOverPrivatePanel(position)) {
+      externalDragOver.value = false
+      dragOverDir.value = null
+      window.dispatchEvent(new CustomEvent('ref-drag-leave'))
+      window.dispatchEvent(new CustomEvent('private-drag-over'))
       return
     }
 
     // Otherwise show FileTree drag state
     window.dispatchEvent(new CustomEvent('ref-drag-leave'))
+    window.dispatchEvent(new CustomEvent('private-drag-leave'))
     externalDragOver.value = true
     const dir = dirAtPosition(position.x, position.y)
     dragOverDir.value = dir
@@ -780,6 +832,14 @@ onMounted(async () => {
       dragOverDir.value = null
       window.dispatchEvent(new CustomEvent('ref-drag-leave'))
       window.dispatchEvent(new CustomEvent('ref-file-drop', { detail: { paths } }))
+      return
+    }
+
+    // Route to private panel if applicable
+    if (isOverPrivatePanel(position)) {
+      dragOverDir.value = null
+      window.dispatchEvent(new CustomEvent('private-drag-leave'))
+      window.dispatchEvent(new CustomEvent('private-file-drop', { detail: { paths, external: true } }))
       return
     }
 
@@ -808,6 +868,7 @@ onMounted(async () => {
       dragOverDir.value = null
     }
     window.dispatchEvent(new CustomEvent('ref-drag-leave'))
+    window.dispatchEvent(new CustomEvent('private-drag-leave'))
   })
 })
 
