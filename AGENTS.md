@@ -1,0 +1,124 @@
+# Shoulders
+
+**Do not add `Co-Authored-By` lines to git commit messages.**
+
+An AI workspace for researchers. Handles Markdown, LaTeX, DOCX, Jupyter notebooks, CSV, and code in a single environment with integrated reference management, multi-provider AI, and version control.
+
+**Central documentation registry: [`docs/MAP.md`](../docs/MAP.md) — start here when looking for anything.**
+
+## Architecture
+
+```
+Tauri v2 Shell
+  Rust Backend (src-tauri/src/)
+    fs_commands.rs  — File I/O, file watching, API proxy, content search, shell commands
+    git.rs          — Git operations via git2 crate (no OS git dependency)
+    chat.rs         — AI streaming proxy (SSE via reqwest + tokio)
+    pty.rs          — Terminal sessions via portable-pty
+    kernel.rs       — Jupyter kernel protocol (ZeroMQ), kernel discovery/launch/execute
+    typst_export.rs — Markdown → Typst → PDF (5 templates, citation-gated bibliography)
+    latex.rs        — LaTeX compilation via Tectonic, SyncTeX
+    usage_db.rs     — Usage tracking SQLite at ~/.shoulders/usage.db
+    lib.rs          — App setup, state management, command registration, OS keychain (keyring)
+
+  Vue 3 Frontend (src/)
+    stores/         — Pinia: workspace, files, editor, chat, tasks, reviews, links, usage, kernel, typst, latex, references, toast, environment
+    services/       — AI providers, chat orchestration, git, GitHub sync, references, system prompt, auth, code runner, telemetry
+    editor/         — CodeMirror 6: setup, theme, ghost suggestions, diff overlay, tasks, wiki links, citations, live preview, code chunks
+    components/     — Vue components: layout, sidebar, editor, right panel, modals, settings
+    utils/          — Helpers: chatMarkdown, fileTypes, notebookFormat, textDiff, errorMessages
+
+  Web Backend (web/)  — Optional Nuxt 3 server powering shoulde.rs (auth, admin, AI proxy, peer review)
+```
+
+Desktop shell is Tauri v2 (Rust + webview). All file operations and API calls go through custom Rust commands — no browser filesystem access, no CORS issues. The frontend is Vue 3 + Pinia + Tailwind CSS 3.
+
+## Key Systems
+
+| System | Key Files | Doc |
+|---|---|---|
+| Editor (CodeMirror 6) | `editor/setup.js`, `TextEditor.vue`, `stores/editor.js` | [editor-system.md](../docs/editor-system.md) |
+| DOCX editing (SuperDoc) | `DocxEditor.vue`, `editor/docxGhost.js`, `stores/editor.js` | [superdoc-system.md](../docs/superdoc-system.md) |
+| AI chat | `stores/chat.js`, `services/chatTransport.js`, `services/chatTools.js`, `services/aiSdk.js` | [ai-system.md](../docs/ai-system.md) |
+| Ghost suggestions | `editor/ghostSuggestion.js`, `editor/docxGhost.js`, `services/ai.js` | [ai-system.md](../docs/ai-system.md) |
+| Document comments | `stores/comments.js`, `editor/comments.js`, `CommentMargin.vue` | [ai-system.md](../docs/ai-system.md) |
+| Edit review | `stores/reviews.js`, `editor/diffOverlay.js`, `.Codex/hooks/intercept-edits.sh` | [review-system.md](../docs/review-system.md) |
+| Git & GitHub sync | `services/git.js`, `services/githubSync.js`, `src-tauri/src/git.rs` | [git-system.md](../docs/git-system.md) |
+| References | `stores/references.js`, `editor/citations.js`, `services/openalex.js` | [state-management.md](../docs/state-management.md) |
+| Zotero sync | `services/zoteroSync.js`, `SettingsZotero.vue`, `stores/references.js` | [zotero-system.md](../docs/zotero-system.md) |
+| Notebooks & Jupyter | `NotebookEditor.vue`, `stores/kernel.js`, `src-tauri/src/kernel.rs` | [notebook-system.md](../docs/notebook-system.md) |
+| Terminal & code runner | `Terminal.vue`, `services/codeRunner.js`, `src-tauri/src/pty.rs` | [terminal-system.md](../docs/terminal-system.md) |
+| Markdown → PDF | `stores/typst.js`, `src-tauri/src/typst_export.rs` | [markdown-system.md](../docs/markdown-system.md) |
+| Quarto rendering | `stores/quarto.js`, `src-tauri/src/quarto.rs`, `ExportPopover.vue` | [rmd-system.md](../docs/rmd-system.md) |
+| LaTeX | `stores/latex.js`, `src-tauri/src/latex.rs`, `editor/latexCitations.js` | [tex-system.md](../docs/tex-system.md) |
+| Wiki links | `stores/links.js`, `editor/wikiLinks.js`, `Backlinks.vue` | [wiki-links.md](../docs/wiki-links.md) |
+| Usage tracking | `stores/usage.js`, `src-tauri/src/usage_db.rs` | [usage-system.md](../docs/usage-system.md) |
+| Live preview | `editor/livePreview.js` | [editor-system.md](../docs/editor-system.md) |
+| HTML preview | `src-tauri/src/preview_server.rs`, `HtmlPreview.vue`, `utils/fileTypes.js` | [editor-system.md](../docs/editor-system.md) |
+| Word Bridge | `services/wordBridge.js`, `src-tauri/src/addin_server.rs`, `addin/taskpane/taskpane.js` | [word-bridge.md](../docs/word-bridge.md) |
+| Tool Server | `services/toolServer.js`, `src-tauri/src/tool_server.rs` | [tool-server.md](../docs/tool-server.md) |
+| Auth & Shoulders proxy | `services/shouldersAuth.js`, `services/apiClient.js` | [auth-system.md](../docs/auth-system.md) |
+| Web backend | `web/server/` (Nuxt/Nitro) | [web-backend.md](../docs/web-backend.md) |
+
+## AI Chat
+
+Multi-provider streaming chat in the right sidebar with parallel sessions.
+
+- **Providers**: Anthropic, OpenAI, Google (configured in `~/.shoulders/models.json` + `~/.shoulders/keys.env`)
+- **29 tools** across 6 categories:
+  - **Workspace** (10): `read_file`, `list_files`, `search_content`, `write_file`, `edit_file`, `rename_file`, `move_file`, `duplicate_file`, `delete_file`, `run_command`
+  - **References** (5): `search_references`, `get_reference`, `add_reference`, `cite_reference`, `edit_reference`
+  - **Comments** (4): `add_comment`, `reply_to_comment`, `resolve_comment`, `create_proposal`
+  - **Notebooks** (6): `read_notebook`, `edit_cell`, `run_cell`, `run_all_cells`, `add_cell`, `delete_cell`
+  - **Web** (3): `web_search`, `search_papers`, `fetch_url`
+  - **Creation** (1): `generate_image`
+- **Streaming**: AI SDK (`Chat` composable → `ToolLoopAgent` → `streamText()`) → tauriFetch → Rust proxy (`chat.rs`) → Tauri events
+- **Sessions**: persist to `.shoulders/chats/`, close/reopen via history dropdown
+- **System prompt**: `services/systemPrompt.js` — shared base for chat and ghost
+- **Skills**: `.project/skills/` — user-defined skill manifests injected into system prompt
+- **Context**: `services/workspaceMeta.js` builds `<workspace-meta>` (open tabs, git diff) appended to system prompt
+- **Sidebar**: `AISidebar.vue` — 5-screen view router (Home / New / Conversation / Workflow / Terminal). Home: unified session list (active + older from disk). New: ChatInput hero + workflow/agent launcher. Drill-ins use v-show (Home, Conversation) or v-if (New, Workflow, Terminal).
+- **Prompts**: `stores/prompts.js` — built-in defaults + user CRUD, persists to `.shoulders/prompts.json`. PROMPTS tab removed from sidebar; `usePrompt()` navigates to New screen with prefill.
+- **Image gen**: `generate_image` tool uses Gemini 3.1 Flash Image (`gemini-3.1-flash-image-preview`) via `proxy_api_call_full`. Saves to workspace root, stores only file path in chat history (no base64 in messages). Display: `GeneratedImageBlock.vue` loads from disk.
+- **Model migration**: `MODELS_VERSION` in `workspace.js` — upgrades old model IDs in `~/.shoulders/models.json` in-place on workspace open. See [ai-system.md — Adding or Updating Models](../docs/ai-system.md#adding-or-updating-models--checklist).
+
+## Edit Review Workflow
+
+When Codex or the built-in AI chat edits files, changes are queued in `.shoulders/pending-edits.json` and shown as inline diffs (accept/reject via merge view).
+
+- **Codex**: intercepted by PreToolUse hook (`.Codex/hooks/intercept-edits.sh`)
+- **Built-in chat**: `edit_file` and `write_file` tools record edits directly via reviews store
+- **Race condition fix**: update `filesStore.fileContents[path]` BEFORE recording pending edit
+
+Toggle "direct mode" in the footer to let edits through without review.
+
+## Shoulders Tool API
+
+When the app is running, workspace tools (references, paper search, comments, notebooks, canvas) are available as a local HTTP API. See `.shoulders/tool-api.md` for usage and the full tool list. Auth token is in `.shoulders/tool-server-token`.
+
+## Config Directories
+
+- **`.shoulders/`** — private AI state (gitignored): `system.md`, `pending-edits.json`, `.direct-mode`, `chats/`, `comments.json`, `open-sessions.json`
+- **`.project/`** — public project data (syncs via git): `references/`, `styles/`, `skills/`, `pdf-settings.json`, `citation-style.json`
+- **`~/.shoulders/`** — global config: `keys.env` (API keys), `models.json`, `usage.db`
+
+## Commands
+
+```bash
+bun install
+npx tauri dev          # Development (hot-reload)
+npx tauri build        # Production build
+bun run build          # Frontend only
+cargo build --manifest-path src-tauri/Cargo.toml  # Rust backend only
+```
+
+## Key Gotchas
+
+See [`docs/gotchas.md`](../docs/gotchas.md) for the full list. Critical ones:
+
+- **SuperDoc + Vue Proxy**: SuperDoc uses `#private` class fields — NEVER put instances in `ref()` or `reactive()`. Use `shallowRef` + `markRaw()`.
+- **`invoke()` struct args**: When Rust command takes `request: MyStruct`, JS MUST pass `{ request: { ... } }` — NOT flat args.
+- **CM6 full-doc swap kills position tracking**: Use `computeMinimalChange()` (`src/utils/textDiff.js`) for surgical diffs.
+- **RightPanel overflow-hidden clips popovers**: Use `<Teleport to="body">` with `position: fixed` for any dropdown inside the right panel.
+- **NEVER use `tauri-plugin-stronghold`**: `Stronghold.load()` takes ~50 seconds. Use `keyring` crate instead.
+- **Shoulders proxy URL**: Single source of truth in `apiClient.js:SHOULDERS_PROXY_URL`.
