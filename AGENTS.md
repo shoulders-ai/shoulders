@@ -42,7 +42,7 @@ Desktop shell is Tauri v2 (Rust + webview). All file operations and API calls go
 | AI chat | `stores/chat.js`, `services/chatTransport.js`, `services/chatTools.js`, `services/aiSdk.js` | [ai-system.md](../docs/ai-system.md) |
 | Ghost suggestions | `editor/ghostSuggestion.js`, `editor/docxGhost.js`, `services/ai.js` | [ai-system.md](../docs/ai-system.md) |
 | Document comments | `stores/comments.js`, `editor/comments.js`, `CommentMargin.vue` | [ai-system.md](../docs/ai-system.md) |
-| Edit review | `stores/reviews.js`, `editor/diffOverlay.js`, `.Codex/hooks/intercept-edits.sh` | [review-system.md](../docs/review-system.md) |
+| Edit review | `stores/reviews.js`, `editor/diffOverlay.js` | [review-system.md](../docs/review-system.md) |
 | Git & GitHub sync | `services/git.js`, `services/githubSync.js`, `src-tauri/src/git.rs` | [git-system.md](../docs/git-system.md) |
 | References | `stores/references.js`, `editor/citations.js`, `services/openalex.js` | [state-management.md](../docs/state-management.md) |
 | Zotero sync | `services/zoteroSync.js`, `SettingsZotero.vue`, `stores/references.js` | [zotero-system.md](../docs/zotero-system.md) |
@@ -84,9 +84,9 @@ Multi-provider streaming chat in the right sidebar with parallel sessions.
 
 ## Edit Review Workflow
 
-When Codex or the built-in AI chat edits files, changes are queued in `.shoulders/pending-edits.json` and shown as inline diffs (accept/reject via merge view).
+When an AI agent or the built-in AI chat edits files, changes are queued in `.shoulders/pending-edits.json` and shown as inline diffs (accept/reject via merge view).
 
-- **Codex**: intercepted by PreToolUse hook (`.Codex/hooks/intercept-edits.sh`)
+- **External agents**: intercepted by PreToolUse hooks (e.g. `.claude/hooks/intercept-edits.sh`)
 - **Built-in chat**: `edit_file` and `write_file` tools record edits directly via reviews store
 - **Race condition fix**: update `filesStore.fileContents[path]` BEFORE recording pending edit
 
@@ -111,6 +111,19 @@ npx tauri build        # Production build
 bun run build          # Frontend only
 cargo build --manifest-path src-tauri/Cargo.toml  # Rust backend only
 ```
+
+## Releasing
+
+**Do NOT run `gh release create` or create GitHub releases manually.** CI handles everything.
+
+To release a new version:
+
+1. Bump the version in all three files: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`
+2. Commit and push to `main`
+3. Tag and push: `git tag v<version> && git push --tags`
+4. Stop. CI (`.github/workflows/build.yml`) builds all platforms, signs the binaries, creates the release with installers, publishes it, and deletes the previous release.
+
+The auto-updater (`shoulde.rs/api/v1/updates/latest.json`) serves the `latest.json` asset from the latest published GitHub release. A manually created release without signed assets will break the update flow for all users.
 
 ## Key Gotchas
 
