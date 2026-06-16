@@ -76,6 +76,11 @@ const tokenPrices = {
     output: 0.40 / 1_000_000,
     cacheRead: 0.005 / 1_000_000,
   },
+  'gpt-5.5': {
+    input: 5.00 / 1_000_000,
+    output: 30.00 / 1_000_000,
+    cacheRead: 0.50 / 1_000_000,
+  },
   'gpt-5.4': {
     input: 2.50 / 1_000_000,
     output: 15.00 / 1_000_000,

@@ -5,7 +5,7 @@ import { gitInit, gitAdd, gitCommit, gitStatus, gitRemoteGetUrl } from '../servi
 import DEFAULT_SKILL_CONTENT from './defaultSkillContent.js'
 import WORKFLOW_BUILDER_SKILL_CONTENT from './workflowBuilderSkillContent.js'
 
-const MODELS_VERSION = 2
+const MODELS_VERSION = 3
 
 // V2: update existing entries to newer model versions (by old API model ID)
 const V2_MODEL_UPGRADES = {
@@ -15,6 +15,11 @@ const V2_MODEL_UPGRADES = {
   'gpt-5-mini-2025-08-07': { model: 'gpt-5.4-mini', name: 'GPT-5.4 Mini' },
   'gpt-5-mini':           { model: 'gpt-5.4-mini', name: 'GPT-5.4 Mini' },
 }
+
+// V3: add GPT-5.5
+const V3_NEW_MODELS = [
+  { id: 'gpt-5.5', name: 'GPT-5.5', provider: 'openai', model: 'gpt-5.5' },
+]
 
 export const useWorkspaceStore = defineStore('workspace', {
   state: () => ({
@@ -247,6 +252,7 @@ When reviewing text:
                   { id: 'opus', name: 'Opus 4.7', provider: 'anthropic', model: 'claude-opus-4-7' },
                   { id: 'sonnet', name: 'Sonnet 4.6', provider: 'anthropic', model: 'claude-sonnet-4-6', default: true },
                   { id: 'haiku', name: 'Haiku 4.5', provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
+                  { id: 'gpt-5.5', name: 'GPT-5.5', provider: 'openai', model: 'gpt-5.5' },
                   { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'openai', model: 'gpt-5.4' },
                   { id: 'gpt-5.4-mini', name: 'GPT-5.4 Mini', provider: 'openai', model: 'gpt-5.4-mini' },
                   { id: 'gemini-3.1-pro-fast', name: 'Gemini 3.1 Pro (Low)', provider: 'google', model: 'gemini-3.1-pro-preview', thinking: 'low' },
@@ -267,11 +273,21 @@ When reviewing text:
             const raw = await invoke('read_file', { path: globalModelsPath })
             const config = JSON.parse(raw)
             if (!config.version || config.version < MODELS_VERSION) {
+              // V2: upgrade old model IDs
               for (const entry of (config.models || [])) {
                 const upgrade = V2_MODEL_UPGRADES[entry.model]
                 if (upgrade) {
                   entry.model = upgrade.model
                   entry.name = upgrade.name
+                }
+              }
+              // V3: inject new models that don't exist yet
+              const existingIds = new Set((config.models || []).map(m => m.id))
+              for (const newModel of V3_NEW_MODELS) {
+                if (!existingIds.has(newModel.id)) {
+                  const insertIdx = (config.models || []).findIndex(m => m.id === 'gpt-5.4')
+                  if (insertIdx >= 0) config.models.splice(insertIdx, 0, newModel)
+                  else (config.models || []).push(newModel)
                 }
               }
               config.version = MODELS_VERSION
