@@ -73,9 +73,12 @@ export PATH="$HOME/.cargo/bin:$PATH"
 The `web/` directory contains an optional Nuxt 3 backend that powers the Shoulders website and backend server at shoulde.rs. It is not required to build or run the desktop app.
 
 
-### Peer Review (preview feature)
+### Peer Review (discontinued)
 
-The peer review feature (`/review`) requires **Typst** for PDF export:
+New peer review submissions are disabled. `/review` shows a closure notice and
+`POST /api/review/upload` returns `410 Gone`; existing review links remain available
+until they expire. Serving PDF exports for existing reviews requires **Typst**:
+
 ```bash
 # Ubuntu
 sudo snap install typst

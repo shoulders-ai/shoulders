@@ -1,6 +1,14 @@
-# Peer Review (`web/pages/review/`)
+# Peer Review (`web/pages/review/`) — Discontinued
 
-Free promotional tool on shoulde.rs: users upload a .docx or .pdf, receive an AI-powered peer review with a structured report and inline comments anchored to specific passages. No account required. Reviews expire after 7 days.
+> **Status (22 August 2026):** New submissions are disabled. `/review` displays a
+> closure notice and `POST /api/review/upload` returns `410 Gone` before reading a
+> request body or starting the AI pipeline. Existing review URLs remain available
+> until their normal expiry so completed work is not broken.
+
+This document preserves the implementation reference for the former promotional
+tool on shoulde.rs. Users could upload a .docx or .pdf and receive an AI-powered
+peer review with a structured report and inline comments anchored to specific
+passages. No account was required; reviews expired after 7 days.
 
 
 ---
@@ -23,7 +31,7 @@ Free promotional tool on shoulde.rs: users upload a .docx or .pdf, receive an AI
 - PDF export: `web/server/utils/reviewToTypst.js` + `web/server/api/review/[slug]/pdf.get.js`
 - Email: `web/server/utils/reviewEmail.js` — Resend notification
 - Cost tracking: `web/server/utils/pricing.js` — per-model pricing tables
-- Upload page: `web/pages/review/index.vue`
+- Closure page (formerly upload): `web/pages/review/index.vue`
 - Review display: `web/pages/review/[slug].vue` — comment positioning, scroll sync, stats header
 - Comment layout: `web/composables/useReviewLayout.js` — waterfall algorithm
 - Scroll sync: `web/composables/useScrollSync.js`
@@ -33,7 +41,10 @@ Free promotional tool on shoulde.rs: users upload a .docx or .pdf, receive an AI
 
 ## User Flow
 
-1. **Upload** (`/review`) — User drops a .docx or .pdf and enters their email (required). On submit, server creates a review record and runs the pipeline in the background. Page shows a confirmation message (no redirect).
+The flow below is retained for historical and maintenance context. New uploads no
+longer enter it because the upload endpoint returns `410 Gone`.
+
+1. **Upload** (`/review`, disabled) — Previously, the user dropped a .docx or .pdf and entered their email. On submit, the server created a review record and ran the pipeline in the background.
 2. **Processing** — Pipeline extracts text, runs AI review, generates report + comments, anchors comments to document passages. User receives an email when ready.
 3. **View** (`/review/[slug]`) — Split layout: report + annotated document (left), positioned comments column (right). Comments align vertically with their marks in the document via scroll sync.
 4. **Export** — Download PDF (Typst) or .md. Delete when done.
